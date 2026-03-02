@@ -1,0 +1,46 @@
+name: monopoly_banking
+description: Monopoly digital banking app - offline P2P.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  flutter_secure_storage: ^9.2.4
+  nfc_manager: ^4.1.1
+  flutter_reactive_ble: ^5.4.0
+  provider: ^6.1.5
+  uuid: ^4.5.3
+  encrypt: ^5.0.3
+  path_provider: ^2.1.5
+  audioplayers: ^6.6.0
+  local_auth: 2.3.0
+  confetti: 0.7.0
+  flutter_tts: 4.2.2
+  fl_chart: 0.71.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.13
+  flutter_launcher_icons: 0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/sounds/
+    - assets/icon/
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 21
