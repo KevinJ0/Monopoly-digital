@@ -23,6 +23,7 @@ class P2PService {
 
   final _payloadStreamCtrl = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get payloadStream => _payloadStreamCtrl.stream;
+  StreamSubscription<Map<String, dynamic>>? _legacyPayloadSub;
 
   P2PTransport get _active => transports[_currentType]!;
 
@@ -55,7 +56,8 @@ class P2PService {
 
   Future<void> startReceiving(P2PPayloadHandler? legacyHandler) async {
     if (legacyHandler != null) {
-      _payloadStreamCtrl.stream.listen(legacyHandler);
+      await _legacyPayloadSub?.cancel();
+      _legacyPayloadSub = _payloadStreamCtrl.stream.listen(legacyHandler);
     }
 
     final transport = _active;
@@ -105,12 +107,15 @@ class P2PService {
   }
 
   Future<void> shutdown() async {
+    await _legacyPayloadSub?.cancel();
+    _legacyPayloadSub = null;
     for (final transport in transports.values) {
       await transport.stop();
     }
   }
 
   void dispose() {
+    _legacyPayloadSub?.cancel();
     for (final transport in transports.values) {
       transport.dispose();
     }

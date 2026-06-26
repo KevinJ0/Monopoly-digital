@@ -22,6 +22,7 @@ import 'package:monopoly_banking/services/transports/nfc_transport.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/odometer_widget.dart';
 import 'package:monopoly_banking/widgets/premium_dialog.dart';
+import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/widgets/transaction_tile.dart';
 import 'package:monopoly_banking/widgets/transport_selector.dart';
 
@@ -46,9 +47,13 @@ class _WalletScreenState extends State<WalletScreen>
   DateTime? _lastBackPressTime;
   bool _isExiting = false;
   StreamSubscription<Map<String, dynamic>>? _payloadSub;
+  StreamSubscription<TxType>? _txSub;
+  StreamSubscription<CardTier>? _tierSub;
   bool _nfcLoopRunning = false;
   bool _bleScanning = false;
-  String? _lastTxId;
+  final Set<String> _seenTxIds = <String>{};
+  final List<String> _seenTxIdOrder = <String>[];
+  VoidCallback? _bankruptListener;
 
   String? _lastRole;
   Color? _lastColor;
@@ -137,8 +142,15 @@ class _WalletScreenState extends State<WalletScreen>
     _payloadSub ??= P2PService().payloadStream.listen((payload) async {
       if (!mounted) return;
       final txId = payload['txId'] as String?;
-      if (txId != null && txId == _lastTxId) return;
-      _lastTxId = txId;
+      if (txId != null) {
+        if (_seenTxIds.contains(txId)) return;
+        _seenTxIds.add(txId);
+        _seenTxIdOrder.add(txId);
+        if (_seenTxIdOrder.length > 80) {
+          final removed = _seenTxIdOrder.removeAt(0);
+          _seenTxIds.remove(removed);
+        }
+      }
       final type = payload['type'] as String?;
 
       if (type == 'handshake') {
@@ -236,11 +248,6 @@ class _WalletScreenState extends State<WalletScreen>
 
   Future<void> _connectToBleBank(BleBankDevice bank) async {
     SoundService.playClick();
-    if (!bank.isContactReady) {
-      _showToast('Acerca el jugador al banco para simular contacto NFC', kRed);
-      return;
-    }
-
     _bleScanning = false;
     if (mounted) setState(() {});
     try {
@@ -252,13 +259,15 @@ class _WalletScreenState extends State<WalletScreen>
 
   void _listenToBankruptcy() {
     final wallet = context.read<WalletController>();
-    wallet.bankruptNotifier.addListener(() {
+    _bankruptListener ??= () {
       if (wallet.bankruptNotifier.value && mounted) {
         _showBankruptcyOverlay();
       }
-    });
+    };
+    wallet.bankruptNotifier.addListener(_bankruptListener!);
 
-    wallet.txStream.listen((event) {
+    _txSub?.cancel();
+    _txSub = wallet.txStream.listen((event) {
       if (event == TxType.largeTransfer && mounted) {
         _confettiCtrl.play();
       }
@@ -302,7 +311,8 @@ class _WalletScreenState extends State<WalletScreen>
 
   void _listenToTierEvolution() {
     final wallet = context.read<WalletController>();
-    wallet.tierStream.listen((newTier) {
+    _tierSub?.cancel();
+    _tierSub = wallet.tierStream.listen((newTier) {
       if (mounted) {
         _showEvolutionAnimation(newTier);
       }
@@ -476,6 +486,14 @@ class _WalletScreenState extends State<WalletScreen>
     _stopBleClient();
     P2PService().shutdown();
     _payloadSub?.cancel();
+    _txSub?.cancel();
+    _tierSub?.cancel();
+    final bankruptListener = _bankruptListener;
+    if (bankruptListener != null) {
+      context.read<WalletController>().bankruptNotifier.removeListener(
+            bankruptListener,
+          );
+    }
     P2PService().typeNotifier.removeListener(_typeListener);
     _pulseCtrl.dispose();
     _welcomeCtrl.dispose();
@@ -594,155 +612,171 @@ class _WalletScreenState extends State<WalletScreen>
           ],
         ),
         extendBodyBehindAppBar: true,
-        body: Stack(
-          children: [
-            Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: CustomScrollView(
-                  slivers: [
-                    _buildAppBar(displayAvatar, displayColor, displayName,
-                        displayRole, isBank),
-                    SliverToBoxAdapter(
-                      child: AnimatedEntry(
-                        delay: const Duration(milliseconds: 100),
-                        child: _buildBalanceCard(displayBalance, displayColor,
-                            displayName, displayColorId, _lastHistory, isBank),
-                      ),
-                    ),
-                    if (!isBank)
+        body: PlayerColorBackdrop(
+          color: displayColor,
+          child: Stack(
+            children: [
+              Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 600),
+                  child: CustomScrollView(
+                    slivers: [
+                      _buildAppBar(displayAvatar, displayColor, displayName,
+                          displayRole, isBank),
                       SliverToBoxAdapter(
                         child: AnimatedEntry(
-                          delay: const Duration(milliseconds: 200),
-                          child: _buildVaultSection(wallet, displayColor),
+                          delay: const Duration(milliseconds: 100),
+                          child: _buildBalanceCard(
+                              displayBalance,
+                              displayColor,
+                              displayName,
+                              displayColorId,
+                              _lastHistory,
+                              isBank),
                         ),
                       ),
-                    SliverToBoxAdapter(
-                      child: AnimatedEntry(
-                        delay: const Duration(milliseconds: 300),
-                        child: _buildStatsRow(stats, displayColor),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: AnimatedEntry(
-                        delay: const Duration(milliseconds: 400),
-                        child: ValueListenableBuilder<TransportType>(
-                          valueListenable: P2PService().typeNotifier,
-                          builder: (context, type, _) {
-                            return _buildConnectionPanel(
-                                displayColor, type, isBank);
-                          },
+                      if (!isBank)
+                        SliverToBoxAdapter(
+                          child: AnimatedEntry(
+                            delay: const Duration(milliseconds: 200),
+                            child: _buildVaultSection(wallet, displayColor),
+                          ),
                         ),
-                      ),
-                    ),
-                    SliverToBoxAdapter(
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: TransportSelector(),
-                      ),
-                    ),
-                    if (!isBank)
                       SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: StreamBuilder<Map<String, dynamic>>(
-                            stream: JugadorClient().messages,
-                            builder: (context, snapshot) {
-                              if (snapshot.hasData &&
-                                  snapshot.data!['type'] == 'transfer_state') {
-                                final stateStr = snapshot.data!['state'];
-                                return _buildNetworkTransferAlert(
-                                    stateStr, displayName, isBank);
-                              }
-                              return const SizedBox();
+                        child: AnimatedEntry(
+                          delay: const Duration(milliseconds: 300),
+                          child: _buildStatsRow(stats, displayColor),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: AnimatedEntry(
+                          delay: const Duration(milliseconds: 400),
+                          child: ValueListenableBuilder<TransportType>(
+                            valueListenable: P2PService().typeNotifier,
+                            builder: (context, type, _) {
+                              return _buildConnectionPanel(
+                                  displayColor, type, isBank);
                             },
                           ),
                         ),
                       ),
-                    SliverToBoxAdapter(
-                      child: AnimatedEntry(
-                        delay: const Duration(milliseconds: 500),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                          child: Row(
-                            children: [
-                              const Text(
-                                'HISTORIAL',
-                                style: TextStyle(
-                                  color: kTextSecondary,
-                                  fontSize: 12,
-                                  letterSpacing: 2,
-                                  fontWeight: FontWeight.w600,
+                      if (isBank)
+                        SliverToBoxAdapter(
+                          child: AnimatedEntry(
+                            delay: const Duration(milliseconds: 450),
+                            child: _buildConnectedPlayersPanel(displayColor),
+                          ),
+                        ),
+                      SliverToBoxAdapter(
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: TransportSelector(),
+                        ),
+                      ),
+                      if (!isBank)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: StreamBuilder<Map<String, dynamic>>(
+                              stream: JugadorClient().messages,
+                              builder: (context, snapshot) {
+                                if (snapshot.hasData &&
+                                    snapshot.data!['type'] ==
+                                        'transfer_state') {
+                                  final stateStr = snapshot.data!['state'];
+                                  return _buildNetworkTransferAlert(
+                                      stateStr, displayName, isBank);
+                                }
+                                return const SizedBox();
+                              },
+                            ),
+                          ),
+                        ),
+                      SliverToBoxAdapter(
+                        child: AnimatedEntry(
+                          delay: const Duration(milliseconds: 500),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                            child: Row(
+                              children: [
+                                const Text(
+                                  'HISTORIAL',
+                                  style: TextStyle(
+                                    color: kTextSecondary,
+                                    fontSize: 12,
+                                    letterSpacing: 2,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: kBgCard,
-                                  borderRadius: BorderRadius.circular(8),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: kBgCard,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${history.length}',
+                                    style: const TextStyle(
+                                        color: kTextSecondary, fontSize: 11),
+                                  ),
                                 ),
-                                child: Text(
-                                  '${history.length}',
-                                  style: const TextStyle(
-                                      color: kTextSecondary, fontSize: 11),
-                                ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    if (history.isEmpty)
-                      const SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.receipt_long_rounded,
-                                  color: kBorder, size: 48),
-                              SizedBox(height: 12),
-                              Text(
-                                'Sin transacciones aún',
-                                style: TextStyle(color: kTextSecondary),
-                              ),
-                            ],
+                      if (history.isEmpty)
+                        const SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.receipt_long_rounded,
+                                    color: Color(0xFF4B5563), size: 48),
+                                SizedBox(height: 12),
+                                Text(
+                                  'Sin transacciones aún',
+                                  style: TextStyle(color: kTextSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (_, i) => TransactionTile(tx: history[i]),
+                            childCount: history.length,
                           ),
                         ),
-                      )
-                    else
-                      SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (_, i) => TransactionTile(tx: history[i]),
-                          childCount: history.length,
-                        ),
+                      SliverToBoxAdapter(
+                        child: SizedBox(
+                            height: 80 + MediaQuery.of(context).padding.bottom),
                       ),
-                    SliverToBoxAdapter(
-                      child: SizedBox(
-                          height: 80 + MediaQuery.of(context).padding.bottom),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-            Align(
-              alignment: Alignment.topCenter,
-              child: ConfettiWidget(
-                confettiController: _confettiCtrl,
-                blastDirectionality: BlastDirectionality.explosive,
-                shouldLoop: false,
-                colors: const [kGold, kGreen, Colors.white, Colors.blue],
-                numberOfParticles: 50,
-                gravity: 0.1,
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: _confettiCtrl,
+                  blastDirectionality: BlastDirectionality.explosive,
+                  shouldLoop: false,
+                  colors: const [kGold, kGreen, Colors.white, Colors.blue],
+                  numberOfParticles: 50,
+                  gravity: 0.1,
+                ),
               ),
-            ),
-            if (_isBankruptOverlayActive)
-              _buildBankruptcyScreen(displayName, session),
-            if (_showWelcome)
-              _buildWelcomeOverlay(displayAvatar, displayColor, displayName),
-          ],
+              if (_isBankruptOverlayActive)
+                _buildBankruptcyScreen(displayName, session),
+              if (_showWelcome)
+                _buildWelcomeOverlay(displayAvatar, displayColor, displayName),
+            ],
+          ),
         ),
       ),
     );
@@ -973,78 +1007,81 @@ class _WalletScreenState extends State<WalletScreen>
 
   SliverAppBar _buildAppBar(
       String avatarId, Color color, String name, String role, bool isBank) {
+    final width = MediaQuery.sizeOf(context).width;
+    final compactActions = width < 390;
+    final title =
+        isBank ? 'Banca Central' : (name.isNotEmpty ? name : 'Mi Billetera');
+    final subtitle =
+        role.toLowerCase() == 'cliente' ? 'JUGADOR' : role.toUpperCase();
+
     return SliverAppBar(
       backgroundColor: kBgDark,
       expandedHeight: 0,
       floating: true,
-      leading: const SizedBox(),
+      leadingWidth: 0,
+      titleSpacing: 12,
       title: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: compactActions ? 32 : 36,
+            height: compactActions ? 32 : 36,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: color.withValues(alpha: 0.5)),
             ),
             child: Center(
-                child: Text(avatarId, style: const TextStyle(fontSize: 18))),
+              child: Text(
+                avatarId,
+                overflow: TextOverflow.clip,
+                style: TextStyle(fontSize: compactActions ? 16 : 18),
+              ),
+            ),
           ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                isBank
-                    ? 'Banca Central'
-                    : (name.isNotEmpty ? name : 'Mi Billetera'),
-                style: const TextStyle(
-                  color: kTextPrimary,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+          SizedBox(width: compactActions ? 8 : 10),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: kTextPrimary,
+                    fontSize: compactActions ? 14 : 15,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              Text(
-                role.toLowerCase() == 'cliente'
-                    ? 'JUGADOR'
-                    : role.toUpperCase(),
-                style: const TextStyle(
-                    color: kTextSecondary, fontSize: 10, letterSpacing: 1),
-              ),
-            ],
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: kTextSecondary,
+                    fontSize: 10,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.nfc_rounded, color: kTextSecondary),
-          tooltip: 'NFC Debug',
-          onPressed: () async {
-            SoundService.playClick();
-            _stopNfcLoop();
-            await P2PService().shutdown();
-            if (!mounted) return;
-            await Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const NfcTestScreen()),
-            );
-            if (mounted) _startNfcLoop();
-          },
-        ),
-        IconButton(
-          icon: const Icon(Icons.bluetooth_rounded, color: kTextSecondary),
-          tooltip: 'BLE Debug',
-          onPressed: () async {
-            SoundService.playClick();
-            _stopNfcLoop();
-            await P2PService().shutdown();
-            if (!mounted) return;
-            await Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const BleTestScreen()),
-            );
-            if (mounted) _startNfcLoop();
-          },
-        ),
+        if (!compactActions) ...[
+          IconButton(
+            icon: const Icon(Icons.nfc_rounded, color: kTextSecondary),
+            tooltip: 'NFC Debug',
+            onPressed: _openNfcDebug,
+          ),
+          IconButton(
+            icon: const Icon(Icons.bluetooth_rounded, color: kTextSecondary),
+            tooltip: 'BLE Debug',
+            onPressed: _openBleDebug,
+          ),
+        ],
         IconButton(
           icon: const Icon(Icons.logout_rounded, color: kRed),
           tooltip: 'Cerrar Sesión',
@@ -1060,8 +1097,50 @@ class _WalletScreenState extends State<WalletScreen>
             setState(() {});
           },
         ),
+        if (compactActions)
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: kTextSecondary),
+            tooltip: 'Más opciones',
+            color: kBgCard,
+            onSelected: (value) {
+              if (value == 'nfc') _openNfcDebug();
+              if (value == 'ble') _openBleDebug();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'nfc',
+                child: Text('NFC Debug'),
+              ),
+              PopupMenuItem(
+                value: 'ble',
+                child: Text('BLE Debug'),
+              ),
+            ],
+          ),
       ],
     );
+  }
+
+  Future<void> _openNfcDebug() async {
+    SoundService.playClick();
+    _stopNfcLoop();
+    await P2PService().shutdown();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const NfcTestScreen()),
+    );
+    if (mounted) _startNfcLoop();
+  }
+
+  Future<void> _openBleDebug() async {
+    SoundService.playClick();
+    _stopNfcLoop();
+    await P2PService().shutdown();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const BleTestScreen()),
+    );
+    if (mounted) _startNfcLoop();
   }
 
   void _confirmExit(SessionProvider session) {
@@ -1640,6 +1719,101 @@ class _WalletScreenState extends State<WalletScreen>
     return _buildNfcButton(color);
   }
 
+  Widget _buildConnectedPlayersPanel(Color color) {
+    final transport = P2PService().bleTransport;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: ValueListenableBuilder<List<BleConnectedPlayer>>(
+        valueListenable: transport.connectedPlayersNotifier,
+        builder: (context, blePlayers, _) {
+          return StreamBuilder<List<Map<String, dynamic>>>(
+            stream: BancoServer().connectedPlayers,
+            initialData: const [],
+            builder: (context, snapshot) {
+              final wifiPlayers = snapshot.data ?? const [];
+              final total = blePlayers.length + wifiPlayers.length;
+
+              return Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: kBgCard.withValues(alpha: 0.82),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: kBorder),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.groups_rounded, color: color, size: 18),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Jugadores conectados',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: kTextPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '$total',
+                          style: const TextStyle(
+                            color: kTextSecondary,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (total == 0) ...[
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Sin jugadores activos',
+                        style: TextStyle(color: kTextSecondary, fontSize: 12),
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 10),
+                      ...blePlayers.map(_buildBleConnectedPlayerTile),
+                      ...wifiPlayers.map(_buildWifiConnectedPlayerTile),
+                    ],
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBleConnectedPlayerTile(BleConnectedPlayer player) {
+    final detail = player.rssi == null
+        ? player.qualityLabel
+        : '${player.qualityLabel} - ${player.rssi} dBm';
+    return _ConnectedPlayerTile(
+      name: player.displayName,
+      transport: 'BLE',
+      detail: detail,
+      color: player.qualityColor,
+      icon: Icons.bluetooth_connected_rounded,
+    );
+  }
+
+  Widget _buildWifiConnectedPlayerTile(Map<String, dynamic> player) {
+    final name = (player['USUARIOID'] as String?)?.trim();
+    return _ConnectedPlayerTile(
+      name: name == null || name.isEmpty ? 'Jugador WiFi' : name,
+      transport: 'WiFi',
+      detail: (player['quality'] as String?) ?? 'Conectado',
+      color: kGreen,
+      icon: Icons.wifi_rounded,
+    );
+  }
+
   Future<bool> _ensureBleReady(BleTransport transport) async {
     var status = await transport.refreshAvailability();
     if (status == BleAvailabilityStatus.ready) return true;
@@ -1713,6 +1887,121 @@ class _WalletScreenState extends State<WalletScreen>
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showBleDistanceSettings() {
+    final transport = P2PService().bleTransport;
+
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kBgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Configurar distancia',
+          style: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w800),
+        ),
+        content: ValueListenableBuilder<int>(
+          valueListenable: transport.contactProfileIndexNotifier,
+          builder: (context, index, _) {
+            final profile = kBleContactProfiles[index];
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.settings_input_antenna_rounded,
+                        color: Colors.blue, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        profile.label,
+                        style: const TextStyle(
+                          color: kTextPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  profile.helper,
+                  style: const TextStyle(color: kTextSecondary, fontSize: 13),
+                ),
+                const SizedBox(height: 18),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    activeTrackColor: Colors.blue,
+                    inactiveTrackColor: kBorder,
+                    thumbColor: kGold,
+                    overlayColor: kGold.withValues(alpha: 0.12),
+                    tickMarkShape:
+                        const RoundSliderTickMarkShape(tickMarkRadius: 3),
+                    activeTickMarkColor: kTextPrimary,
+                    inactiveTickMarkColor: kTextSecondary,
+                    valueIndicatorColor: kBgDark,
+                    valueIndicatorTextStyle: const TextStyle(
+                      color: kTextPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  child: Slider(
+                    min: 0,
+                    max: (kBleContactProfiles.length - 1).toDouble(),
+                    divisions: kBleContactProfiles.length - 1,
+                    value: index.toDouble(),
+                    label: profile.label,
+                    onChanged: (value) {
+                      SoundService.playClick();
+                      transport.setContactProfileIndex(value.round());
+                    },
+                  ),
+                ),
+                const Row(
+                  children: [
+                    Text(
+                      'Muy estricto',
+                      style: TextStyle(color: kTextSecondary, fontSize: 11),
+                    ),
+                    Spacer(),
+                    Text(
+                      'Lejos',
+                      style: TextStyle(color: kTextSecondary, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: ElevatedButton(
+              onPressed: () {
+                SoundService.playClick();
+                Navigator.pop(ctx);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Guardar',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
           ),
         ],
       ),
@@ -1807,6 +2096,20 @@ class _WalletScreenState extends State<WalletScreen>
                                     : null,
                               ),
                             ),
+                            if (active) ...[
+                              const SizedBox(width: 8),
+                              IconButton(
+                                tooltip: 'Configurar distancia',
+                                onPressed: () {
+                                  SoundService.playClick();
+                                  _showBleDistanceSettings();
+                                },
+                                icon: const Icon(
+                                  Icons.tune_rounded,
+                                  color: kTextSecondary,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 14),
@@ -1834,13 +2137,17 @@ class _WalletScreenState extends State<WalletScreen>
                                         size: 16,
                                       ),
                                       const SizedBox(width: 8),
-                                      Text(
-                                        connected
-                                            ? 'Listo para operar con el jugador'
-                                            : 'Activo automáticamente',
-                                        style: TextStyle(
-                                          color: accent,
-                                          fontWeight: FontWeight.w800,
+                                      Flexible(
+                                        child: Text(
+                                          connected
+                                              ? 'Listo para operar con el jugador'
+                                              : 'Activo automáticamente',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: accent,
+                                            fontWeight: FontWeight.w800,
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -2034,10 +2341,10 @@ class _WalletScreenState extends State<WalletScreen>
                                     const SizedBox(height: 8),
                                     ...banks.map(
                                       (bank) {
-                                        final contactReady =
-                                            bank.isContactReady;
+                                        final contactReady = transport
+                                            .isRssiContactReady(bank.rssi);
                                         final bankColor =
-                                            contactReady ? kGreen : kBorder;
+                                            contactReady ? kGreen : Colors.blue;
                                         return Padding(
                                           padding:
                                               const EdgeInsets.only(bottom: 8),
@@ -2065,7 +2372,7 @@ class _WalletScreenState extends State<WalletScreen>
                                                         .account_balance_rounded,
                                                     color: contactReady
                                                         ? kGreen
-                                                        : kTextSecondary,
+                                                        : Colors.blue,
                                                     size: 18,
                                                   ),
                                                   const SizedBox(width: 10),
@@ -2081,19 +2388,19 @@ class _WalletScreenState extends State<WalletScreen>
                                                           overflow: TextOverflow
                                                               .ellipsis,
                                                           style: TextStyle(
-                                                            color: contactReady
-                                                                ? kTextPrimary
-                                                                : kTextSecondary,
+                                                            color: kTextPrimary,
                                                             fontWeight:
                                                                 FontWeight.w800,
                                                           ),
                                                         ),
                                                         Text(
-                                                          '${bank.proximityLabel} - ${bank.rssi} dBm',
+                                                          contactReady
+                                                              ? 'En contacto para operaciones - ${bank.rssi} dBm'
+                                                              : 'Conectable - acércalo al operar (${bank.rssi} dBm)',
                                                           style: TextStyle(
                                                             color: contactReady
                                                                 ? kGreen
-                                                                : kTextSecondary,
+                                                                : Colors.blue,
                                                             fontSize: 11,
                                                             fontWeight:
                                                                 FontWeight.w700,
@@ -2107,10 +2414,10 @@ class _WalletScreenState extends State<WalletScreen>
                                                         ? Icons
                                                             .touch_app_rounded
                                                         : Icons
-                                                            .sensors_off_rounded,
+                                                            .bluetooth_connected_rounded,
                                                     color: contactReady
                                                         ? kGreen
-                                                        : kTextSecondary,
+                                                        : Colors.blue,
                                                   ),
                                                 ],
                                               ),
@@ -3063,15 +3370,98 @@ class _StatChip extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 18),
             const SizedBox(height: 4),
-            Text(value,
-                style: const TextStyle(
-                    color: kTextPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13)),
-            Text(label,
-                style: const TextStyle(color: kTextSecondary, fontSize: 10)),
+            SizedBox(
+              width: double.infinity,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(value,
+                    style: const TextStyle(
+                        color: kTextPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13)),
+              ),
+            ),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: kTextSecondary, fontSize: 10),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ConnectedPlayerTile extends StatelessWidget {
+  final String name;
+  final String transport;
+  final String detail;
+  final Color color;
+  final IconData icon;
+
+  const _ConnectedPlayerTile({
+    required this.name,
+    required this.transport,
+    required this.detail,
+    required this.color,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: kTextPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  '$transport - $detail',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: kTextSecondary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ],
       ),
     );
   }

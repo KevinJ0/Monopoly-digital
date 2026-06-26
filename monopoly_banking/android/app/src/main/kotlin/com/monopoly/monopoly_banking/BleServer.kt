@@ -48,13 +48,13 @@ class BleServer(private val context: Context, private val channel: MethodChannel
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 connectedDevices.add(device)
                 mainHandler.post {
-                    channel.invokeMethod("bleClientConnected", device.address)
+                    channel.invokeMethod("bleClientConnected", deviceInfo(device))
                 }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 connectedDevices.remove(device)
                 subscribedDevices.remove(device)
                 mainHandler.post {
-                    channel.invokeMethod("bleClientDisconnected", device.address)
+                    channel.invokeMethod("bleClientDisconnected", deviceInfo(device))
                 }
             }
         }
@@ -74,7 +74,11 @@ class BleServer(private val context: Context, private val channel: MethodChannel
             }
             val jsonStr = String(value, Charsets.UTF_8)
             mainHandler.post {
-                channel.invokeMethod("bleDataReceived", jsonStr)
+                channel.invokeMethod("bleDataReceived", mapOf(
+                    "deviceId" to device.address,
+                    "deviceName" to (device.name ?: ""),
+                    "payload" to jsonStr
+                ))
             }
         }
 
@@ -95,12 +99,12 @@ class BleServer(private val context: Context, private val channel: MethodChannel
                     subscribedDevices.add(device)
                     Log.d(TAG, "Cliente ${device.address} suscrito a notificaciones")
                     mainHandler.post {
-                        channel.invokeMethod("bleClientSubscribed", device.address)
+                        channel.invokeMethod("bleClientSubscribed", deviceInfo(device))
                     }
                 } else {
                     subscribedDevices.remove(device)
                     mainHandler.post {
-                        channel.invokeMethod("bleClientUnsubscribed", device.address)
+                        channel.invokeMethod("bleClientUnsubscribed", deviceInfo(device))
                     }
                     Log.d(TAG, "Cliente ${device.address} canceló suscripción")
                 }
@@ -230,6 +234,13 @@ class BleServer(private val context: Context, private val channel: MethodChannel
 
     fun isClientConnected(): Boolean = connectedDevices.isNotEmpty()
     fun isClientSubscribed(): Boolean = subscribedDevices.isNotEmpty()
+
+    private fun deviceInfo(device: android.bluetooth.BluetoothDevice): Map<String, String> {
+        return mapOf(
+            "deviceId" to device.address,
+            "deviceName" to (device.name ?: "")
+        )
+    }
 
     fun stop() {
         Log.d(TAG, "stop")

@@ -26,7 +26,7 @@ class BalanceTweenController {
     _tween = Tween<double>(begin: from, end: to).animate(
       CurvedAnimation(parent: controller, curve: Curves.easeOutCubic),
     )..addListener(() {
-        displayBalance.value = _tween!.value;
+        displayBalance.value = _tween!.value.roundToDouble();
       });
 
     controller.forward(from: 0);

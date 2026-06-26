@@ -21,24 +21,15 @@ String formatMoneyAmount(num value) {
   if (value.isNaN) return 'NaN';
 
   final negative = value < 0;
-  final absolute = value.abs();
-  final hasDecimals = absolute % 1 != 0;
-  var text =
-      hasDecimals ? absolute.toStringAsFixed(2) : absolute.round().toString();
-  if (hasDecimals) {
-    text = text.replaceFirst(RegExp(r'\.?0+$'), '');
-  }
+  final text = value.abs().round().toString();
 
-  final parts = text.split('.');
-  final whole = parts.first;
   final buffer = StringBuffer();
-  for (var i = 0; i < whole.length; i++) {
-    if (i > 0 && (whole.length - i) % 3 == 0) buffer.write(',');
-    buffer.write(whole[i]);
+  for (var i = 0; i < text.length; i++) {
+    if (i > 0 && (text.length - i) % 3 == 0) buffer.write(',');
+    buffer.write(text[i]);
   }
 
-  final decimals = parts.length > 1 ? '.${parts.last}' : '';
-  return '${negative ? '-' : ''}${buffer.toString()}$decimals';
+  return '${negative ? '-' : ''}${buffer.toString()}';
 }
 
 String formatMoney(num value) => '$kMoneySymbol${formatMoneyAmount(value)}';

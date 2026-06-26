@@ -41,7 +41,7 @@ generate_tone('assets/sounds/click.wav', 0.1, [600, 800], decay=True, envelope_t
 generate_tone('assets/sounds/cash.wav', 0.5, [1200, 1500, 2000], decay=True, envelope_type='exp')
 
 # Generar un arpegio simple de fondo (Theme musical)
-# Haremos una melodÃ­a simple combinando tonos
+# Haremos una melodía simple combinando tonos
 sample_rate = 44100
 duration = 16.0
 filename = 'assets/sounds/theme.wav'

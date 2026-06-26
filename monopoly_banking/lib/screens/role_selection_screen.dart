@@ -8,6 +8,7 @@ import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/screens/nfc_test_screen.dart';
 import 'package:monopoly_banking/screens/ble_test_screen.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
+import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 
 const _avatars = ['🎩', '🚗', '🐶', '⚓', '🎸', '👢', '💰', '🛳️'];
@@ -170,93 +171,97 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _bgAnimCtrl,
-              builder: (context, child) {
-                return CustomPaint(
-                  painter: _MonopolyBackgroundPainter(
-                    animationValue: _bgAnimCtrl.value,
-                  ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            top: 12,
-            right: 12,
-            child: SafeArea(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.bluetooth_rounded,
-                        color: kTextSecondary),
-                    tooltip: 'BLE Debug',
-                    onPressed: () {
-                      SoundService.playClick();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const BleTestScreen()),
-                      );
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.nfc_rounded, color: kTextSecondary),
-                    tooltip: 'NFC Debug',
-                    onPressed: () {
-                      SoundService.playClick();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                            builder: (_) => const NfcTestScreen()),
-                      );
-                    },
-                  ),
-                ],
+      body: PlayerColorBackdrop(
+        color: _colors[_selectedColor],
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _bgAnimCtrl,
+                builder: (context, child) {
+                  return CustomPaint(
+                    painter: _MonopolyBackgroundPainter(
+                      animationValue: _bgAnimCtrl.value,
+                    ),
+                  );
+                },
               ),
             ),
-          ),
-          FadeTransition(
-            opacity: _fade,
-            child: SafeArea(
-              child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 600),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        const AnimatedEntry(
-                          delay: Duration(milliseconds: 200),
-                          child: _HeaderWidget(),
-                        ),
-                        const SizedBox(height: 32),
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 400),
-                          child: _buildBankSection(),
-                        ),
-                        const SizedBox(height: 40),
-                        const AnimatedEntry(
-                          delay: Duration(milliseconds: 600),
-                          child: _DividerWidget(),
-                        ),
-                        const SizedBox(height: 32),
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 800),
-                          child: _buildClientSection(),
-                        ),
-                      ],
+            Positioned(
+              top: 12,
+              right: 12,
+              child: SafeArea(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.bluetooth_rounded,
+                          color: kTextSecondary),
+                      tooltip: 'BLE Debug',
+                      onPressed: () {
+                        SoundService.playClick();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => const BleTestScreen()),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon:
+                          const Icon(Icons.nfc_rounded, color: kTextSecondary),
+                      tooltip: 'NFC Debug',
+                      onPressed: () {
+                        SoundService.playClick();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => const NfcTestScreen()),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            FadeTransition(
+              opacity: _fade,
+              child: SafeArea(
+                child: SingleChildScrollView(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 600),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const AnimatedEntry(
+                            delay: Duration(milliseconds: 200),
+                            child: _HeaderWidget(),
+                          ),
+                          const SizedBox(height: 32),
+                          AnimatedEntry(
+                            delay: const Duration(milliseconds: 400),
+                            child: _buildBankSection(),
+                          ),
+                          const SizedBox(height: 40),
+                          const AnimatedEntry(
+                            delay: Duration(milliseconds: 600),
+                            child: _DividerWidget(),
+                          ),
+                          const SizedBox(height: 32),
+                          AnimatedEntry(
+                            delay: const Duration(milliseconds: 800),
+                            child: _buildClientSection(),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

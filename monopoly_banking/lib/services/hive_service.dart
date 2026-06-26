@@ -9,6 +9,7 @@ class HiveService {
   static const _keyAlias = 'monopoly_hive_key';
   static const _sessionBox = 'session';
   static const _txBox = 'transactions';
+  static const _settingsBox = 'settings';
 
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
@@ -38,9 +39,14 @@ class HiveService {
         _txBox,
         encryptionCipher: HiveAesCipher(encryptionKey),
       );
+      await Hive.openBox(
+        _settingsBox,
+        encryptionCipher: HiveAesCipher(encryptionKey),
+      );
     } catch (e) {
       await Hive.deleteBoxFromDisk(_sessionBox);
       await Hive.deleteBoxFromDisk(_txBox);
+      await Hive.deleteBoxFromDisk(_settingsBox);
 
       await Hive.openBox<SessionModel>(
         _sessionBox,
@@ -48,6 +54,10 @@ class HiveService {
       );
       await Hive.openBox<TransactionModel>(
         _txBox,
+        encryptionCipher: HiveAesCipher(encryptionKey),
+      );
+      await Hive.openBox(
+        _settingsBox,
         encryptionCipher: HiveAesCipher(encryptionKey),
       );
     }
@@ -77,4 +87,5 @@ class HiveService {
   static Box<SessionModel> get sessionBox =>
       Hive.box<SessionModel>(_sessionBox);
   static Box<TransactionModel> get txBox => Hive.box<TransactionModel>(_txBox);
+  static Box get settingsBox => Hive.box(_settingsBox);
 }

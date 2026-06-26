@@ -67,7 +67,7 @@ class _OdometerWidgetState extends State<OdometerWidget>
     return AnimatedBuilder(
       animation: _anim,
       builder: (_, __) {
-        final formatted = formatMoneyAmount(_anim.value);
+        final formatted = formatMoneyAmount(_anim.value.round());
         return ShaderMask(
           shaderCallback: (bounds) {
             final color = widget.color ?? kGreen;

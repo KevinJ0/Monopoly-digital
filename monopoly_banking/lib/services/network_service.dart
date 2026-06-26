@@ -12,6 +12,7 @@ class BancoServer {
 
   ServerSocket? _server;
   final List<Socket> _clients = [];
+  final Map<Socket, Map<String, dynamic>> _clientUsers = {};
   Map<String, dynamic> _db = {};
   TransferState state = TransferState.idle;
 
@@ -58,6 +59,14 @@ class BancoServer {
       (data) => _handleSyncMessage(client, data),
       onDone: () {
         _clients.remove(client);
+        _clientUsers.remove(client);
+        _broadcastConnectedPlayers();
+        _broadcastPlayers();
+      },
+      onError: (_) {
+        _clients.remove(client);
+        _clientUsers.remove(client);
+        _broadcastConnectedPlayers();
         _broadcastPlayers();
       },
     );
@@ -69,6 +78,8 @@ class BancoServer {
 
     if (type == 'register') {
       _updateUserInDb(msg['user']);
+      _clientUsers[client] = Map<String, dynamic>.from(msg['user']);
+      _broadcastConnectedPlayers();
       _broadcastPlayers();
     } else if (type == 'request_transfer') {
       _initiateManualTransfer(msg['from'], msg['to'], msg['amount']);
@@ -88,13 +99,24 @@ class BancoServer {
     _saveDatabase();
   }
 
+  void _broadcastConnectedPlayers() {
+    final activePlayers = _clientUsers.entries.map((entry) {
+      final user = Map<String, dynamic>.from(entry.value);
+      user['transport'] = 'WiFi';
+      user['quality'] = 'Buena';
+      user['qualityColor'] = 'green';
+      user['address'] = entry.key.remoteAddress.address;
+      return user;
+    }).toList(growable: false);
+    _clientsController.add(activePlayers);
+  }
+
   void _broadcastPlayers() {
     final players = _db['users'];
     final data = jsonEncode({'type': 'player_list', 'players': players});
     for (var c in _clients) {
       c.write(data);
     }
-    _clientsController.add(List<Map<String, dynamic>>.from(players));
   }
 
   void _initiateManualTransfer(String fromId, String toId, double amount) {

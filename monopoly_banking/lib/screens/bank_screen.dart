@@ -15,6 +15,7 @@ import 'package:monopoly_banking/services/network_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
+import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 
 class BankScreen extends StatefulWidget {
@@ -24,21 +25,43 @@ class BankScreen extends StatefulWidget {
   State<BankScreen> createState() => _BankScreenState();
 }
 
-class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+class _BankScreenState extends State<BankScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final _amountCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _sending = false;
   String _selectedOp = 'payment';
   String _connectedPlayerName = 'Jugador';
+  StreamSubscription<Map<String, dynamic>>? _payloadSub;
   late final AnimationController _slideCtrl;
   late final Animation<Offset> _slide;
 
   final _operations = const [
-    _OpOption(id: 'payment', label: 'Cobrar al jugador', icon: Icons.arrow_upward_rounded, color: kRed),
-    _OpOption(id: 'receive', label: 'Pagar al jugador', icon: Icons.arrow_downward_rounded, color: kGreen),
-    _OpOption(id: 'handshake', label: 'Handshake inicial', icon: Icons.wifi_tethering_rounded, color: kGold),
-    _OpOption(id: 'passGo', label: 'Pasar por GO', icon: Icons.flag_rounded, color: kGold),
-    _OpOption(id: 'manual', label: 'Intermediario Físico', icon: Icons.handshake_rounded, color: Colors.cyan),
+    _OpOption(
+        id: 'payment',
+        label: 'Cobrar al jugador',
+        icon: Icons.arrow_upward_rounded,
+        color: kRed),
+    _OpOption(
+        id: 'receive',
+        label: 'Pagar al jugador',
+        icon: Icons.arrow_downward_rounded,
+        color: kGreen),
+    _OpOption(
+        id: 'handshake',
+        label: 'Handshake inicial',
+        icon: Icons.wifi_tethering_rounded,
+        color: kGold),
+    _OpOption(
+        id: 'passGo',
+        label: 'Pasar por GO',
+        icon: Icons.flag_rounded,
+        color: kGold),
+    _OpOption(
+        id: 'manual',
+        label: 'Intermediario Físico',
+        icon: Icons.handshake_rounded,
+        color: Colors.cyan),
   ];
 
   @override
@@ -54,7 +77,7 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOutCubic));
 
-    P2PService().payloadStream.listen((payload) {
+    _payloadSub = P2PService().payloadStream.listen((payload) {
       if (!mounted) return;
       if (payload['type'] == 'handshake_confirm') {
         final name = payload['name'] as String? ?? 'Jugador';
@@ -69,6 +92,7 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _payloadSub?.cancel();
     _amountCtrl.dispose();
     _slideCtrl.dispose();
     super.dispose();
@@ -107,7 +131,9 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
       );
 
       if (_selectedOp == 'handshake') {
-        final amountText = _amountCtrl.text.isEmpty ? '2000' : _amountCtrl.text.replaceAll(',', '');
+        final amountText = _amountCtrl.text.isEmpty
+            ? '2000'
+            : _amountCtrl.text.replaceAll(',', '');
         final amount = double.parse(amountText);
         final session = context.read<SessionProvider>();
         await _sendToConnectedPlayer({
@@ -137,7 +163,8 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
           _toast('Cobro de ${formatMoney(amount)} realizado', kRed);
         }
       }
-      dialog.complete('Proceso completado con el jugador ${_playerNameLabel()}');
+      dialog
+          .complete('Proceso completado con el jugador ${_playerNameLabel()}');
     } catch (e, s) {
       if (dialogOpen && mounted) {
         Navigator.of(context, rootNavigator: true).pop();
@@ -159,16 +186,21 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
     }
   }
 
-  Future<bool> _waitForBleContactIfNeeded(_BankOperationDialogController dialog) async {
+  Future<bool> _waitForBleContactIfNeeded(
+      _BankOperationDialogController dialog) async {
     final transport = P2PService().bleTransport;
-    if (!transport.serverActiveNotifier.value || !transport.clientConnectedNotifier.value || transport.contactReadyNotifier.value) {
+    if (!transport.serverActiveNotifier.value ||
+        !transport.clientConnectedNotifier.value) {
       return true;
     }
+
+    transport.contactReadyNotifier.value = false;
+    transport.contactRssiNotifier.value = null;
 
     final completer = Completer<bool>();
     dialog.update(
       title: 'Acerca el jugador al banco',
-      message: 'Esperando contacto BLE para iniciar la operación. Pon ambos dispositivos muy cerca.',
+      message: 'Acerca los dispositivos para ejecutar esta operación.',
     );
 
     void finish(bool value) {
@@ -194,7 +226,7 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
       if (rssi == null) return;
       dialog.update(
         title: 'Acerca el jugador al banco',
-        message: 'Señal actual: $rssi dBm. Acércalo más hasta que marque contacto.',
+        message: 'Señal actual: $rssi dBm. Acerca más los dispositivos.',
       );
     }
 
@@ -212,73 +244,110 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => PopScope(
-        canPop: false,
-        child: ValueListenableBuilder<String>(
-          valueListenable: controller.title,
-          builder: (context, title, _) {
-            return ValueListenableBuilder<String>(
-              valueListenable: controller.message,
-              builder: (context, message, _) {
-                return ValueListenableBuilder<bool>(
-                  valueListenable: controller.completed,
-                  builder: (context, completed, _) {
-                    return AlertDialog(
-                      backgroundColor: kBgCard,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        side: BorderSide(
-                          color: completed ? kGreen.withValues(alpha: 0.45) : Colors.blue.withValues(alpha: 0.35),
+      builder: (ctx) {
+        var autoCloseScheduled = false;
+
+        return PopScope(
+          canPop: false,
+          child: ValueListenableBuilder<String>(
+            valueListenable: controller.title,
+            builder: (context, title, _) {
+              return ValueListenableBuilder<String>(
+                valueListenable: controller.message,
+                builder: (context, message, _) {
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: controller.completed,
+                    builder: (context, completed, _) {
+                      if (completed && !autoCloseScheduled) {
+                        autoCloseScheduled = true;
+                        Future.delayed(const Duration(seconds: 3), () {
+                          if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                            Navigator.of(ctx).pop();
+                          }
+                        });
+                      }
+
+                      return AlertDialog(
+                        backgroundColor: kBgCard,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                          side: BorderSide(
+                            color: completed
+                                ? kGreen.withValues(alpha: 0.45)
+                                : Colors.blue.withValues(alpha: 0.35),
+                          ),
                         ),
-                      ),
-                      title: Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: kTextPrimary,
-                          fontWeight: FontWeight.w800,
+                        title: Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: kTextPrimary,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _OperationLoadingVisual(completed: completed),
-                          const SizedBox(height: 18),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 220),
-                            child: Text(
-                              message,
-                              key: ValueKey(message),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: kTextSecondary,
-                                height: 1.35,
-                                fontWeight: FontWeight.w600,
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _OperationLoadingVisual(completed: completed),
+                            const SizedBox(height: 18),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              child: Text(
+                                message,
+                                key: ValueKey(message),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: kTextSecondary,
+                                  height: 1.35,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
+                          ],
+                        ),
+                        actions: [
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: completed
+                                ? ElevatedButton(
+                                    onPressed: () {
+                                      SoundService.playClick();
+                                      Navigator.of(ctx).pop();
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: kGreen,
+                                      foregroundColor: Colors.black,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(14),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'Cerrar',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  )
+                                : TextButton(
+                                    onPressed: () {
+                                      SoundService.playClick();
+                                      controller.cancelled.value = true;
+                                      Navigator.of(ctx).pop();
+                                    },
+                                    child: const Text('Cancelar'),
+                                  ),
                           ),
                         ],
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () {
-                            SoundService.playClick();
-                            if (!completed) {
-                              controller.cancelled.value = true;
-                            }
-                            Navigator.of(ctx).pop();
-                          },
-                          child: Text(completed ? 'Cerrar' : 'Cancelar'),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
-            );
-          },
-        ),
-      ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        );
+      },
     ).whenComplete(() {
       if (!controller.completed.value) {
         controller.cancelled.value = true;
@@ -400,7 +469,8 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('NFC desactivado'),
-        content: const Text('Para usar la app necesitas NFC. ¿Quieres activarlo ahora?'),
+        content: const Text(
+            'Para usar la app necesitas NFC. ¿Quieres activarlo ahora?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -416,7 +486,8 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
     if (confirmed == true) {
       _toast('Abriendo ajustes de NFC...', kGold);
       await Future.delayed(const Duration(milliseconds: 600));
-      final nfcTransport = P2PService().transports[TransportType.nfc] as NfcTransport?;
+      final nfcTransport =
+          P2PService().transports[TransportType.nfc] as NfcTransport?;
       await nfcTransport?.openNfcSettings();
     } else {
       _toast('NFC necesario para continuar', kRed);
@@ -429,12 +500,15 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
 
   @override
   Widget build(BuildContext context) {
+    final playerColor = context.watch<SessionProvider>().color;
+
     return Scaffold(
       backgroundColor: kBgDark,
       appBar: AppBar(
         backgroundColor: kBgDark,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: kTextSecondary),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: kTextSecondary),
           onPressed: () {
             SoundService.playClick();
             Navigator.pop(context);
@@ -442,59 +516,63 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
         ),
         title: const Text(
           'Panel del Banco',
-          style: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w700, fontSize: 18),
+          style: TextStyle(
+              color: kTextPrimary, fontWeight: FontWeight.w700, fontSize: 18),
         ),
         centerTitle: true,
       ),
-      body: SlideTransition(
-        position: _slide,
-        child: FadeTransition(
-          opacity: _slideCtrl,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 600),
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  20,
-                  20,
-                  MediaQuery.viewPaddingOf(context).bottom + 128,
-                ),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const AnimatedEntry(
-                        delay: Duration(milliseconds: 100),
-                        child: _BankHeader(),
-                      ),
-                      const SizedBox(height: 24),
-                      AnimatedEntry(
-                        delay: const Duration(milliseconds: 200),
-                        child: _buildOpSelector(),
-                      ),
-                      const SizedBox(height: 24),
-                      if (_selectedOp == 'manual')
-                        _buildManualTransferInterface()
-                      else ...[
-                        if (_selectedOp != 'passGo')
+      body: PlayerColorBackdrop(
+        color: playerColor,
+        child: SlideTransition(
+          position: _slide,
+          child: FadeTransition(
+            opacity: _slideCtrl,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    20,
+                    20,
+                    MediaQuery.viewPaddingOf(context).bottom + 128,
+                  ),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const AnimatedEntry(
+                          delay: Duration(milliseconds: 100),
+                          child: _BankHeader(),
+                        ),
+                        const SizedBox(height: 24),
+                        AnimatedEntry(
+                          delay: const Duration(milliseconds: 200),
+                          child: _buildOpSelector(),
+                        ),
+                        const SizedBox(height: 24),
+                        if (_selectedOp == 'manual')
+                          _buildManualTransferInterface()
+                        else ...[
+                          if (_selectedOp != 'passGo')
+                            AnimatedEntry(
+                              delay: const Duration(milliseconds: 300),
+                              child: _buildAmountField(),
+                            ),
+                          const SizedBox(height: 28),
                           AnimatedEntry(
-                            delay: const Duration(milliseconds: 300),
-                            child: _buildAmountField(),
+                            delay: const Duration(milliseconds: 400),
+                            child: _buildQuickAmounts(),
                           ),
-                        const SizedBox(height: 28),
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 400),
-                          child: _buildQuickAmounts(),
-                        ),
-                        const SizedBox(height: 32),
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 500),
-                          child: _buildSendButton(),
-                        ),
+                          const SizedBox(height: 32),
+                          AnimatedEntry(
+                            delay: const Duration(milliseconds: 500),
+                            child: _buildSendButton(),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -526,7 +604,10 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
               Text(
                 _getStateLabel(state),
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: kTextPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    color: kTextPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
@@ -544,9 +625,11 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.cyan,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: const Text('Iniciar Servidor de Banco', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text('Iniciar Servidor de Banco',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
               ],
             ],
@@ -558,7 +641,8 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
 
   Widget _buildStateAnimation(TransferState state) {
     if (state == TransferState.idle) {
-      return const Icon(Icons.power_settings_new_rounded, size: 80, color: kBorder);
+      return const Icon(Icons.power_settings_new_rounded,
+          size: 80, color: kBorder);
     }
     return Stack(
       alignment: Alignment.center,
@@ -643,7 +727,8 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
       children: [
         const Text(
           'OPERACIÓN',
-          style: TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
+          style:
+              TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
         ),
         const SizedBox(height: 12),
         ...(_operations.map((op) => _buildOpTile(op))),
@@ -672,17 +757,21 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
         ),
         child: Row(
           children: [
-            Icon(op.icon, color: selected ? op.color : kTextSecondary, size: 20),
+            Icon(op.icon,
+                color: selected ? op.color : kTextSecondary, size: 20),
             const SizedBox(width: 12),
-            Text(
-              op.label,
-              style: TextStyle(
-                color: selected ? op.color : kTextSecondary,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
+            Expanded(
+              child: Text(
+                op.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? op.color : kTextSecondary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
               ),
             ),
-            const Spacer(),
             if (selected)
               Container(
                 width: 8,
@@ -704,7 +793,8 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
       children: [
         const Text(
           'MONTO',
-          style: TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
+          style:
+              TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
         ),
         const SizedBox(height: 10),
         TextFormField(
@@ -712,15 +802,18 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
           onTap: () => SoundService.playClick(),
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: const TextStyle(color: kTextPrimary, fontSize: 24, fontWeight: FontWeight.w700),
+          style: const TextStyle(
+              color: kTextPrimary, fontSize: 24, fontWeight: FontWeight.w700),
           decoration: InputDecoration(
             prefixText: '\$ ',
-            prefixStyle: const TextStyle(color: kGreen, fontSize: 24, fontWeight: FontWeight.w700),
+            prefixStyle: const TextStyle(
+                color: kGreen, fontSize: 24, fontWeight: FontWeight.w700),
             hintText: '0',
             hintStyle: const TextStyle(color: kBorder, fontSize: 24),
             filled: true,
             fillColor: kBgCard,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: const BorderSide(color: kBorder),
@@ -775,7 +868,10 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
             ),
             child: Text(
               formatMoney(p),
-              style: const TextStyle(color: kTextSecondary, fontSize: 13, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                  color: kTextSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600),
             ),
           ),
         );
@@ -796,7 +892,8 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.black),
                 )
               : Icon(op.icon),
           label: Text(
@@ -805,8 +902,10 @@ class _BankScreenState extends State<BankScreen> with SingleTickerProviderStateM
           ),
           style: ElevatedButton.styleFrom(
             backgroundColor: op.color,
-            foregroundColor: op.color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            foregroundColor:
+                op.color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             elevation: 0,
           ),
         ),
@@ -843,10 +942,12 @@ class _OperationLoadingVisual extends StatefulWidget {
   final bool completed;
 
   @override
-  State<_OperationLoadingVisual> createState() => _OperationLoadingVisualState();
+  State<_OperationLoadingVisual> createState() =>
+      _OperationLoadingVisualState();
 }
 
-class _OperationLoadingVisualState extends State<_OperationLoadingVisual> with SingleTickerProviderStateMixin {
+class _OperationLoadingVisualState extends State<_OperationLoadingVisual>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _pulseCtrl;
 
   @override
@@ -1003,7 +1104,8 @@ class _BankHeader extends StatelessWidget {
               color: kGold.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.account_balance_rounded, color: kGold, size: 28),
+            child: const Icon(Icons.account_balance_rounded,
+                color: kGold, size: 28),
           ),
           const SizedBox(width: 14),
           const Expanded(
@@ -1012,7 +1114,8 @@ class _BankHeader extends StatelessWidget {
               children: [
                 Text(
                   'Banca Central',
-                  style: TextStyle(color: kGold, fontWeight: FontWeight.w800, fontSize: 16),
+                  style: TextStyle(
+                      color: kGold, fontWeight: FontWeight.w800, fontSize: 16),
                 ),
                 Text(
                   'Gestiona el capital de los jugadores',
@@ -1030,13 +1133,15 @@ class _BankHeader extends StatelessWidget {
 class _BleServerPanel extends StatelessWidget {
   const _BleServerPanel();
 
-  Future<bool> _ensureBleReady(BuildContext context, BleTransport transport) async {
+  Future<bool> _ensureBleReady(
+      BuildContext context, BleTransport transport) async {
     var status = await transport.refreshAvailability();
     if (status == BleAvailabilityStatus.ready) return true;
     if (!context.mounted) return false;
 
     if (status == BleAvailabilityStatus.noHardware) {
-      _showMessage(context, 'Este dispositivo no tiene Bluetooth LE disponible.');
+      _showMessage(
+          context, 'Este dispositivo no tiene Bluetooth LE disponible.');
       return false;
     }
 
@@ -1044,7 +1149,8 @@ class _BleServerPanel extends StatelessWidget {
       final allow = await _confirm(
         context,
         title: 'Permisos de Bluetooth',
-        message: 'Para activar el servidor BLE del banco necesito permisos de Bluetooth. ¿Quieres permitirlos ahora?',
+        message:
+            'Para activar el servidor BLE del banco necesito permisos de Bluetooth. ¿Quieres permitirlos ahora?',
         confirmLabel: 'Permitir',
       );
       if (allow != true || !context.mounted) return false;
@@ -1057,7 +1163,8 @@ class _BleServerPanel extends StatelessWidget {
         return _askToOpenBleSettings(context, transport);
       }
       if (context.mounted) {
-        _showMessage(context, 'Permisos de Bluetooth pendientes. Revisa los permisos de la app e intenta de nuevo.');
+        _showMessage(context,
+            'Permisos de Bluetooth pendientes. Revisa los permisos de la app e intenta de nuevo.');
       }
       return false;
     }
@@ -1066,15 +1173,18 @@ class _BleServerPanel extends StatelessWidget {
       return _askToOpenBleSettings(context, transport);
     }
 
-    _showMessage(context, 'No pude verificar Bluetooth. Revisa los ajustes e intenta de nuevo.');
+    _showMessage(context,
+        'No pude verificar Bluetooth. Revisa los ajustes e intenta de nuevo.');
     return false;
   }
 
-  Future<bool> _askToOpenBleSettings(BuildContext context, BleTransport transport) async {
+  Future<bool> _askToOpenBleSettings(
+      BuildContext context, BleTransport transport) async {
     final open = await _confirm(
       context,
       title: 'Bluetooth apagado',
-      message: 'Para usar el banco por BLE debes activar Bluetooth. ¿Quieres abrir los ajustes?',
+      message:
+          'Para usar el banco por BLE debes activar Bluetooth. ¿Quieres abrir los ajustes?',
       confirmLabel: 'Abrir ajustes',
     );
     if (open == true && context.mounted) {
@@ -1151,7 +1261,9 @@ class _BleServerPanel extends StatelessWidget {
                       Row(
                         children: [
                           Icon(
-                            connected ? Icons.bluetooth_connected_rounded : Icons.bluetooth_rounded,
+                            connected
+                                ? Icons.bluetooth_connected_rounded
+                                : Icons.bluetooth_rounded,
                             color: active ? accent : kTextSecondary,
                             size: 22,
                           ),
@@ -1207,28 +1319,34 @@ class _BleServerPanel extends StatelessWidget {
                                   SoundService.playClick();
                                   transport.stopServer();
                                 },
-                                icon: const Icon(Icons.stop_circle_outlined, size: 16),
+                                icon: const Icon(Icons.stop_circle_outlined,
+                                    size: 16),
                                 label: const Text('Detener Servidor BLE'),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: kRed,
                                   side: const BorderSide(color: kRed),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
                                 ),
                               )
                             : ElevatedButton.icon(
                                 onPressed: () async {
                                   SoundService.playClick();
-                                  final ready = await _ensureBleReady(context, transport);
+                                  final ready =
+                                      await _ensureBleReady(context, transport);
                                   if (!ready || !context.mounted) return;
                                   await transport.startServer();
                                   P2PService().setTransport(TransportType.ble);
                                 },
-                                icon: const Icon(Icons.bluetooth_searching_rounded, size: 16),
+                                icon: const Icon(
+                                    Icons.bluetooth_searching_rounded,
+                                    size: 16),
                                 label: const Text('Iniciar Servidor BLE'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.blue,
                                   foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
                                 ),
                               ),
                       ),
