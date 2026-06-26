@@ -123,8 +123,13 @@ class _BleTestScreenState extends State<BleTestScreen>
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'bleDataReceived') {
         try {
-          final jsonStr = call.arguments as String;
+          final args = call.arguments;
+          final jsonStr =
+              args is Map ? (args['payload'] as String? ?? '') : args as String;
           final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+          if (args is Map && args['deviceId'] != null) {
+            data['_bleDeviceId'] = args['deviceId'];
+          }
           _addLog('━━━ DATOS RECIBIDOS ━━━', _LogLevel.ok);
           _addLog('Payload: $data', _LogLevel.ok);
           _addLog('━━━━━━━━━━━━━━━━━━━━━━', _LogLevel.ok);
