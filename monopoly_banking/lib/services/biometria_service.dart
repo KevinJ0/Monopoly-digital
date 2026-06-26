@@ -11,9 +11,11 @@ class BiometriaService {
   Future<bool> autenticar(String motivo) async {
     try {
       final bool canAuthenticateWithBiometrics = await auth.canCheckBiometrics;
-      final bool canAuthenticate = canAuthenticateWithBiometrics || await auth.isDeviceSupported();
+      final bool canAuthenticate =
+          canAuthenticateWithBiometrics || await auth.isDeviceSupported();
 
-      if (!canAuthenticate) return true; // Si el dispositivo no soporta, permitimos pasar (o podrías bloquearlo)
+      if (!canAuthenticate)
+        return true; // Si el dispositivo no soporta, permitimos pasar (o podrías bloquearlo)
 
       return await auth.authenticate(
         localizedReason: motivo,

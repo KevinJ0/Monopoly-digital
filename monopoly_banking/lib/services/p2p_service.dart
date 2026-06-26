@@ -1,49 +1,89 @@
 import 'dart:async';
-import 'package:monopoly_banking/services/ble_service.dart';
-import 'package:monopoly_banking/services/nfc_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:monopoly_banking/services/transports/p2p_transport.dart';
+import 'package:monopoly_banking/services/transports/nfc_transport.dart';
+import 'package:monopoly_banking/services/transports/ble_transport.dart';
+import 'package:monopoly_banking/services/transports/wifi_transport.dart';
+
+export 'package:monopoly_banking/services/transports/nfc_transport.dart'
+    show NfcDisabledException;
 
 typedef P2PPayloadHandler = void Function(Map<String, dynamic> payload);
+
+enum TransportType { nfc, ble, wifi }
 
 class P2PService {
   static final P2PService _instance = P2PService._();
   factory P2PService() => _instance;
   P2PService._();
 
-  final _nfc = NfcService();
-  final _ble = BleService();
+  final nfcTransport = NfcTransport();
+  final bleTransport = BleTransport();
+  final wifiTransport = WifiTransport();
 
   final _payloadStreamCtrl = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get payloadStream => _payloadStreamCtrl.stream;
 
-  bool _isListening = false;
+  P2PTransport get _active => transports[_currentType]!;
+
+  final Map<TransportType, P2PTransport> transports = {};
+
+  TransportType _currentType = TransportType.nfc;
+  TransportType get currentType => _currentType;
+
+  final _typeCtrl = ValueNotifier<TransportType>(TransportType.nfc);
+  ValueNotifier<TransportType> get typeNotifier => _typeCtrl;
+
+  int _txCounter = 0;
+
+  Future<void> initTransports({bool isBank = false}) async {
+    bleTransport.setBankMode(isBank);
+
+    transports[TransportType.nfc] = nfcTransport;
+    transports[TransportType.ble] = bleTransport;
+    transports[TransportType.wifi] = wifiTransport;
+
+    await nfcTransport.initialize();
+    await bleTransport.initialize();
+    await wifiTransport.initialize();
+  }
+
+  void setTransport(TransportType type) {
+    _currentType = type;
+    _typeCtrl.value = type;
+  }
 
   Future<void> startReceiving(P2PPayloadHandler? legacyHandler) async {
     if (legacyHandler != null) {
       _payloadStreamCtrl.stream.listen(legacyHandler);
     }
 
-    if (_isListening) return;
-    _isListening = true;
+    final transport = _active;
+    if (!transport.isEnabled) return;
 
-    final nfcAvailable = await _nfc.isAvailable;
-    if (nfcAvailable) {
-      await _nfc.startReader((payload) {
-        _payloadStreamCtrl.add(payload);
-      });
-    } else {
-      await _ble.scanAndConnect('monopoly', (payload) {
-        _payloadStreamCtrl.add(payload);
-      });
-    }
+    await transport.startReceiving((payload) {
+      _payloadStreamCtrl.add(payload);
+    });
   }
 
   Future<void> sendPayload(Map<String, dynamic> payload) async {
-    final nfcAvailable = await _nfc.isAvailable;
-    if (nfcAvailable) {
-      await _nfc.startWriter(payload);
-    } else {
-      await _ble.writePayload(payload);
+    _txCounter++;
+    payload['txId'] = '${DateTime.now().millisecondsSinceEpoch}-$_txCounter';
+
+    final transport = _active;
+    if (!transport.isEnabled) {
+      if (_currentType == TransportType.ble) {
+        throw TransportUnavailableException('Bluetooth no está disponible');
+      }
+      for (final entry in transports.entries) {
+        if (entry.value.isEnabled) {
+          await entry.value.sendPayload(payload);
+          return;
+        }
+      }
+      throw TransportUnavailableException('No hay transporte disponible');
     }
+    await transport.sendPayload(payload);
   }
 
   Future<void> sendHandshake({
@@ -65,8 +105,16 @@ class P2PService {
   }
 
   Future<void> shutdown() async {
-    _isListening = false;
-    await _nfc.stopSession();
-    await _ble.dispose();
+    for (final transport in transports.values) {
+      await transport.stop();
+    }
+  }
+
+  void dispose() {
+    for (final transport in transports.values) {
+      transport.dispose();
+    }
+    _payloadStreamCtrl.close();
+    _typeCtrl.dispose();
   }
 }

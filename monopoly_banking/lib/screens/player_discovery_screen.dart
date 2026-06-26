@@ -4,6 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/services/network_service.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
+import 'package:monopoly_banking/services/sound_service.dart';
+import 'package:monopoly_banking/widgets/animated_entry.dart';
+import 'package:monopoly_banking/widgets/premium_dialog.dart';
+import 'package:monopoly_banking/services/error_translator_service.dart';
 
 class PlayerDiscoveryScreen extends StatelessWidget {
   const PlayerDiscoveryScreen({super.key});
@@ -16,7 +20,8 @@ class PlayerDiscoveryScreen extends StatelessWidget {
       backgroundColor: kBgDark,
       appBar: AppBar(
         backgroundColor: kBgDark,
-        title: const Text('Descubrir Jugadores', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Descubrir Jugadores',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: StreamBuilder<List<dynamic>>(
@@ -29,64 +34,84 @@ class PlayerDiscoveryScreen extends StatelessWidget {
                 children: [
                   CircularProgressIndicator(color: kGold),
                   SizedBox(height: 20),
-                  Text('Buscando jugadores en la red...', style: TextStyle(color: kTextSecondary)),
+                  Text('Buscando jugadores en la red...',
+                      style: TextStyle(color: kTextSecondary)),
                 ],
               ),
             );
           }
 
-          final players = snapshot.data!.where((p) => p['USUARIOID'] != session.name).toList();
+          final players = snapshot.data!
+              .where((p) => p['USUARIOID'] != session.name)
+              .toList();
 
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: players.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              final player = players[index];
-              return MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: () => _showTransferDialog(context, player, session.name),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: kBgCard,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: kBorder),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: players.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final player = players[index];
+                  return MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: AnimatedEntry(
+                      delay: Duration(milliseconds: index * 100),
+                      child: GestureDetector(
+                        onTap: () {
+                          SoundService.playClick();
+                          _showTransferDialog(context, player, session.name);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: kGold.withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
+                            color: kBgCard,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: kBorder),
                           ),
-                          child: Text(player['avatar'] ?? '👤', style: const TextStyle(fontSize: 24)),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Text(
-                                player['USUARIOID'],
-                                style: const TextStyle(color: kTextPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: kGold.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(player['avatar'] ?? '👤',
+                                    style: const TextStyle(fontSize: 24)),
                               ),
-                              Text(
-                                'Saldo: \$${player['TREVNOT']}',
-                                style: const TextStyle(color: kTextSecondary, fontSize: 12),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      player['USUARIOID'],
+                                      style: const TextStyle(
+                                          color: kTextPrimary,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16),
+                                    ),
+                                    Text(
+                                      'Saldo: ${formatMoney((player['TREVNOT'] as num?) ?? 0)}',
+                                      style: const TextStyle(
+                                          color: kTextSecondary, fontSize: 12),
+                                    ),
+                                  ],
+                                ),
                               ),
+                              const Icon(Icons.arrow_forward_ios_rounded,
+                                  color: kBorder, size: 16),
                             ],
                           ),
                         ),
-                        const Icon(Icons.arrow_forward_ios_rounded, color: kBorder, size: 16),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-              );
-            },
+                  );
+                },
+              ),
+            ),
           );
         },
       ),
@@ -95,9 +120,9 @@ class PlayerDiscoveryScreen extends StatelessWidget {
 
   void _showTransferDialog(BuildContext context, dynamic player, String myId) {
     final controller = TextEditingController();
-    showDialog(
+    showPremiumDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      child: AlertDialog(
         backgroundColor: kBgCard,
         title: Text('Transferir a ${player['USUARIOID']}'),
         content: TextField(
@@ -110,14 +135,25 @@ class PlayerDiscoveryScreen extends StatelessWidget {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () {
+                SoundService.playClick();
+                Navigator.pop(context);
+              },
+              child: const Text('Cancelar')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
+              SoundService.playClick();
               final amount = double.tryParse(controller.text) ?? 0;
               if (amount > 0) {
-                JugadorClient().requestTransfer(player['USUARIOID'], amount, myId);
-                Navigator.pop(context);
-                Navigator.pop(context);
+                try {
+                  JugadorClient()
+                      .requestTransfer(player['USUARIOID'], amount, myId);
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                } catch (e, s) {
+                  if (context.mounted) context.showFriendlyError(e, s);
+                }
               }
             },
             child: const Text('Solicitar al Banco'),

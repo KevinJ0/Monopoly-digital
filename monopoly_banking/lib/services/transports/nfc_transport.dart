@@ -1,38 +1,47 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nfc_manager/nfc_manager.dart';
 import 'package:nfc_manager/nfc_manager_android.dart';
-import 'package:nfc_manager/ndef_record.dart';
+import 'package:monopoly_banking/services/transports/p2p_transport.dart';
 
-typedef NfcPayloadHandler = void Function(Map<String, dynamic> payload);
-
-/// Thrown when NFC is supported but currently disabled by the user.
 class NfcDisabledException implements Exception {
   const NfcDisabledException();
 }
 
-class NfcService {
-  static final NfcService _instance = NfcService._();
-  factory NfcService() => _instance;
-  NfcService._();
+class NfcTransport extends P2PTransport {
+  @override
+  String get name => 'NFC';
+
+  @override
+  IconData get icon => Icons.nfc_rounded;
+
+  @override
+  String get description => 'Acerca los teléfonos para transferir';
+
+  @override
+  bool get isEnabled => _availability == NfcAvailability.enabled;
 
   static const _channel = MethodChannel('com.monopoly/nfc');
 
+  NfcAvailability _availability = NfcAvailability.unsupported;
   bool _sessionActive = false;
   bool _processing = false;
   Completer<void>? _sessionCompleter;
 
-  /// Checks NFC availability using nfc_manager first, with a native fallback.
+  @override
+  Future<void> initialize() async {
+    _availability = await checkAvailability();
+  }
+
   Future<NfcAvailability> checkAvailability() async {
-    // Try the nfc_manager package first
     try {
       final result = await NfcManager.instance.checkAvailability();
       if (result != NfcAvailability.unsupported) return result;
     } catch (_) {}
 
-    // Fallback: ask native side directly (more reliable)
     try {
       final hasHardware =
           await _channel.invokeMethod<bool>('hasNfcHardware') ?? false;
@@ -45,10 +54,6 @@ class NfcService {
     }
   }
 
-  Future<bool> get isAvailable async =>
-      (await checkAvailability()) == NfcAvailability.enabled;
-
-  /// Opens the system NFC settings screen (Android only).
   Future<void> openNfcSettings() async {
     if (defaultTargetPlatform == TargetPlatform.android) {
       try {
@@ -57,8 +62,10 @@ class NfcService {
     }
   }
 
-  Future<void> startReader(NfcPayloadHandler onPayload) async {
-    if (_sessionActive) await stopSession();
+  @override
+  Future<void> startReceiving(
+      void Function(Map<String, dynamic>) onData) async {
+    if (_sessionActive) await stop();
     _sessionActive = true;
 
     final completer = Completer<void>();
@@ -71,7 +78,7 @@ class NfcService {
           if (_processing) return;
           _processing = true;
           try {
-            await _handleDiscoveredTag(tag, onPayload);
+            await _handleDiscoveredTag(tag, onData);
           } finally {
             _processing = false;
           }
@@ -89,21 +96,21 @@ class NfcService {
   }
 
   Future<void> _handleDiscoveredTag(
-      NfcTag tag, NfcPayloadHandler onPayload) async {
+      NfcTag tag, void Function(Map<String, dynamic>) onData) async {
     try {
       final isoDep = IsoDepAndroid.from(tag);
       if (isoDep != null) {
-        await _handleIsoDep(isoDep, onPayload);
+        await _handleIsoDep(isoDep, onData);
         return;
       }
-      await _handleNdef(tag, onPayload);
+      await _handleNdef(tag, onData);
     } finally {
-      if (_sessionActive) await stopSession();
+      if (_sessionActive) await _stopSessionInternal();
     }
   }
 
   Future<void> _handleIsoDep(
-      IsoDepAndroid isoDep, NfcPayloadHandler onPayload) async {
+      IsoDepAndroid isoDep, void Function(Map<String, dynamic>) onData) async {
     try {
       final selectAid = Uint8List.fromList([
         0x00,
@@ -137,11 +144,12 @@ class NfcService {
       if (dataResp.length < 2 + payloadLen + 2) return;
       final jsonStr = utf8.decode(dataResp.sublist(2, 2 + payloadLen));
       final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-      onPayload(data);
+      onData(data);
     } catch (_) {}
   }
 
-  Future<void> _handleNdef(NfcTag tag, NfcPayloadHandler onPayload) async {
+  Future<void> _handleNdef(
+      NfcTag tag, void Function(Map<String, dynamic>) onData) async {
     try {
       final ndefAndroid = NdefAndroid.from(tag);
       final cached = ndefAndroid?.cachedNdefMessage;
@@ -149,61 +157,11 @@ class NfcService {
       final raw = cached.records.first.payload;
       final jsonStr = utf8.decode(raw.skip(3).toList());
       final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-      onPayload(data);
+      onData(data);
     } catch (_) {}
   }
 
-  Future<void> writeTag(NfcTag tag, Map<String, dynamic> payload) async {
-    final ndefAndroid = NdefAndroid.from(tag);
-    if (ndefAndroid == null) return;
-    if (!ndefAndroid.isWritable) return;
-
-    final bytes = utf8.encode(jsonEncode(payload));
-    final record = NdefRecord(
-      typeNameFormat: TypeNameFormat.wellKnown,
-      type: Uint8List.fromList([0x54]), // 'T' for Text
-      identifier: Uint8List(0),
-      payload: Uint8List.fromList([0x02, 0x65, 0x6E, ...bytes]),
-    );
-
-    final message = NdefMessage(records: [record]);
-
-    await ndefAndroid.writeNdefMessage(message);
-  }
-
-  /// Activa HCE para que este dispositivo emule una tarjeta NFC con [payload].
-  /// El receptor debe llamar a [startReader] para obtener el payload.
-  Future<void> startHce(Map<String, dynamic> payload) async {
-    final jsonStr = jsonEncode(payload);
-    await _channel.invokeMethod<void>('hceStart', {'payload': jsonStr});
-  }
-
-  /// Desactiva HCE y borra el payload pendiente.
-  Future<void> stopHce() async {
-    await _channel.invokeMethod<void>('hceStop');
-  }
-
-  Future<void> startWriter(Map<String, dynamic> payload) async {
-    // Cierra sesión previa si quedó bloqueada
-    if (_sessionActive) await stopSession();
-    _sessionActive = true;
-
-    try {
-      await NfcManager.instance.startSession(
-        pollingOptions: {NfcPollingOption.iso14443},
-        onDiscovered: (NfcTag tag) {
-          writeTag(tag, payload).then((_) => stopSession()).catchError((_) {
-            stopSession();
-          });
-        },
-      );
-    } catch (_) {
-      _sessionActive = false;
-      rethrow;
-    }
-  }
-
-  Future<void> stopSession() async {
+  Future<void> _stopSessionInternal() async {
     if (!_sessionActive) return;
     _sessionActive = false;
     await NfcManager.instance.stopSession();
@@ -211,5 +169,42 @@ class NfcService {
       _sessionCompleter!.complete();
     }
     _sessionCompleter = null;
+  }
+
+  Timer? _hceAutoStopTimer;
+
+  @override
+  Future<void> sendPayload(Map<String, dynamic> payload) async {
+    _hceAutoStopTimer?.cancel();
+    await _stopSessionInternal();
+    await stopHce();
+    await startHce(payload);
+    _hceAutoStopTimer = Timer(const Duration(seconds: 8), () {
+      stopHce();
+      _hceAutoStopTimer = null;
+    });
+  }
+
+  Future<void> startHce(Map<String, dynamic> payload) async {
+    final jsonStr = jsonEncode(payload);
+    await _channel.invokeMethod<void>('hceStart', {'payload': jsonStr});
+  }
+
+  Future<void> stopHce() async {
+    await _channel.invokeMethod<void>('hceStop');
+  }
+
+  @override
+  Future<void> stop() async {
+    _hceAutoStopTimer?.cancel();
+    _hceAutoStopTimer = null;
+    await _stopSessionInternal();
+    await stopHce();
+  }
+
+  @override
+  void dispose() {
+    _hceAutoStopTimer?.cancel();
+    _hceAutoStopTimer = null;
   }
 }

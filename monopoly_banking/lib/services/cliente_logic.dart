@@ -13,9 +13,12 @@ class ClienteLogic with WidgetsBindingObserver {
   bool _isConnecting = false;
   Timer? _reconnectTimer;
 
-  final StreamController<List<UsuarioModel>> usuariosController = StreamController<List<UsuarioModel>>.broadcast();
-  final StreamController<String> estadoBancoController = StreamController<String>.broadcast();
-  final StreamController<bool> conexionController = StreamController<bool>.broadcast();
+  final StreamController<List<UsuarioModel>> usuariosController =
+      StreamController<List<UsuarioModel>>.broadcast();
+  final StreamController<String> estadoBancoController =
+      StreamController<String>.broadcast();
+  final StreamController<bool> conexionController =
+      StreamController<bool>.broadcast();
 
   ClienteLogic({required this.usuarioId, this.ipBanco = '192.168.43.1'}) {
     WidgetsBinding.instance.addObserver(this);
@@ -26,7 +29,8 @@ class ClienteLogic with WidgetsBindingObserver {
     _isConnecting = true;
 
     try {
-      _socket = await Socket.connect(ipBanco, 8080, timeout: const Duration(seconds: 5));
+      _socket = await Socket.connect(ipBanco, 8080,
+          timeout: const Duration(seconds: 5));
       _isConnecting = false;
       conexionController.add(true);
 
@@ -72,7 +76,8 @@ class ClienteLogic with WidgetsBindingObserver {
       final jsonMsg = jsonDecode(mensaje);
       if (jsonMsg['tipo'] == 'usuarios') {
         List<dynamic> data = jsonMsg['data'];
-        usuariosController.add(data.map((j) => UsuarioModel.fromJson(j)).toList());
+        usuariosController
+            .add(data.map((j) => UsuarioModel.fromJson(j)).toList());
       } else if (jsonMsg['tipo'] == 'estado_banco') {
         estadoBancoController.add(jsonMsg['estado']);
       }

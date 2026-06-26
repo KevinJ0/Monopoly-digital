@@ -1,17 +1,29 @@
+import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:confetti/confetti.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/providers/stats_provider.dart';
 import 'package:monopoly_banking/providers/wallet_controller.dart';
 import 'package:monopoly_banking/screens/bank_screen.dart';
-import 'package:monopoly_banking/services/p2p_service.dart';
-import 'package:monopoly_banking/services/network_service.dart';
+import 'package:monopoly_banking/screens/nfc_test_screen.dart';
+import 'package:monopoly_banking/screens/ble_test_screen.dart';
 import 'package:monopoly_banking/screens/player_discovery_screen.dart';
+import 'package:monopoly_banking/services/error_translator_service.dart';
+import 'package:monopoly_banking/services/network_service.dart';
+import 'package:monopoly_banking/services/notification_service.dart';
+import 'package:monopoly_banking/services/p2p_service.dart';
+import 'package:monopoly_banking/services/sound_service.dart';
+import 'package:monopoly_banking/services/transports/ble_transport.dart';
+import 'package:monopoly_banking/services/transports/nfc_transport.dart';
+import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/odometer_widget.dart';
+import 'package:monopoly_banking/widgets/premium_dialog.dart';
 import 'package:monopoly_banking/widgets/transaction_tile.dart';
-import 'package:confetti/confetti.dart';
-import 'package:fl_chart/fl_chart.dart';
+import 'package:monopoly_banking/widgets/transport_selector.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -20,7 +32,8 @@ class WalletScreen extends StatefulWidget {
   State<WalletScreen> createState() => _WalletScreenState();
 }
 
-class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMixin {
+class _WalletScreenState extends State<WalletScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _pulseCtrl;
   late final AnimationController _welcomeCtrl;
   late final Animation<double> _welcomeScale;
@@ -32,6 +45,10 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
   bool _isBankruptOverlayActive = false;
   DateTime? _lastBackPressTime;
   bool _isExiting = false;
+  StreamSubscription<Map<String, dynamic>>? _payloadSub;
+  bool _nfcLoopRunning = false;
+  bool _bleScanning = false;
+  String? _lastTxId;
 
   String? _lastRole;
   Color? _lastColor;
@@ -41,9 +58,12 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
   double? _lastBalance;
   final List<double> _lastHistory = [];
 
+  late final VoidCallback _typeListener;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -53,16 +73,33 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
       vsync: this,
       duration: const Duration(seconds: 1),
     );
-    _welcomeScale = CurvedAnimation(parent: _welcomeCtrl, curve: Curves.easeOutBack);
-    _welcomeOpacity = CurvedAnimation(parent: _welcomeCtrl, curve: Curves.easeIn);
+    _welcomeScale =
+        CurvedAnimation(parent: _welcomeCtrl, curve: Curves.easeOutBack);
+    _welcomeOpacity =
+        CurvedAnimation(parent: _welcomeCtrl, curve: Curves.easeIn);
 
     _confettiCtrl = ConfettiController(duration: const Duration(seconds: 3));
 
     _listenForIncoming();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _typeListener = () {
+      if (P2PService().currentType != TransportType.ble && _bleScanning) {
+        _stopBleClient();
+      }
+    };
+    P2PService().typeNotifier.addListener(_typeListener);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final session = context.read<SessionProvider>();
+      await P2PService().initTransports(isBank: session.isBank);
       _listenToBankruptcy();
-      _connectToHost(context.read<SessionProvider>());
+      _listenToTierEvolution();
+      _connectToHost(session);
+      if (session.isBank) {
+        await _ensureBankBleServerActive();
+      } else {
+        _startNfcLoop();
+      }
     });
   }
 
@@ -73,24 +110,41 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
         'TREVNOT': context.read<WalletController>().rawBalance.value,
         'avatar': session.avatarId,
         'color': session.colorId,
-      }).catchError((e) {
-        // Ignorar si el host no está levantado aún
+      }).catchError((e, s) {
+        if (mounted) context.showFriendlyError(e, s);
       });
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final session = context.read<SessionProvider>();
+      if (session.isBank) {
+        _ensureBankBleServerActive();
+      } else {
+        _startNfcLoop();
+      }
+    } else if (state == AppLifecycleState.paused) {
+      _stopNfcLoop();
     }
   }
 
   void _listenForIncoming() {
     final wallet = context.read<WalletController>();
     final session = context.read<SessionProvider>();
-    P2PService().startReceiving((payload) async {
+
+    _payloadSub ??= P2PService().payloadStream.listen((payload) async {
       if (!mounted) return;
+      final txId = payload['txId'] as String?;
+      if (txId != null && txId == _lastTxId) return;
+      _lastTxId = txId;
       final type = payload['type'] as String?;
 
       if (type == 'handshake') {
         if (!session.isHandshakeDone) {
           await session.applyHandshake(payload);
           _triggerWelcomeAnimation(payload['name'] as String?);
-          // Confirm back to bank
           P2PService().sendPayload({
             'type': 'handshake_confirm',
             'name': session.name,
@@ -98,16 +152,102 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
         }
       } else if (type == 'handshake_confirm') {
         final name = payload['name'] as String? ?? 'Jugador';
-        _showToast('✅ $name se ha unido a la partida', kGold);
+        _showToast('$name se ha unido a la partida', kGold);
       } else if (type == 'payment') {
         final amount = (payload['amount'] as num).toDouble();
         wallet.addFunds(amount);
-        _showToast('¡Recibiste \$$amount!', kGreen);
+        _showToast('¡Recibiste ${formatMoney(amount)}!', kGreen);
+      } else if (type == 'charge') {
+        final amount = (payload['amount'] as num).toDouble();
+        wallet.subtractFunds(amount);
+        _showToast('Te cobraron ${formatMoney(amount)}', kRed);
       } else if (type == 'passGo') {
         wallet.addFunds(kPassGoAmount, isPassGo: true);
-        _showToast('Pasaste por GO: +\$${kPassGoAmount.round()}', kGold);
+        _showToast('Pasaste por GO: +${formatMoney(kPassGoAmount)}', kGold);
       }
+    }, onError: (e, s) {
+      if (mounted) context.showFriendlyError(e, s);
     });
+  }
+
+  void _startNfcLoop() {
+    if (_nfcLoopRunning) return;
+    final currentTransport = P2PService().currentType;
+    if (currentTransport == TransportType.ble) return;
+    _nfcLoopRunning = true;
+    _runNfcOnce();
+  }
+
+  void _stopNfcLoop() {
+    _nfcLoopRunning = false;
+  }
+
+  Future<void> _ensureBankBleServerActive() async {
+    final transport = P2PService().bleTransport;
+    final ready = await _ensureBleReady(transport);
+    if (!ready || !mounted) return;
+    await transport.startServer();
+    P2PService().setTransport(TransportType.ble);
+  }
+
+  Future<void> _runNfcOnce() async {
+    if (!mounted || !_nfcLoopRunning) {
+      _nfcLoopRunning = false;
+      return;
+    }
+    try {
+      await P2PService().startReceiving(null);
+    } catch (e, s) {
+      if (!mounted || !_nfcLoopRunning) {
+        _nfcLoopRunning = false;
+        return;
+      }
+      if (mounted) context.showFriendlyError(e, s);
+    }
+    if (_nfcLoopRunning && mounted) {
+      await Future.delayed(const Duration(milliseconds: 800));
+      _runNfcOnce();
+    } else {
+      _nfcLoopRunning = false;
+    }
+  }
+
+  Future<void> _startBleClient() async {
+    if (_bleScanning) return;
+    if (P2PService().currentType != TransportType.ble) {
+      P2PService().setTransport(TransportType.ble);
+    }
+    _bleScanning = true;
+    setState(() {});
+    try {
+      await P2PService().startReceiving(null);
+    } catch (e, s) {
+      _bleScanning = false;
+      if (mounted) setState(() {});
+      if (mounted) context.showFriendlyError(e, s);
+    }
+  }
+
+  void _stopBleClient() {
+    _bleScanning = false;
+    P2PService().bleTransport.stopClientScan();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _connectToBleBank(BleBankDevice bank) async {
+    SoundService.playClick();
+    if (!bank.isContactReady) {
+      _showToast('Acerca el jugador al banco para simular contacto NFC', kRed);
+      return;
+    }
+
+    _bleScanning = false;
+    if (mounted) setState(() {});
+    try {
+      await P2PService().bleTransport.connectToBank(bank);
+    } catch (e, s) {
+      if (mounted) context.showFriendlyError(e, s);
+    }
   }
 
   void _listenToBankruptcy() {
@@ -125,15 +265,169 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
     });
   }
 
-  void _showToast(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(fontWeight: FontWeight.w700)),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 3),
+  Future<void> _showNfcDisabledDialog() async {
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('NFC desactivado'),
+        content: const Text(
+            'Para usar la app necesitas NFC. ¿Quieres activarlo ahora?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Activar'),
+          ),
+        ],
       ),
+    );
+    if (confirmed == true) {
+      _showToast('Abriendo ajustes de NFC...', kGold);
+      await Future.delayed(const Duration(milliseconds: 600));
+      final nfcTransport =
+          P2PService().transports[TransportType.nfc] as NfcTransport?;
+      await nfcTransport?.openNfcSettings();
+    } else {
+      _showToast('NFC necesario para continuar', Colors.red);
+    }
+  }
+
+  void _showToast(String msg, Color color) {
+    NotificationService().show(msg, backgroundColor: color);
+  }
+
+  void _listenToTierEvolution() {
+    final wallet = context.read<WalletController>();
+    wallet.tierStream.listen((newTier) {
+      if (mounted) {
+        _showEvolutionAnimation(newTier);
+      }
+    });
+  }
+
+  void _showEvolutionAnimation(CardTier tier) async {
+    // Pokemon-style evolution feel
+    HapticFeedback.vibrate();
+    SoundService.playSuccess();
+
+    String tierName = "";
+    Color accentColor = Colors.white;
+    switch (tier) {
+      case CardTier.gold:
+        tierName = "GOLD";
+        accentColor = const Color(0xFFBF953F);
+        break;
+      case CardTier.platinum:
+        tierName = "PLATINUM";
+        accentColor = const Color(0xFFE0E0E0);
+        break;
+      case CardTier.black:
+        tierName = "ULTIMATE BLACK";
+        accentColor = Colors.blueAccent;
+        break;
+      default:
+        tierName = "STANDARD";
+    }
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withValues(alpha: 0.9),
+      transitionDuration: const Duration(milliseconds: 800),
+      pageBuilder: (ctx, anim1, anim2) {
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const AnimatedEntry(
+                  delay: Duration(milliseconds: 200),
+                  child: Text(
+                    "¡TU TARJETA ESTÁ EVOLUCIONANDO!",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 4),
+                  ),
+                ),
+                const SizedBox(height: 40),
+                ScaleTransition(
+                  scale: Tween<double>(begin: 0.5, end: 1.2).animate(
+                      CurvedAnimation(parent: anim1, curve: Curves.elasticOut)),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                            color: accentColor.withValues(alpha: 0.5),
+                            blurRadius: 50,
+                            spreadRadius: 10)
+                      ],
+                    ),
+                    child: Icon(Icons.auto_awesome_rounded,
+                        size: 120, color: accentColor),
+                  ),
+                ),
+                const SizedBox(height: 40),
+                AnimatedEntry(
+                  delay: const Duration(milliseconds: 600),
+                  child: Column(
+                    children: [
+                      const Text(
+                        "¡FELICIDADES!",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        "HAS ALCANZADO EL NIVEL $tierName",
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: accentColor,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 60),
+                ElevatedButton(
+                  onPressed: () {
+                    _confettiCtrl.play();
+                    Navigator.pop(ctx);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accentColor,
+                    foregroundColor: Colors.black,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 40, vertical: 15),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30)),
+                  ),
+                  child: const Text("VER MI NUEVA TARJETA",
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (ctx, anim1, anim2, child) {
+        return FadeTransition(opacity: anim1, child: child);
+      },
     );
   }
 
@@ -177,6 +471,12 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopNfcLoop();
+    _stopBleClient();
+    P2PService().shutdown();
+    _payloadSub?.cancel();
+    P2PService().typeNotifier.removeListener(_typeListener);
     _pulseCtrl.dispose();
     _welcomeCtrl.dispose();
     _confettiCtrl.dispose();
@@ -212,20 +512,13 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         final now = DateTime.now();
-        if (_lastBackPressTime == null || now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+        if (_lastBackPressTime == null ||
+            now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
           _lastBackPressTime = now;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
-                'Presiona Atrás de nuevo para salir',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-              backgroundColor: Colors.black87,
-              behavior: SnackBarBehavior.floating,
-              duration: const Duration(seconds: 2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              margin: const EdgeInsets.all(20),
-            ),
+          NotificationService().show(
+            'Presiona Atrás de nuevo para salir',
+            backgroundColor: Colors.black87,
+            duration: const Duration(seconds: 2),
           );
         } else {
           Navigator.of(context).pop();
@@ -233,112 +526,206 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
       },
       child: Scaffold(
         backgroundColor: kBgDark,
-        floatingActionButton: isBank
-            ? FloatingActionButton.extended(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const BankScreen()),
-                ),
-                backgroundColor: kGold,
-                foregroundColor: Colors.black,
-                icon: const Icon(Icons.account_balance_rounded),
-                label: const Text(
-                  'Panel Banco',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-              )
-            : FloatingActionButton.extended(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const PlayerDiscoveryScreen()),
-                ),
-                backgroundColor: displayColor,
-                foregroundColor: displayColor.computeLuminance() > 0.5 ? Colors.black : Colors.white,
-                icon: const Icon(Icons.people_alt_rounded),
-                label: const Text(
-                  'Transferir',
-                  style: TextStyle(fontWeight: FontWeight.w800),
+        floatingActionButton: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            // Botón de TEST (+200 GO)
+            if (!isBank)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: FloatingActionButton.small(
+                  heroTag: 'test_go_btn',
+                  onPressed: () {
+                    SoundService.playClick();
+                    wallet.addFunds(kPassGoAmount, isPassGo: true);
+                    _showToast(
+                        'TEST: +${formatMoney(kPassGoAmount)} (GO)', kGold);
+                  },
+                  backgroundColor: Colors.white10,
+                  foregroundColor: kGold,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Colors.white10),
+                  ),
+                  child: const Icon(Icons.plus_one_rounded),
                 ),
               ),
+            isBank
+                ? FloatingActionButton.extended(
+                    heroTag: 'bank_panel_btn',
+                    onPressed: () async {
+                      SoundService.playClick();
+                      _stopNfcLoop();
+                      if (!mounted) return;
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const BankScreen()),
+                      );
+                      if (mounted) await _ensureBankBleServerActive();
+                    },
+                    backgroundColor: kGold,
+                    foregroundColor: Colors.black,
+                    icon: const Icon(Icons.account_balance_rounded),
+                    label: const Text(
+                      'Panel Banco',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  )
+                : FloatingActionButton.extended(
+                    heroTag: 'transfer_btn',
+                    onPressed: () {
+                      SoundService.playClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const PlayerDiscoveryScreen()),
+                      );
+                    },
+                    backgroundColor: displayColor,
+                    foregroundColor: displayColor.computeLuminance() > 0.5
+                        ? Colors.black
+                        : Colors.white,
+                    icon: const Icon(Icons.people_alt_rounded),
+                    label: const Text(
+                      'Transferir',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+          ],
+        ),
         extendBodyBehindAppBar: true,
         body: Stack(
           children: [
-            CustomScrollView(
-              slivers: [
-                _buildAppBar(displayAvatar, displayColor, displayName, displayRole, isBank),
-                SliverToBoxAdapter(child: _buildBalanceCard(displayBalance, displayColor, displayName, displayColorId, _lastHistory, isBank)),
-                if (!isBank) SliverToBoxAdapter(child: _buildVaultSection(wallet, displayColor)),
-                SliverToBoxAdapter(child: _buildStatsRow(stats, displayColor)),
-                SliverToBoxAdapter(child: _buildNfcButton(displayColor)),
-                if (!isBank)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: StreamBuilder<Map<String, dynamic>>(
-                        stream: JugadorClient().messages,
-                        builder: (context, snapshot) {
-                          if (snapshot.hasData && snapshot.data!['type'] == 'transfer_state') {
-                            final stateStr = snapshot.data!['state'];
-                            return _buildNetworkTransferAlert(stateStr, displayName, isBank);
-                          }
-                          return const SizedBox();
-                        },
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: CustomScrollView(
+                  slivers: [
+                    _buildAppBar(displayAvatar, displayColor, displayName,
+                        displayRole, isBank),
+                    SliverToBoxAdapter(
+                      child: AnimatedEntry(
+                        delay: const Duration(milliseconds: 100),
+                        child: _buildBalanceCard(displayBalance, displayColor,
+                            displayName, displayColorId, _lastHistory, isBank),
                       ),
                     ),
-                  ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                    child: Row(
-                      children: [
-                        const Text(
-                          'HISTORIAL',
-                          style: TextStyle(
-                            color: kTextSecondary,
-                            fontSize: 12,
-                            letterSpacing: 2,
-                            fontWeight: FontWeight.w600,
-                          ),
+                    if (!isBank)
+                      SliverToBoxAdapter(
+                        child: AnimatedEntry(
+                          delay: const Duration(milliseconds: 200),
+                          child: _buildVaultSection(wallet, displayColor),
                         ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: kBgCard,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '${history.length}',
-                            style: const TextStyle(color: kTextSecondary, fontSize: 11),
-                          ),
-                        ),
-                      ],
+                      ),
+                    SliverToBoxAdapter(
+                      child: AnimatedEntry(
+                        delay: const Duration(milliseconds: 300),
+                        child: _buildStatsRow(stats, displayColor),
+                      ),
                     ),
-                  ),
+                    SliverToBoxAdapter(
+                      child: AnimatedEntry(
+                        delay: const Duration(milliseconds: 400),
+                        child: ValueListenableBuilder<TransportType>(
+                          valueListenable: P2PService().typeNotifier,
+                          builder: (context, type, _) {
+                            return _buildConnectionPanel(
+                                displayColor, type, isBank);
+                          },
+                        ),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: TransportSelector(),
+                      ),
+                    ),
+                    if (!isBank)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: StreamBuilder<Map<String, dynamic>>(
+                            stream: JugadorClient().messages,
+                            builder: (context, snapshot) {
+                              if (snapshot.hasData &&
+                                  snapshot.data!['type'] == 'transfer_state') {
+                                final stateStr = snapshot.data!['state'];
+                                return _buildNetworkTransferAlert(
+                                    stateStr, displayName, isBank);
+                              }
+                              return const SizedBox();
+                            },
+                          ),
+                        ),
+                      ),
+                    SliverToBoxAdapter(
+                      child: AnimatedEntry(
+                        delay: const Duration(milliseconds: 500),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                          child: Row(
+                            children: [
+                              const Text(
+                                'HISTORIAL',
+                                style: TextStyle(
+                                  color: kTextSecondary,
+                                  fontSize: 12,
+                                  letterSpacing: 2,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: kBgCard,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '${history.length}',
+                                  style: const TextStyle(
+                                      color: kTextSecondary, fontSize: 11),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (history.isEmpty)
+                      const SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.receipt_long_rounded,
+                                  color: kBorder, size: 48),
+                              SizedBox(height: 12),
+                              Text(
+                                'Sin transacciones aún',
+                                style: TextStyle(color: kTextSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (_, i) => TransactionTile(tx: history[i]),
+                          childCount: history.length,
+                        ),
+                      ),
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                          height: 80 + MediaQuery.of(context).padding.bottom),
+                    ),
+                  ],
                 ),
-                if (history.isEmpty)
-                  const SliverFillRemaining(
-                    hasScrollBody: false,
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.receipt_long_rounded, color: kBorder, size: 48),
-                          SizedBox(height: 12),
-                          Text(
-                            'Sin transacciones aún',
-                            style: TextStyle(color: kTextSecondary),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (_, i) => TransactionTile(tx: history[i]),
-                      childCount: history.length,
-                    ),
-                  ),
-              ],
+              ),
             ),
             Align(
               alignment: Alignment.topCenter,
@@ -351,15 +738,18 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                 gravity: 0.1,
               ),
             ),
-            if (_isBankruptOverlayActive) _buildBankruptcyScreen(displayName, session),
-            if (_showWelcome) _buildWelcomeOverlay(displayAvatar, displayColor, displayName),
+            if (_isBankruptOverlayActive)
+              _buildBankruptcyScreen(displayName, session),
+            if (_showWelcome)
+              _buildWelcomeOverlay(displayAvatar, displayColor, displayName),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNetworkTransferAlert(String stateStr, String userName, bool isBank) {
+  Widget _buildNetworkTransferAlert(
+      String stateStr, String userName, bool isBank) {
     Color color = kGold;
     String label = '';
     String sub = '';
@@ -401,8 +791,15 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 1.2)),
-                    Text(sub, style: const TextStyle(color: kTextSecondary, fontSize: 12)),
+                    Text(label,
+                        style: TextStyle(
+                            color: color,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            letterSpacing: 1.2)),
+                    Text(sub,
+                        style: const TextStyle(
+                            color: kTextSecondary, fontSize: 12)),
                   ],
                 ),
               ),
@@ -413,9 +810,18 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => JugadorClient().confirmAction(userName),
-                style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.black),
-                child: const Text('CONFIRMAR ACCIÓN FÍSICA', style: TextStyle(fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  SoundService.playClick();
+                  try {
+                    JugadorClient().confirmAction(userName);
+                  } catch (e, s) {
+                    if (context.mounted) context.showFriendlyError(e, s);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: color, foregroundColor: Colors.black),
+                child: const Text('CONFIRMAR ACCIÓN FÍSICA',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -442,7 +848,8 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                 child: child,
               );
             },
-            child: const Icon(Icons.broken_image_rounded, color: kRed, size: 120),
+            child:
+                const Icon(Icons.broken_image_rounded, color: kRed, size: 120),
           ),
           const SizedBox(height: 32),
           const Text(
@@ -465,13 +872,15 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
           const SizedBox(height: 48),
           ElevatedButton(
             onPressed: () {
+              SoundService.playClick();
               session.clearSession();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: kRed,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30)),
             ),
             child: const Text(
               'RECOGER MIS TABLAS E IRME',
@@ -480,7 +889,10 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
           ),
           const SizedBox(height: 20),
           TextButton(
-            onPressed: () => setState(() => _isBankruptOverlayActive = false),
+            onPressed: () {
+              SoundService.playClick();
+              setState(() => _isBankruptOverlayActive = false);
+            },
             child: const Text(
               'Ver mis deudas (Cerrar)',
               style: TextStyle(color: Colors.white24),
@@ -509,7 +921,8 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                   decoration: BoxDecoration(
                     color: color.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
-                    border: Border.all(color: color.withValues(alpha: 0.5), width: 2),
+                    border: Border.all(
+                        color: color.withValues(alpha: 0.5), width: 2),
                     boxShadow: [
                       BoxShadow(
                         color: color.withValues(alpha: 0.3),
@@ -543,8 +956,12 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                 ),
                 const SizedBox(height: 48),
                 IconButton(
-                  onPressed: _hideWelcome,
-                  icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 64),
+                  onPressed: () {
+                    SoundService.playClick();
+                    _hideWelcome();
+                  },
+                  icon: const Icon(Icons.check_circle_rounded,
+                      color: Colors.white, size: 64),
                 ),
               ],
             ),
@@ -554,7 +971,8 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
     );
   }
 
-  SliverAppBar _buildAppBar(String avatarId, Color color, String name, String role, bool isBank) {
+  SliverAppBar _buildAppBar(
+      String avatarId, Color color, String name, String role, bool isBank) {
     return SliverAppBar(
       backgroundColor: kBgDark,
       expandedHeight: 0,
@@ -570,14 +988,17 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: color.withValues(alpha: 0.5)),
             ),
-            child: Center(child: Text(avatarId, style: const TextStyle(fontSize: 18))),
+            child: Center(
+                child: Text(avatarId, style: const TextStyle(fontSize: 18))),
           ),
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isBank ? 'Banca Central' : (name.isNotEmpty ? name : 'Mi Billetera'),
+                isBank
+                    ? 'Banca Central'
+                    : (name.isNotEmpty ? name : 'Mi Billetera'),
                 style: const TextStyle(
                   color: kTextPrimary,
                   fontSize: 15,
@@ -585,8 +1006,11 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                 ),
               ),
               Text(
-                role.toUpperCase(),
-                style: const TextStyle(color: kTextSecondary, fontSize: 10, letterSpacing: 1),
+                role.toLowerCase() == 'cliente'
+                    ? 'JUGADOR'
+                    : role.toUpperCase(),
+                style: const TextStyle(
+                    color: kTextSecondary, fontSize: 10, letterSpacing: 1),
               ),
             ],
           ),
@@ -594,33 +1018,72 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
       ),
       actions: [
         IconButton(
+          icon: const Icon(Icons.nfc_rounded, color: kTextSecondary),
+          tooltip: 'NFC Debug',
+          onPressed: () async {
+            SoundService.playClick();
+            _stopNfcLoop();
+            await P2PService().shutdown();
+            if (!mounted) return;
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const NfcTestScreen()),
+            );
+            if (mounted) _startNfcLoop();
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.bluetooth_rounded, color: kTextSecondary),
+          tooltip: 'BLE Debug',
+          onPressed: () async {
+            SoundService.playClick();
+            _stopNfcLoop();
+            await P2PService().shutdown();
+            if (!mounted) return;
+            await Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const BleTestScreen()),
+            );
+            if (mounted) _startNfcLoop();
+          },
+        ),
+        IconButton(
           icon: const Icon(Icons.logout_rounded, color: kRed),
           tooltip: 'Cerrar Sesión',
-          onPressed: () => _confirmExit(context.read<SessionProvider>()),
+          onPressed: () {
+            SoundService.playClick();
+            _confirmExit(context.read<SessionProvider>());
+          },
         ),
         IconButton(
           icon: const Icon(Icons.refresh_rounded, color: kTextSecondary),
-          onPressed: () => setState(() {}),
+          onPressed: () {
+            SoundService.playClick();
+            setState(() {});
+          },
         ),
       ],
     );
   }
 
   void _confirmExit(SessionProvider session) {
-    showDialog(
+    showPremiumDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      child: AlertDialog(
         backgroundColor: kBgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('¿Cerrar sesión?', style: TextStyle(color: kTextPrimary)),
+        title: const Text('¿Cerrar sesión?',
+            style: TextStyle(color: kTextPrimary)),
         content: const Text(
           'Se borrarán todos los datos de esta partida y volverás a la selección de roles.',
           style: TextStyle(color: kTextSecondary),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(context);
+            },
+            child:
+                const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -631,7 +1094,8 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
             style: ElevatedButton.styleFrom(
               backgroundColor: kRed,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('Cerrar Sesión'),
           ),
@@ -640,7 +1104,8 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
     );
   }
 
-  Widget _buildBalanceCard(double balance, Color color, String name, int colorId, List<double> history, bool isBank) {
+  Widget _buildBalanceCard(double balance, Color color, String name,
+      int colorId, List<double> history, bool isBank) {
     if (isBank) {
       return _buildBankDisplay(balance);
     }
@@ -669,7 +1134,8 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                           builder: (context, targetPasses, _) {
                             final hasInvestment = invested > 0;
                             return Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 16),
+                              margin:
+                                  const EdgeInsets.symmetric(horizontal: 16),
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
                                 color: kBgCard,
@@ -681,7 +1147,8 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                                 children: [
                                   Row(
                                     children: [
-                                      const Icon(Icons.security_rounded, color: Colors.blueGrey),
+                                      const Icon(Icons.security_rounded,
+                                          color: Colors.blueGrey),
                                       const SizedBox(width: 8),
                                       const Text(
                                         'BÓVEDA DE INVERSIÓN',
@@ -695,17 +1162,31 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                                       const Spacer(),
                                       if (hasInvestment)
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
                                           decoration: BoxDecoration(
-                                            color: targetPasses > 0 && currentPasses >= targetPasses
-                                                ? kGreenGlow.withValues(alpha: 0.2)
-                                                : Colors.orange.withValues(alpha: 0.2),
-                                            borderRadius: BorderRadius.circular(8),
+                                            color: targetPasses > 0 &&
+                                                    currentPasses >=
+                                                        targetPasses
+                                                ? kGreenGlow.withValues(
+                                                    alpha: 0.2)
+                                                : Colors.orange
+                                                    .withValues(alpha: 0.2),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
                                           ),
                                           child: Text(
-                                            targetPasses > 0 && currentPasses >= targetPasses ? 'COMPLETADO' : 'EN PROCESO',
+                                            targetPasses > 0 &&
+                                                    currentPasses >=
+                                                        targetPasses
+                                                ? 'COMPLETADO'
+                                                : 'EN PROCESO',
                                             style: TextStyle(
-                                              color: targetPasses > 0 && currentPasses >= targetPasses ? kGreenGlow : Colors.orange,
+                                              color: targetPasses > 0 &&
+                                                      currentPasses >=
+                                                          targetPasses
+                                                  ? kGreenGlow
+                                                  : Colors.orange,
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,
                                             ),
@@ -717,41 +1198,69 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                                   if (!hasInvestment) ...[
                                     const Text(
                                       'Invierta su dinero a plazo fijo. Obtenga altos retornos bloqueando su saldo por una determinada cantidad de cruces por GO.',
-                                      style: TextStyle(color: Colors.white54, fontSize: 13),
+                                      style: TextStyle(
+                                          color: Colors.white54, fontSize: 13),
                                     ),
                                     const SizedBox(height: 20),
                                     SizedBox(
                                       width: double.infinity,
                                       child: ElevatedButton.icon(
-                                        onPressed: () => _showInvestDialog(wallet, color),
-                                        icon: const Icon(Icons.rocket_launch_rounded),
+                                        onPressed: () {
+                                          SoundService.playClick();
+                                          _showInvestDialog(wallet, color);
+                                        },
+                                        icon: const Icon(
+                                            Icons.rocket_launch_rounded),
                                         label: const Text('Comenzar Inversión'),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: color,
-                                          foregroundColor: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
-                                          padding: const EdgeInsets.symmetric(vertical: 14),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          foregroundColor:
+                                              color.computeLuminance() > 0.5
+                                                  ? Colors.black
+                                                  : Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 14),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12)),
                                         ),
                                       ),
                                     )
                                   ] else ...[
                                     Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
                                         Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            const Text('Capital Invertido', style: TextStyle(color: Colors.white54, fontSize: 11)),
-                                            Text('\$${invested.round()}',
-                                                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                                            const Text('Capital Invertido',
+                                                style: TextStyle(
+                                                    color: Colors.white54,
+                                                    fontSize: 11)),
+                                            Text(formatMoney(invested),
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 20,
+                                                    fontWeight:
+                                                        FontWeight.bold)),
                                           ],
                                         ),
                                         Column(
-                                          crossAxisAlignment: CrossAxisAlignment.end,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.end,
                                           children: [
-                                            const Text('Rendimiento', style: TextStyle(color: Colors.white54, fontSize: 11)),
-                                            Text('+\$${generated.round()}',
-                                                style: const TextStyle(color: kGreenGlow, fontSize: 20, fontWeight: FontWeight.bold)),
+                                            const Text('Rendimiento',
+                                                style: TextStyle(
+                                                    color: Colors.white54,
+                                                    fontSize: 11)),
+                                            Text('+${formatMoney(generated)}',
+                                                style: const TextStyle(
+                                                    color: kGreenGlow,
+                                                    fontSize: 20,
+                                                    fontWeight:
+                                                        FontWeight.bold)),
                                           ],
                                         ),
                                       ],
@@ -761,9 +1270,14 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                                       children: [
                                         Expanded(
                                           child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(4),
+                                            borderRadius:
+                                                BorderRadius.circular(4),
                                             child: LinearProgressIndicator(
-                                              value: targetPasses > 0 ? (currentPasses / targetPasses).clamp(0.0, 1.0) : 0.0,
+                                              value: targetPasses > 0
+                                                  ? (currentPasses /
+                                                          targetPasses)
+                                                      .clamp(0.0, 1.0)
+                                                  : 0.0,
                                               minHeight: 8,
                                               backgroundColor: Colors.white10,
                                               color: color,
@@ -773,7 +1287,10 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                                         const SizedBox(width: 12),
                                         Text(
                                           '$currentPasses / $targetPasses GO',
-                                          style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.bold),
+                                          style: const TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold),
                                         ),
                                       ],
                                     ),
@@ -781,14 +1298,31 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                                     SizedBox(
                                       width: double.infinity,
                                       child: OutlinedButton.icon(
-                                        onPressed: () => _showWithdrawDialog(wallet),
-                                        icon: const Icon(Icons.account_balance_wallet_rounded),
-                                        label: Text(currentPasses >= targetPasses ? 'Retirar Ganancias' : 'Retirar Anticipadamente (Penalidad 20%)'),
+                                        onPressed: () {
+                                          SoundService.playClick();
+                                          _showWithdrawDialog(wallet);
+                                        },
+                                        icon: const Icon(Icons
+                                            .account_balance_wallet_rounded),
+                                        label: Text(currentPasses >=
+                                                targetPasses
+                                            ? 'Retirar Ganancias'
+                                            : 'Retirar Anticipadamente (Penalidad 20%)'),
                                         style: OutlinedButton.styleFrom(
-                                          foregroundColor: currentPasses >= targetPasses ? kGreenGlow : kRed,
-                                          side: BorderSide(color: currentPasses >= targetPasses ? kGreenGlow : kRed),
-                                          padding: const EdgeInsets.symmetric(vertical: 14),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          foregroundColor:
+                                              currentPasses >= targetPasses
+                                                  ? kGreenGlow
+                                                  : kRed,
+                                          side: BorderSide(
+                                              color:
+                                                  currentPasses >= targetPasses
+                                                      ? kGreenGlow
+                                                      : kRed),
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 14),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12)),
                                         ),
                                       ),
                                     )
@@ -806,10 +1340,10 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
     final amountCtrl = TextEditingController();
     int selectedPasses = 3;
 
-    showDialog(
+    showPremiumDialog(
       context: context,
-      builder: (ctx) => StatefulBuilder(builder: (context, setStateSB) {
-        final val = double.tryParse(amountCtrl.text) ?? 0;
+      child: StatefulBuilder(builder: (context, setStateSB) {
+        final val = double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0;
         double getRate(int passes) {
           switch (passes) {
             case 1:
@@ -832,14 +1366,17 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
 
         return AlertDialog(
           backgroundColor: kBgCard,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Nueva Inversión', style: TextStyle(fontWeight: FontWeight.bold)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Nueva Inversión',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Monto a Invertir', style: TextStyle(color: Colors.white70)),
+                const Text('Monto a Invertir',
+                    style: TextStyle(color: Colors.white70)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: amountCtrl,
@@ -849,11 +1386,14 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                     prefixText: '\$ ',
                     filled: true,
                     fillColor: kBgDark,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none),
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text('Plazo (Pases por GO)', style: TextStyle(color: Colors.white70)),
+                const Text('Plazo (Pases por GO)',
+                    style: TextStyle(color: Colors.white70)),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -861,19 +1401,27 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                     final passes = index + 1;
                     final isSelected = selectedPasses == passes;
                     return GestureDetector(
-                      onTap: () => setStateSB(() => selectedPasses = passes),
+                      onTap: () {
+                        SoundService.playClick();
+                        setStateSB(() => selectedPasses = passes);
+                      },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: isSelected ? brandColor : kBgDark,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: isSelected ? brandColor : Colors.white10),
+                          border: Border.all(
+                              color: isSelected ? brandColor : Colors.white10),
                         ),
                         child: Text(
                           '$passes',
                           style: TextStyle(
-                            color: isSelected ? (brandColor.computeLuminance() > 0.5 ? Colors.black : Colors.white) : Colors.white54,
+                            color: isSelected
+                                ? (brandColor.computeLuminance() > 0.5
+                                    ? Colors.black
+                                    : Colors.white)
+                                : Colors.white54,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
@@ -886,13 +1434,19 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(
+                      color: Colors.black26,
+                      borderRadius: BorderRadius.circular(12)),
                   child: Column(
                     children: [
-                      Text('Rendimiento por Pase: ${(rate * 100).round()}%', style: const TextStyle(color: Colors.white70)),
+                      Text('Rendimiento por Pase: ${(rate * 100).round()}%',
+                          style: const TextStyle(color: Colors.white70)),
                       const SizedBox(height: 4),
-                      Text('Ganancia Estimada: \$${expectedTotal.round()}',
-                          style: const TextStyle(color: kGreenGlow, fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text('Ganancia Estimada: ${formatMoney(expectedTotal)}',
+                          style: const TextStyle(
+                              color: kGreenGlow,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16)),
                     ],
                   ),
                 )
@@ -900,17 +1454,37 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
+            TextButton(
+                onPressed: () {
+                  SoundService.playClick();
+                  Navigator.pop(context);
+                },
+                child: const Text('Cancelar',
+                    style: TextStyle(color: Colors.white54))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: brandColor,
-                foregroundColor: brandColor.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+                foregroundColor: brandColor.computeLuminance() > 0.5
+                    ? Colors.black
+                    : Colors.white,
               ),
               onPressed: () {
-                final finalVal = double.tryParse(amountCtrl.text) ?? 0;
+                SoundService.playClick();
+                final finalVal =
+                    double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0;
                 if (finalVal > 0) {
-                  wallet.investInVault(finalVal, selectedPasses);
-                  Navigator.pop(ctx);
+                  if (wallet.balance < finalVal) {
+                    _showToast(
+                        'Saldo insuficiente para invertir ${formatMoney(finalVal)}',
+                        kRed);
+                    return;
+                  }
+                  try {
+                    wallet.investInVault(finalVal, selectedPasses);
+                    Navigator.pop(context);
+                  } catch (e, s) {
+                    if (context.mounted) context.showFriendlyError(e, s);
+                  }
                 }
               },
               child: const Text('Invertir'),
@@ -923,29 +1497,45 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
 
   void _showWithdrawDialog(WalletController wallet) {
     final isEarly = wallet.currentPassesVault < wallet.targetPassesVault;
-    showDialog(
+    showPremiumDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-              backgroundColor: kBgCard,
-              title: Text(isEarly ? 'Retiro Anticipado' : 'Retiro de Inversión', style: TextStyle(color: isEarly ? kRed : kGreenGlow)),
-              content: Text(
-                isEarly
-                    ? 'Aún no has cumplido los pases por GO (${wallet.currentPassesVault}/${wallet.targetPassesVault}). Si retiras ahora, perderás los intereses generados y se aplicará una penalización del 20% sobre tu capital invertido.\n\n¿Estás seguro que deseas retirar?'
-                    : '¡Enhorabuena! Has cumplido el plazo de tu inversión. Se acreditará tu capital más los intereses generados a tu cuenta principal.',
-                style: const TextStyle(color: Colors.white70),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: isEarly ? kRed : kGreenGlow, foregroundColor: Colors.white),
-                  onPressed: () {
-                    wallet.withdrawVault();
-                    Navigator.pop(ctx);
-                  },
-                  child: Text(isEarly ? 'Sí, Retirar con Penalización' : 'Liquidar Inversión'),
-                ),
-              ],
-            ));
+        child: AlertDialog(
+          backgroundColor: kBgCard,
+          title: Text(isEarly ? 'Retiro Anticipado' : 'Retiro de Inversión',
+              style: TextStyle(color: isEarly ? kRed : kGreenGlow)),
+          content: Text(
+            isEarly
+                ? 'Aún no has cumplido los pases por GO (${wallet.currentPassesVault}/${wallet.targetPassesVault}). Si retiras ahora, perderás los intereses generados y se aplicará una penalización del 20% sobre tu capital invertido.\n\n¿Estás seguro que deseas retirar?'
+                : '¡Enhorabuena! Has cumplido el plazo de tu inversión. Se acreditará tu capital más los intereses generados a tu cuenta principal.',
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () {
+                  SoundService.playClick();
+                  Navigator.pop(context);
+                },
+                child: const Text('Cancelar',
+                    style: TextStyle(color: Colors.white54))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: isEarly ? kRed : kGreenGlow,
+                  foregroundColor: Colors.white),
+              onPressed: () {
+                SoundService.playClick();
+                try {
+                  wallet.withdrawVault();
+                  Navigator.pop(context);
+                } catch (e, s) {
+                  if (context.mounted) context.showFriendlyError(e, s);
+                }
+              },
+              child: Text(isEarly
+                  ? 'Sí, Retirar con Penalización'
+                  : 'Liquidar Inversión'),
+            ),
+          ],
+        ));
   }
 
   Widget _buildBankDisplay(double balance) {
@@ -1032,7 +1622,7 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
           const SizedBox(width: 8),
           _StatChip(
             label: 'Pass GO',
-            value: '×${stats.passGoCount}',
+            value: 'x${stats.passGoCount}',
             icon: Icons.flag_rounded,
             color: color,
           ),
@@ -1041,11 +1631,560 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
     );
   }
 
+  Widget _buildConnectionPanel(
+      Color color, TransportType currentTransport, bool isBank) {
+    if (currentTransport == TransportType.ble) {
+      if (isBank) return _buildBleBankPanel();
+      return _buildBleClientPanel(color);
+    }
+    return _buildNfcButton(color);
+  }
+
+  Future<bool> _ensureBleReady(BleTransport transport) async {
+    var status = await transport.refreshAvailability();
+    if (status == BleAvailabilityStatus.ready) return true;
+    if (!mounted) return false;
+
+    if (status == BleAvailabilityStatus.noHardware) {
+      _showToast('Este dispositivo no tiene Bluetooth LE disponible.', kRed);
+      return false;
+    }
+
+    if (status == BleAvailabilityStatus.missingPermissions) {
+      final allow = await _confirmAction(
+        title: 'Permisos de Bluetooth',
+        message:
+            'Para activar el servidor BLE del banco necesito permisos de Bluetooth. ¿Quieres permitirlos ahora?',
+        confirmLabel: 'Permitir',
+      );
+      if (allow != true || !mounted) return false;
+
+      await transport.requestPermissions();
+      await Future.delayed(const Duration(milliseconds: 500));
+      status = await transport.refreshAvailability();
+      if (status == BleAvailabilityStatus.ready) return true;
+      if (status == BleAvailabilityStatus.bluetoothOff) {
+        return _askToOpenBleSettings(transport);
+      }
+      _showToast(
+          'Permisos de Bluetooth pendientes. Revisa los permisos de la app.',
+          kRed);
+      return false;
+    }
+
+    if (status == BleAvailabilityStatus.bluetoothOff) {
+      return _askToOpenBleSettings(transport);
+    }
+
+    _showToast(
+        'No pude verificar Bluetooth. Revisa los ajustes e intenta de nuevo.',
+        kRed);
+    return false;
+  }
+
+  Future<bool> _askToOpenBleSettings(BleTransport transport) async {
+    final open = await _confirmAction(
+      title: 'Bluetooth apagado',
+      message:
+          'Para usar el banco por BLE debes activar Bluetooth. ¿Quieres abrir los ajustes?',
+      confirmLabel: 'Abrir ajustes',
+    );
+    if (open == true && mounted) {
+      await transport.openBleSettings();
+    }
+    return false;
+  }
+
+  Future<bool?> _confirmAction({
+    required String title,
+    required String message,
+    required String confirmLabel,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBleBankPanel() {
+    final transport = P2PService().bleTransport;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: transport.serverActiveNotifier,
+        builder: (context, active, _) {
+          return ValueListenableBuilder<bool>(
+            valueListenable: transport.clientConnectedNotifier,
+            builder: (context, connected, _) {
+              return ValueListenableBuilder<String>(
+                valueListenable: transport.connectionStatusNotifier,
+                builder: (context, status, _) {
+                  final accent = connected ? kGreen : Colors.blue;
+                  final title = connected
+                      ? 'JUGADOR CONECTADO'
+                      : active
+                          ? 'SERVIDOR BLE ACTIVO'
+                          : 'SERVIDOR BLE';
+                  final subtitle = status.isNotEmpty
+                      ? status
+                      : active
+                          ? 'Esperando que un jugador se conecte...'
+                          : 'Activa el servidor para recibir jugadores por Bluetooth';
+
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: active ? accent.withValues(alpha: 0.08) : kBgCard,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color:
+                            active ? accent.withValues(alpha: 0.45) : kBorder,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              connected
+                                  ? Icons.bluetooth_connected_rounded
+                                  : Icons.bluetooth_rounded,
+                              color: active ? accent : kTextSecondary,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: TextStyle(
+                                      color: active ? accent : kTextSecondary,
+                                      fontSize: 11,
+                                      letterSpacing: 1.5,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  Text(
+                                    subtitle,
+                                    style: const TextStyle(
+                                      color: kTextSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: active ? accent : kBorder,
+                                boxShadow: active
+                                    ? [
+                                        BoxShadow(
+                                          color: accent.withValues(alpha: 0.6),
+                                          blurRadius: 8,
+                                          spreadRadius: 2,
+                                        )
+                                      ]
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        SizedBox(
+                          width: double.infinity,
+                          child: active
+                              ? Container(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: accent.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: accent.withValues(alpha: 0.35),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        connected
+                                            ? Icons.link_rounded
+                                            : Icons.sensors_rounded,
+                                        color: accent,
+                                        size: 16,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        connected
+                                            ? 'Listo para operar con el jugador'
+                                            : 'Activo automáticamente',
+                                        style: TextStyle(
+                                          color: accent,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ElevatedButton.icon(
+                                  onPressed: () async {
+                                    SoundService.playClick();
+                                    final ready =
+                                        await _ensureBleReady(transport);
+                                    if (!ready || !mounted) return;
+                                    await transport.startServer();
+                                    P2PService()
+                                        .setTransport(TransportType.ble);
+                                  },
+                                  icon: const Icon(
+                                      Icons.bluetooth_searching_rounded,
+                                      size: 16),
+                                  label: const Text('Iniciar Servidor BLE'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBleClientPanel(Color color) {
+    final transport = P2PService().bleTransport;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: transport.clientConnectedNotifier,
+        builder: (context, connected, _) {
+          return ValueListenableBuilder<String>(
+            valueListenable: transport.connectionStatusNotifier,
+            builder: (context, status, _) {
+              return ValueListenableBuilder<String>(
+                valueListenable: transport.connectedDeviceNameNotifier,
+                builder: (context, _, __) {
+                  final connecting = status.startsWith('Conectando');
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color:
+                          connected ? color.withValues(alpha: 0.08) : kBgCard,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: connected
+                            ? color.withValues(alpha: 0.5)
+                            : connecting
+                                ? Colors.blue.withValues(alpha: 0.4)
+                                : _bleScanning
+                                    ? Colors.blue.withValues(alpha: 0.4)
+                                    : kBorder,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              connected
+                                  ? Icons.bluetooth_connected_rounded
+                                  : connecting
+                                      ? Icons.bluetooth_searching_rounded
+                                      : _bleScanning
+                                          ? Icons.bluetooth_searching_rounded
+                                          : Icons.bluetooth_rounded,
+                              color: connected
+                                  ? color
+                                  : connecting
+                                      ? Colors.blue
+                                      : _bleScanning
+                                          ? Colors.blue
+                                          : kTextSecondary,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    connected
+                                        ? 'CONECTADO AL BANCO'
+                                        : connecting
+                                            ? 'CONECTANDO AL BANCO...'
+                                            : _bleScanning
+                                                ? 'BUSCANDO SERVIDORES BLE...'
+                                                : 'BLUETOOTH',
+                                    style: TextStyle(
+                                      color: connected
+                                          ? color
+                                          : connecting
+                                              ? Colors.blue
+                                              : _bleScanning
+                                                  ? Colors.blue
+                                                  : kTextSecondary,
+                                      fontSize: 11,
+                                      letterSpacing: 1.5,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  if (status.isNotEmpty)
+                                    Text(
+                                      status,
+                                      style: TextStyle(
+                                        color: kTextSecondary,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: connected
+                                    ? color
+                                    : connecting
+                                        ? Colors.blue
+                                        : _bleScanning
+                                            ? Colors.blue
+                                            : kBorder,
+                                boxShadow: (connected ||
+                                        _bleScanning ||
+                                        connecting)
+                                    ? [
+                                        BoxShadow(
+                                          color:
+                                              (connected ? color : Colors.blue)
+                                                  .withValues(alpha: 0.6),
+                                          blurRadius: 8,
+                                          spreadRadius: 2,
+                                        )
+                                      ]
+                                    : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        if (!connected)
+                          ValueListenableBuilder<List<BleBankDevice>>(
+                            valueListenable: transport.discoveredBanksNotifier,
+                            builder: (context, banks, _) {
+                              if (!_bleScanning && banks.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (banks.isEmpty)
+                                    const Padding(
+                                      padding: EdgeInsets.only(bottom: 12),
+                                      child: Text(
+                                        'Esperando servidores activos...',
+                                        style: TextStyle(
+                                          color: kTextSecondary,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    )
+                                  else ...[
+                                    const Text(
+                                      'SERVIDORES DISPONIBLES',
+                                      style: TextStyle(
+                                        color: kTextSecondary,
+                                        fontSize: 10,
+                                        letterSpacing: 1.2,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ...banks.map(
+                                      (bank) {
+                                        final contactReady =
+                                            bank.isContactReady;
+                                        final bankColor =
+                                            contactReady ? kGreen : kBorder;
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 8),
+                                          child: InkWell(
+                                            onTap: () =>
+                                                _connectToBleBank(bank),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            child: Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: bankColor.withValues(
+                                                    alpha: 0.08),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: bankColor.withValues(
+                                                      alpha: 0.35),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons
+                                                        .account_balance_rounded,
+                                                    color: contactReady
+                                                        ? kGreen
+                                                        : kTextSecondary,
+                                                    size: 18,
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          bank.name,
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style: TextStyle(
+                                                            color: contactReady
+                                                                ? kTextPrimary
+                                                                : kTextSecondary,
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          '${bank.proximityLabel} - ${bank.rssi} dBm',
+                                                          style: TextStyle(
+                                                            color: contactReady
+                                                                ? kGreen
+                                                                : kTextSecondary,
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  Icon(
+                                                    contactReady
+                                                        ? Icons
+                                                            .touch_app_rounded
+                                                        : Icons
+                                                            .sensors_off_rounded,
+                                                    color: contactReady
+                                                        ? kGreen
+                                                        : kTextSecondary,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 6),
+                                  ],
+                                ],
+                              );
+                            },
+                          ),
+                        SizedBox(
+                          width: double.infinity,
+                          child: connected || _bleScanning || connecting
+                              ? OutlinedButton.icon(
+                                  onPressed: () {
+                                    SoundService.playClick();
+                                    _stopBleClient();
+                                  },
+                                  icon: const Icon(
+                                      Icons.bluetooth_disabled_rounded,
+                                      size: 16),
+                                  label: Text(_bleScanning
+                                      ? 'Cancelar Búsqueda'
+                                      : 'Desconectar del Banco'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: kRed,
+                                    side: const BorderSide(color: kRed),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
+                                  ),
+                                )
+                              : ElevatedButton.icon(
+                                  onPressed: () {
+                                    SoundService.playClick();
+                                    _startBleClient();
+                                  },
+                                  icon: const Icon(
+                                      Icons.bluetooth_searching_rounded,
+                                      size: 16),
+                                  label: const Text('Buscar bancos BLE'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(10)),
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildNfcButton(Color color) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
       child: GestureDetector(
-        onTap: _toggleNfc,
+        onTap: () {
+          SoundService.playClick();
+          _toggleNfc();
+        },
         child: AnimatedBuilder(
           animation: _pulseCtrl,
           builder: (context, child) {
@@ -1055,7 +2194,10 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                 color: _nfcListening ? color.withValues(alpha: 0.05) : kBgCard,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: _nfcListening ? color.withValues(alpha: 0.3 + (0.7 * (1.0 - _pulseCtrl.value))) : kBorder,
+                  color: _nfcListening
+                      ? color.withValues(
+                          alpha: 0.3 + (0.7 * (1.0 - _pulseCtrl.value)))
+                      : kBorder,
                   width: _nfcListening ? 2 : 1,
                 ),
                 gradient: _nfcListening
@@ -1079,13 +2221,17 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
-                    _nfcListening ? Icons.nfc_rounded : Icons.sensors_off_rounded,
+                    _nfcListening
+                        ? Icons.nfc_rounded
+                        : Icons.sensors_off_rounded,
                     color: _nfcListening ? color : kTextSecondary,
                     size: 22,
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    _nfcListening ? 'NFC ESCANEANDO...' : 'ACTIVAR NFC / CONTACTLESS',
+                    _nfcListening
+                        ? 'NFC ESCANEANDO...'
+                        : 'ACTIVAR NFC / CONTACTLESS',
                     style: TextStyle(
                       color: _nfcListening ? color : kTextSecondary,
                       fontWeight: FontWeight.w800,
@@ -1103,11 +2249,7 @@ class _WalletScreenState extends State<WalletScreen> with TickerProviderStateMix
   }
 
   String _compact(double val) {
-    if (val.isInfinite) return '∞';
-    if (val.isNaN) return 'NaN';
-    if (val >= 1000000) return '${(val / 1000000).toStringAsFixed(1)}M';
-    if (val >= 1000) return '${(val / 1000).toStringAsFixed(1)}K';
-    return val.round().toString();
+    return formatMoney(val);
   }
 }
 
@@ -1130,81 +2272,55 @@ class _PremiumCreditCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tier = _getTier();
-    final styles = _getStyles(tier);
-    final isVisa = colorId % 2 == 0;
+    return LayoutBuilder(builder: (context, constraints) {
+      // Ratio estándar de tarjeta de crédito: 85.6mm × 53.98mm = 1.586:1
+      // Se capa a 240 para que en pantallas grandes (OnePlus 7T) sea igual que antes
+      final cardHeight =
+          ((constraints.maxWidth - 32) / 1.586).clamp(0.0, 240.0);
 
-    if (isVisa) {
-      return _buildVisaCard(styles, tier);
-    } else {
-      return _buildMastercardCard(styles, tier);
-    }
+      // Special VIP Black Edition for Kevin and Meibi
+      final nameLower = name.toLowerCase().trim();
+      if (nameLower == 'kevin' || nameLower == 'meibi') {
+        return _buildVipBlackCard(cardHeight: cardHeight);
+      }
+
+      final wallet = context.read<WalletController>();
+      final tier = wallet.maxTier;
+      final styles = _getStyles(tier, color);
+
+      switch (tier) {
+        case CardTier.standard:
+          return _buildStandardCard(styles, cardHeight: cardHeight);
+        case CardTier.gold:
+          return _buildGoldCard(styles, cardHeight: cardHeight);
+        case CardTier.platinum:
+          return _buildPlatinumCard(styles, cardHeight: cardHeight);
+        case CardTier.black:
+          return _buildBlackCard(styles, cardHeight: cardHeight);
+      }
+    });
   }
 
-  Widget _buildMastercardCard(_CardStyles styles, _CardTier tier) {
+  Widget _buildStandardCard(_CardStyles styles, {required double cardHeight}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      height: 220,
-      width: double.infinity,
+      height: cardHeight,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         gradient: styles.gradient,
         boxShadow: [
           BoxShadow(
-            color: styles.accent.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
+              color: styles.accent.withValues(alpha: 0.2),
+              blurRadius: 15,
+              offset: const Offset(0, 8))
         ],
       ),
       child: Stack(
         children: [
           Positioned(
-            right: -50,
-            top: -50,
-            child: CircleAvatar(
-              radius: 100,
-              backgroundColor: Colors.white.withValues(alpha: 0.03),
-            ),
-          ),
-          if (history.isNotEmpty)
-            Positioned(
-              right: 0,
-              left: 0,
-              bottom: 0,
-              top: 50,
-              child: Opacity(
-                opacity: 0.2,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 20, top: 20),
-                  child: LineChart(
-                    LineChartData(
-                      gridData: const FlGridData(show: false),
-                      titlesData: const FlTitlesData(show: false),
-                      borderData: FlBorderData(show: false),
-                      lineBarsData: [
-                        LineChartBarData(
-                          spots: history.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value)).toList(),
-                          isCurved: true,
-                          color: styles.accent,
-                          barWidth: 2,
-                          isStrokeCapRound: true,
-                          dotData: const FlDotData(show: false),
-                          belowBarData: BarAreaData(
-                            show: true,
-                            gradient: LinearGradient(
-                              colors: [styles.accent.withValues(alpha: 0.3), styles.accent.withValues(alpha: 0.0)],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+              right: -30,
+              top: -30,
+              child: Icon(Icons.circle, size: 200, color: Colors.white10)),
           Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
@@ -1213,92 +2329,311 @@ class _PremiumCreditCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          styles.tierName,
-                          style: TextStyle(
-                            color: styles.accent,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2,
+                    const Icon(Icons.credit_card_rounded,
+                        color: Colors.white70, size: 30),
+                    Text(styles.tierName,
+                        style: const TextStyle(
+                            color: Colors.white70,
                             fontSize: 10,
-                          ),
-                        ),
-                        Text(
-                          name.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
                             fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                      ],
-                    ),
-                    _buildBrandLogo(colorId, false),
+                            letterSpacing: 2)),
                   ],
                 ),
                 const Spacer(),
-                Text(
-                  isBank ? 'BANCO CENTRAL' : '**** **** **** ${1000 + colorId}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Courier',
-                    fontSize: 16,
-                    letterSpacing: 2,
-                  ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                      isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          letterSpacing: 4,
+                          fontFamily: 'Courier')),
                 ),
                 const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('JUGADOR',
+                                style: TextStyle(
+                                    color: Colors.white54, fontSize: 8)),
+                            Text(name.toUpperCase(),
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                                overflow: TextOverflow.ellipsis),
+                          ]),
+                    ),
+                    Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text('SALDO',
+                              style: TextStyle(
+                                  color: Colors.white54, fontSize: 8)),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              OdometerWidget(
+                                  value: balance,
+                                  color: Colors.white,
+                                  style: const TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white)),
+                              const SizedBox(width: 8),
+                              _buildCardNetworkLogo(isVisa: true),
+                            ],
+                          ),
+                        ]),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGoldCard(_CardStyles styles, {required double cardHeight}) {
+    const goldLight = Color(0xFFFCF6BA);
+    const goldDeep = Color(0xFFBF953F);
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      height: cardHeight,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: styles.gradient,
+        border: Border.all(color: goldLight.withValues(alpha: 0.5), width: 2),
+        boxShadow: [
+          BoxShadow(
+              color: goldDeep.withValues(alpha: 0.4),
+              blurRadius: 20,
+              spreadRadius: 2)
+        ],
+      ),
+      child: Stack(
+        children: [
+          Center(
+              child: Opacity(
+                  opacity: 0.1,
+                  child:
+                      Icon(Icons.stars_rounded, size: 200, color: goldLight))),
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildEmvChipDesign(),
+                    Text(styles.tierName,
+                        style: TextStyle(
+                            color: goldLight.withValues(alpha: 0.8),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2)),
+                  ],
+                ),
+                const Spacer(),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                      isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
+                      style: const TextStyle(
+                          color: Color(0xFF3E2723),
+                          fontSize: 18,
+                          letterSpacing: 4,
+                          fontFamily: 'Courier',
+                          fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('GOLD MEMBER',
+                                style: TextStyle(
+                                    color: Color(0xFF5D4037),
+                                    fontSize: 7,
+                                    fontWeight: FontWeight.bold)),
+                            Text(name.toUpperCase(),
+                                style: const TextStyle(
+                                    color: Color(0xFF3E2723),
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 16),
+                                overflow: TextOverflow.ellipsis),
+                          ]),
+                    ),
+                    Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          const Text('SALDO DISPONIBLE',
+                              style: TextStyle(
+                                  color: Color(0xFF5D4037),
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold)),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              OdometerWidget(
+                                  value: balance,
+                                  color: const Color(0xFF3E2723),
+                                  style: const TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF3E2723))),
+                              const SizedBox(width: 8),
+                              _buildCardNetworkLogo(isVisa: false),
+                            ],
+                          ),
+                        ]),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlatinumCard(_CardStyles styles, {required double cardHeight}) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      height: cardHeight,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: styles.gradient,
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Stack(
+        children: [
+          ...List.generate(
+              15,
+              (index) => Positioned(
+                    left: index * 40.0,
+                    top: 0,
+                    bottom: 0,
+                    width: 1,
+                    child:
+                        Container(color: Colors.white.withValues(alpha: 0.03)),
+                  )),
+          // Watermark effect
+          Positioned(
+            right: -20,
+            bottom: 40,
+            child: Transform.rotate(
+              angle: -0.2,
+              child: Opacity(
+                opacity: 0.05,
+                child: Text(
+                  'PLATINUM\nPRESTIGE',
+                  style: TextStyle(
+                    color: const Color(0xFF102A43),
+                    fontSize: 80,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -2,
+                    height: 0.8,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildEmvChipDesign(),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Icon(Icons.wifi_rounded,
+                            color: Color(0xFF486581), size: 24),
+                        Text(styles.tierName,
+                            style: const TextStyle(
+                                color: Color(0xFF486581),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 2.5)),
+                      ],
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                      isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
+                      style: const TextStyle(
+                          color: Color(0xFF102A43),
+                          fontSize: 22,
+                          letterSpacing: 4.5,
+                          fontFamily: 'Courier',
+                          fontWeight: FontWeight.w900)),
+                ),
+                const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'SALDO ACTUAL',
-                            style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.bold),
-                          ),
-                          OdometerWidget(
-                            value: balance,
-                            color: Colors.white,
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('PLATINUM CARDHOLDER',
+                                style: TextStyle(
+                                    color: Color(0xFF486581),
+                                    fontSize: 7,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 1)),
+                            Text(name.toUpperCase(),
+                                style: const TextStyle(
+                                    color: Color(0xFF102A43),
+                                    fontSize: 16,
+                                    letterSpacing: 1.5,
+                                    fontWeight: FontWeight.w900),
+                                overflow: TextOverflow.ellipsis),
+                          ]),
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
-                          'VALIDEZ',
-                          style: TextStyle(color: Colors.white70, fontSize: 9, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          '12/30',
-                          style: TextStyle(color: styles.accent, fontWeight: FontWeight.bold),
+                        const Text('BALANCE DISPONIBLE',
+                            style: TextStyle(
+                                color: Color(0xFF486581),
+                                fontSize: 7,
+                                fontWeight: FontWeight.w900)),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            OdometerWidget(
+                                value: balance,
+                                color: const Color(0xFF102A43),
+                                style: const TextStyle(
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF102A43))),
+                            const SizedBox(width: 8),
+                            _buildCardNetworkLogo(isVisa: true),
+                          ],
                         ),
                       ],
                     ),
                   ],
                 ),
-                if (tier == _CardTier.black) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    _getRandomQuote(),
-                    style: const TextStyle(
-                      color: Colors.white38,
-                      fontSize: 9,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -1307,122 +2642,94 @@ class _PremiumCreditCard extends StatelessWidget {
     );
   }
 
-  Widget _buildVisaCard(_CardStyles styles, _CardTier tier) {
+  Widget _buildBlackCard(_CardStyles styles, {required double cardHeight}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      height: 220,
-      width: double.infinity,
+      height: cardHeight,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        // Visa design typically uses strong solid colors or subtle gradients
-        gradient: LinearGradient(
-          colors: [color.withValues(alpha: 0.8), Colors.black87],
-          begin: Alignment.bottomLeft,
-          end: Alignment.topRight,
-        ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+        color: Colors.black,
+        border:
+            Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.2)),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.2),
-            blurRadius: 15,
-            spreadRadius: 2,
-          ),
+              color: const Color(0xFFD4AF37).withValues(alpha: 0.1),
+              blurRadius: 30,
+              spreadRadius: 5)
         ],
       ),
       child: Stack(
         children: [
-          // Background pattern for Visa
-          Positioned.fill(
-            child: CustomPaint(
-              painter: _VisaBackgroundPattern(color: styles.accent.withValues(alpha: 0.1)),
-            ),
-          ),
+          Positioned.fill(child: CustomPaint(painter: _CarbonFiberPainter())),
           Padding(
-            padding: const EdgeInsets.all(20.0),
+            padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildBrandLogo(colorId, true),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: styles.accent.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: styles.accent.withValues(alpha: 0.5)),
-                      ),
-                      child: Text(
-                        styles.tierName,
-                        style: TextStyle(color: styles.accent, fontSize: 9, fontWeight: FontWeight.bold),
-                      ),
-                    ),
+                    const Icon(Icons.alt_route_rounded,
+                        color: Color(0xFFD4AF37), size: 32),
+                    Text(styles.tierName,
+                        style: const TextStyle(
+                            color: Color(0xFFD4AF37),
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 4)),
                   ],
                 ),
-                // EMV Chip
-                Container(
-                  width: 45,
-                  height: 35,
-                  decoration: BoxDecoration(
-                      color: Colors.amber.shade200,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.amber.shade600, width: 1.5),
-                      gradient: LinearGradient(
-                        colors: [Colors.amber.shade200, Colors.amber.shade400],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )),
-                  child: Stack(
-                    children: [
-                      Center(child: Container(width: 45, height: 1, color: Colors.amber.shade600)),
-                      Center(child: Container(width: 1, height: 35, color: Colors.amber.shade600)),
-                      Center(
-                          child: Container(
-                              width: 25,
-                              height: 15,
-                              decoration: BoxDecoration(border: Border.all(color: Colors.amber.shade600), borderRadius: BorderRadius.circular(4)))),
-                    ],
-                  ),
+                const Spacer(),
+                _buildEmvChipDesign(isBlack: true),
+                const SizedBox(height: 10),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                      isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
+                      style: const TextStyle(
+                          color: Color(0xFFD4AF37),
+                          fontSize: 20,
+                          letterSpacing: 5,
+                          fontFamily: 'Courier',
+                          fontWeight: FontWeight.bold)),
                 ),
-                Text(
-                  isBank ? 'BANCO CENTRAL' : '4000 1234 5678 ${1000 + colorId}',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Courier',
-                    fontSize: 22,
-                    letterSpacing: 3,
-                    shadows: [Shadow(color: Colors.black.withValues(alpha: 0.5), blurRadius: 2)],
-                  ),
-                ),
+                const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'CARDHOLDER NAME',
-                          style: TextStyle(color: Colors.white54, fontSize: 8, letterSpacing: 1),
-                        ),
-                        Text(
-                          name.toUpperCase(),
-                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: 1.5),
-                        ),
-                      ],
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(name.toUpperCase(),
+                                style: const TextStyle(
+                                    color: Color(0xFFD4AF37),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800),
+                                overflow: TextOverflow.ellipsis),
+                            Text(_getRandomQuote(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color: const Color(0xFFD4AF37)
+                                        .withValues(alpha: 0.6),
+                                    fontSize: 9,
+                                    fontStyle: FontStyle.italic)),
+                          ]),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('SALDO', style: TextStyle(color: Colors.white54, fontSize: 8)),
                         OdometerWidget(
-                          value: balance,
-                          color: Colors.white,
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
+                            value: balance,
+                            color: const Color(0xFFD4AF37),
+                            style: const TextStyle(
+                                fontSize: 34,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFFD4AF37))),
+                        const SizedBox(width: 8),
+                        _buildCardNetworkLogo(isVisa: false),
                       ],
                     ),
                   ],
@@ -1435,23 +2742,219 @@ class _PremiumCreditCard extends StatelessWidget {
     );
   }
 
-  _CardTier _getTier() {
-    if (isBank) return _CardTier.gold;
-    if (balance >= 20000) return _CardTier.black;
-    if (balance >= 10000) return _CardTier.platinum;
-    if (balance >= 5000) return _CardTier.gold;
-    return _CardTier.standard;
+  Widget _buildEmvChipDesign({bool isBlack = false}) {
+    return Container(
+      width: 45,
+      height: 35,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+            colors: isBlack
+                ? [Colors.grey.shade800, Colors.grey.shade600]
+                : [Colors.amber.shade200, Colors.amber.shade400],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+            color: isBlack ? Colors.white24 : Colors.amber.shade700, width: 1),
+      ),
+      child: Stack(
+        children: [
+          Center(child: Container(width: 45, height: 1, color: Colors.black12)),
+          Center(child: Container(width: 1, height: 35, color: Colors.black12)),
+        ],
+      ),
+    );
   }
 
-  _CardStyles _getStyles(_CardTier tier) {
+  Widget _buildCardNetworkLogo({required bool isVisa}) {
+    if (isVisa) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('VISA',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                fontStyle: FontStyle.italic,
+              )),
+          Container(width: 30, height: 2, color: Colors.amber),
+        ],
+      );
+    } else {
+      return SizedBox(
+        width: 40,
+        height: 25,
+        child: Stack(
+          children: [
+            Container(
+              width: 25,
+              height: 25,
+              decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.8),
+                  shape: BoxShape.circle),
+            ),
+            Positioned(
+              left: 12,
+              child: Container(
+                width: 25,
+                height: 25,
+                decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.8),
+                    shape: BoxShape.circle),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Widget _buildVipBlackCard({required double cardHeight}) {
+    const goldDeep = Color(0xFFBF953F);
+    const goldLight = Color(0xFFFCF6BA);
+    const goldMid = Color(0xFFD4AF37);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      height: cardHeight,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0A0A0A), Color(0xFF1A1A1A), Color(0xFF0D0D0D)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: goldMid, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+              color: goldMid.withValues(alpha: 0.4),
+              blurRadius: 24,
+              spreadRadius: 2,
+              offset: const Offset(0, 8)),
+          BoxShadow(
+              color: goldDeep.withValues(alpha: 0.2),
+              blurRadius: 48,
+              spreadRadius: -4),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.hardEdge,
+        children: [
+          Positioned(
+              right: -60,
+              top: -60,
+              child: Container(
+                  width: 200,
+                  height: 200,
+                  decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(colors: [
+                        goldMid.withValues(alpha: 0.15),
+                        Colors.transparent
+                      ])))),
+          Positioned(
+              left: -40,
+              bottom: -40,
+              child: Container(
+                  width: 150,
+                  height: 150,
+                  decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(colors: [
+                        goldDeep.withValues(alpha: 0.2),
+                        Colors.transparent
+                      ])))),
+          Padding(
+            padding: const EdgeInsets.all(22.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('MONOPOLY BANK',
+                              style: TextStyle(
+                                  color: goldLight,
+                                  fontSize: 9,
+                                  letterSpacing: 3,
+                                  fontWeight: FontWeight.w800)),
+                          const Text('VIP BLACK EDITION',
+                              style: TextStyle(
+                                  color: goldMid,
+                                  fontSize: 8,
+                                  letterSpacing: 2.5,
+                                  fontWeight: FontWeight.w700)),
+                        ]),
+                    Icon(Icons.diamond_rounded, color: goldLight, size: 30),
+                  ],
+                ),
+                const Spacer(),
+                _buildEmvChipDesign(),
+                const SizedBox(height: 12),
+                Text(_generateCardNumber(name),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontFamily: 'Courier',
+                        fontSize: 18,
+                        letterSpacing: 3,
+                        fontWeight: FontWeight.bold)),
+                const Spacer(),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('PLATINUM CARDHOLDER',
+                                style: TextStyle(color: goldDeep, fontSize: 7)),
+                            Text(name.toUpperCase(),
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900),
+                                overflow: TextOverflow.ellipsis),
+                          ]),
+                    ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        OdometerWidget(
+                            value: balance,
+                            color: goldLight,
+                            style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w900,
+                                color: goldLight)),
+                        const SizedBox(width: 8),
+                        _buildCardNetworkLogo(isVisa: true),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _CardStyles _getStyles(CardTier tier, Color playerColor) {
     switch (tier) {
-      case _CardTier.standard:
+      case CardTier.standard:
         return _CardStyles(
           gradient: LinearGradient(
             colors: [
-              color,
-              Color.lerp(color, Colors.black, 0.4)!,
-              Color.lerp(color, Colors.black, 0.7)!,
+              playerColor,
+              Color.lerp(playerColor, Colors.black, 0.4)!,
+              Color.lerp(playerColor, Colors.black, 0.7)!
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -1459,17 +2962,23 @@ class _PremiumCreditCard extends StatelessWidget {
           accent: Colors.white,
           tierName: 'CLASSIC EDITION',
         );
-      case _CardTier.gold:
+      case CardTier.gold:
         return _CardStyles(
           gradient: const LinearGradient(
-            colors: [Color(0xFFBF953F), Color(0xFFFCF6BA), Color(0xFFB38728), Color(0xFFFBF5B7), Color(0xFFAA771C)],
+            colors: [
+              Color(0xFFBF953F),
+              Color(0xFFFCF6BA),
+              Color(0xFFB38728),
+              Color(0xFFFBF5B7),
+              Color(0xFFFBF5B7)
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           accent: const Color(0xFF2D2410),
           tierName: 'GOLD MEMBERSHIP',
         );
-      case _CardTier.platinum:
+      case CardTier.platinum:
         return _CardStyles(
           gradient: const LinearGradient(
             colors: [Color(0xFFE0E0E0), Color(0xFFBDBDBD), Color(0xFF757575)],
@@ -1479,74 +2988,52 @@ class _PremiumCreditCard extends StatelessWidget {
           accent: Colors.white,
           tierName: 'PLATINUM PRESTIGE',
         );
-      case _CardTier.black:
+      case CardTier.black:
         return _CardStyles(
           gradient: const LinearGradient(
             colors: [Color(0xFF141E30), Color(0xFF000000)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          accent: Colors.white,
-          tierName: 'ULTIMATE BLACK EDITION',
+          accent: Colors.blueAccent,
+          tierName: 'ULTIMATE BLACK',
         );
     }
   }
 
-  Widget _buildBrandLogo(int id, bool isVisa) {
-    return Column(
-      children: [
-        Icon(
-          isVisa ? Icons.credit_card_rounded : Icons.payments_rounded,
-          color: Colors.white38,
-          size: 32,
-        ),
-        Text(
-          isVisa ? 'VISA' : 'Mastercard',
-          style: const TextStyle(
-            color: Colors.white38,
-            fontWeight: FontWeight.w900,
-            fontStyle: FontStyle.italic,
-            fontSize: 10,
-          ),
-        ),
-      ],
-    );
+  String _generateCardNumber(String source) {
+    if (source.isEmpty) source = "JUGADOR";
+    // Usar el nombre como semilla para Random
+    final seed = source
+        .split('')
+        .fold<int>(0, (prev, char) => prev + char.codeUnitAt(0));
+    final rand = Random(seed);
+
+    String part() => (rand.nextInt(9000) + 1000).toString().padLeft(4, '0');
+    return "${part()} ${part()} ${part()} ${part()}";
   }
 
   String _getRandomQuote() {
     final quotes = [
-      "Mi jet tiene su propia pista de aterrizaje.",
-      "¿Ahorrar? Pensé que eso era un deporte extremo.",
-      "Uso billetes de 500 para limpiar mis gafas.",
-      "Mis propinas son el salario anual de una nación.",
-      "Este café costó lo mismo que tu primer coche.",
-      "Perdí un Rolex en el sofá y simplemente compré otro sofá.",
-      "El oro es mi color favorito, después del platino.",
-      "No hablo el idioma de los descuentos.",
-      "Mi champán tiene más burbujas que tu cuenta.",
-      "Contraté a alguien para que suspire por mí.",
-      "Mi piscina tiene calefacción volcánica.",
-      "El caviar de hoy estaba un poco... económico.",
-      "Vendo barcos para comprar barcos más grandes.",
-      "Mi mayordomo tiene su propio mayordomo.",
-      "El aire que respiro está filtrado por seda.",
-      "Me aburrí y compré una isla, la devolví ayer.",
-      "Las monedas me dan alergia, prefiero el papel.",
-      "Mi tarjeta es de vibranio, la tuya de plástico.",
-      "Vuelo en primera clase hasta para ir al baño.",
-      "Si preguntas el precio, no puedes pagarlo.",
+      "Tu sueldo es mi propina.",
+      "Demasiado rico para tener gusto.",
+      "Mi única Bill es Gates.",
+      "Compré el banco para no esperar.",
+      "No hablo idioma 'descuento'.",
+      "Más burbujas que tu cuenta.",
+      "El caviar es mi snack.",
+      "Oro para mis lentes.",
     ];
     return quotes[name.length % quotes.length];
   }
 }
 
-enum _CardTier { standard, gold, platinum, black }
-
 class _CardStyles {
   final LinearGradient gradient;
   final Color accent;
   final String tierName;
-  _CardStyles({required this.gradient, required this.accent, required this.tierName});
+  _CardStyles(
+      {required this.gradient, required this.accent, required this.tierName});
 }
 
 class _StatChip extends StatelessWidget {
@@ -1576,8 +3063,13 @@ class _StatChip extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 18),
             const SizedBox(height: 4),
-            Text(value, style: const TextStyle(color: kTextPrimary, fontWeight: FontWeight.w700, fontSize: 13)),
-            Text(label, style: const TextStyle(color: kTextSecondary, fontSize: 10)),
+            Text(value,
+                style: const TextStyle(
+                    color: kTextPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13)),
+            Text(label,
+                style: const TextStyle(color: kTextSecondary, fontSize: 10)),
           ],
         ),
       ),
@@ -1585,23 +3077,17 @@ class _StatChip extends StatelessWidget {
   }
 }
 
-class _VisaBackgroundPattern extends CustomPainter {
-  final Color color;
-  _VisaBackgroundPattern({required this.color});
-
+class _CarbonFiberPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+      ..color = Colors.white.withValues(alpha: 0.05)
+      ..strokeWidth = 1;
 
-    final path = Path();
-    for (double i = -size.height; i < size.width; i += 30) {
-      path.moveTo(i, 0);
-      path.lineTo(i + size.height * 1.5, size.height);
+    for (double i = -size.height; i < size.width; i += 10) {
+      canvas.drawLine(
+          Offset(i, 0), Offset(i + size.height, size.height), paint);
     }
-    canvas.drawPath(path, paint);
   }
 
   @override

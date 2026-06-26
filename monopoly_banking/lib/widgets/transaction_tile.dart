@@ -45,11 +45,7 @@ class TransactionTile extends StatelessWidget {
           style: const TextStyle(color: kTextSecondary, fontSize: 12),
         ),
         trailing: Text(
-          tx.amount.isInfinite
-              ? '∞'
-              : tx.amount.isNaN
-                  ? 'NaN'
-                  : '$sign$kMoneySymbol${tx.amount.round()}',
+          '$sign${formatMoney(tx.amount.abs())}',
           style: TextStyle(
             color: color,
             fontWeight: FontWeight.w800,

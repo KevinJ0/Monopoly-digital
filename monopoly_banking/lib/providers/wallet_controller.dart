@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/models/session_model.dart';
 import 'package:monopoly_banking/models/transaction_model.dart';
 import 'package:monopoly_banking/providers/stats_provider.dart';
@@ -13,6 +14,8 @@ import 'package:uuid/uuid.dart';
 
 enum TxType { received, sent, passGo, largeTransfer }
 
+enum CardTier { standard, gold, platinum, black }
+
 class WalletController extends ChangeNotifier {
   final StatsProvider _stats;
   final _uuid = const Uuid();
@@ -22,12 +25,16 @@ class WalletController extends ChangeNotifier {
   final ValueNotifier<double> vaultGeneratedAmount = ValueNotifier(0);
   final ValueNotifier<int> vaultTargetPasses = ValueNotifier(0);
   final ValueNotifier<int> vaultCurrentPasses = ValueNotifier(0);
-  final StreamController<TxType> _txEvent = StreamController.broadcast();
   final ValueNotifier<bool> bankruptNotifier = ValueNotifier(false);
+  final StreamController<TxType> _txEvent = StreamController.broadcast();
+  final StreamController<CardTier> _tierStream = StreamController.broadcast();
 
   final AudioPlayer _audioPlayer = AudioPlayer();
 
+  List<TransactionModel>? _cachedHistory;
+
   Stream<TxType> get txStream => _txEvent.stream;
+  Stream<CardTier> get tierStream => _tierStream.stream;
 
   WalletController(this._stats);
 
@@ -40,6 +47,7 @@ class WalletController extends ChangeNotifier {
   int get currentPassesVault => _session?.vaultCurrentPasses ?? 0;
   bool get isBankrupt => _session?.isBankrupt ?? false;
   List<double> get historyData => _session?.balanceHistory ?? [];
+  CardTier get maxTier => CardTier.values[_session?.maxTier ?? 0];
 
   Future<void> addFunds(double amount, {bool isPassGo = false}) async {
     final session = _session;
@@ -52,7 +60,8 @@ class WalletController extends ChangeNotifier {
     if (isPassGo) {
       session.passGoCount += 1;
 
-      if (session.vaultInvestedAmount > 0 && session.vaultCurrentPasses < session.vaultTargetPasses) {
+      if (session.vaultInvestedAmount > 0 &&
+          session.vaultCurrentPasses < session.vaultTargetPasses) {
         session.vaultCurrentPasses += 1;
 
         final double rate;
@@ -80,14 +89,15 @@ class WalletController extends ChangeNotifier {
         session.vaultGeneratedAmount += generated;
 
         final msg = session.vaultCurrentPasses >= session.vaultTargetPasses
-            ? "Inversión completada. Ganancia total: ${session.vaultGeneratedAmount.round()} pesos."
-            : "Intereses de inversión generados: ${generated.round()} pesos. Pase ${session.vaultCurrentPasses} de ${session.vaultTargetPasses}.";
+            ? "Inversión completada. Ganancia total: ${formatMoney(session.vaultGeneratedAmount)} pesos."
+            : "Intereses de inversión generados: ${formatMoney(generated)} pesos. Pase ${session.vaultCurrentPasses} de ${session.vaultTargetPasses}.";
 
         VozService().hablar(msg);
       }
     }
 
     _recordHistory(session);
+    syncTierWithBalance();
     await session.save();
 
     _stats.record(amount, isPassGo: isPassGo);
@@ -105,7 +115,7 @@ class WalletController extends ChangeNotifier {
 
     // Feedback
     try {
-      _audioPlayer.play(AssetSource('sounds/cash.mp3'));
+      _audioPlayer.play(AssetSource('sounds/cash.wav'));
     } catch (_) {}
 
     if (isPassGo) {
@@ -133,7 +143,8 @@ class WalletController extends ChangeNotifier {
     if (session.balance < amount) return false;
 
     if (amount >= 5000) {
-      final auth = await BiometriaService().autenticar("Autorice la transferencia de alto valor por \$${amount.round()}");
+      final auth = await BiometriaService().autenticar(
+          "Autorice la transferencia de alto valor por ${formatMoney(amount)}");
       if (!auth) return false;
     }
 
@@ -150,7 +161,7 @@ class WalletController extends ChangeNotifier {
 
     // Feedback
     try {
-      _audioPlayer.play(AssetSource('sounds/click.mp3'));
+      _audioPlayer.play(AssetSource('sounds/click.wav'));
     } catch (_) {}
 
     if (amount >= 2000) {
@@ -203,11 +214,14 @@ class WalletController extends ChangeNotifier {
     if (isEarly) {
       // 20% penalty on invested amount, lose generated interests
       amountToReturn = session.vaultInvestedAmount * 0.80;
-      VozService().hablar("Retiro anticipado con penalización. Recuperado ${amountToReturn.round()} pesos.");
+      VozService().hablar(
+          "Retiro anticipado con penalización. Recuperado ${formatMoney(amountToReturn)} pesos.");
     } else {
       // Full amount + generated interests
-      amountToReturn = session.vaultInvestedAmount + session.vaultGeneratedAmount;
-      VozService().hablar("Inversión retirada con éxito. Capital más intereses: ${amountToReturn.round()} pesos.");
+      amountToReturn =
+          session.vaultInvestedAmount + session.vaultGeneratedAmount;
+      VozService().hablar(
+          "Inversión retirada con éxito. Capital más intereses: ${formatMoney(amountToReturn)} pesos.");
     }
 
     session.balance += amountToReturn;
@@ -230,6 +244,29 @@ class WalletController extends ChangeNotifier {
     vaultGeneratedAmount.value = session.vaultGeneratedAmount;
     vaultCurrentPasses.value = session.vaultCurrentPasses;
     vaultTargetPasses.value = session.vaultTargetPasses;
+  }
+
+  void syncTierWithBalance() {
+    final session = _session;
+    if (session == null || session.role == 'bank') return;
+
+    int currentTierIdx = session.maxTier;
+    int newTierIdx = currentTierIdx;
+
+    if (session.balance >= 15000) {
+      newTierIdx = 3; // Black
+    } else if (session.balance >= 8000) {
+      newTierIdx = 2; // Platinum
+    } else if (session.balance >= 4000) {
+      newTierIdx = 1; // Gold
+    }
+
+    if (newTierIdx > currentTierIdx) {
+      session.maxTier = newTierIdx;
+      session.save(); // Persistir el logro
+      _tierStream.add(CardTier.values[newTierIdx]);
+      notifyListeners();
+    }
   }
 
   void _recordHistory(SessionModel session) {
@@ -263,13 +300,19 @@ class WalletController extends ChangeNotifier {
       balanceAfter: balanceAfter,
     );
     HiveService.txBox.put(tx.id, tx);
+    _cachedHistory?.insert(0, tx);
   }
 
-  List<TransactionModel> get history => HiveService.txBox.values.toList()..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  List<TransactionModel> get history {
+    _cachedHistory ??= HiveService.txBox.values.toList()
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return _cachedHistory!;
+  }
 
   @override
   void dispose() {
     _txEvent.close();
+    _tierStream.close();
     rawBalance.dispose();
     bankruptNotifier.dispose();
     _audioPlayer.dispose();

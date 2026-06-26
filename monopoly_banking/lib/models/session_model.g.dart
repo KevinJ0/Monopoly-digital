@@ -27,10 +27,10 @@ class SessionModelAdapter extends TypeAdapter<SessionModel> {
       isBankrupt: fields[4] as bool,
       name: fields[8] as String?,
       isHandshakeDone: fields[9] as bool,
-      vaultInvestedAmount: fields[10] as double,
-      vaultGeneratedAmount: fields[12] as double,
-      vaultTargetPasses: fields[13] as int,
-      vaultCurrentPasses: fields[14] as int,
+      vaultInvestedAmount: fields[10] == null ? 0.0 : fields[10] as double,
+      vaultGeneratedAmount: fields[12] == null ? 0.0 : fields[12] as double,
+      vaultTargetPasses: fields[13] == null ? 0 : fields[13] as int,
+      vaultCurrentPasses: fields[14] == null ? 0 : fields[14] as int,
       balanceHistory: (fields[11] as List?)?.cast<double>(),
     );
   }

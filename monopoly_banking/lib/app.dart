@@ -8,6 +8,7 @@ import 'package:monopoly_banking/providers/wallet_controller.dart';
 import 'package:monopoly_banking/screens/role_selection_screen.dart';
 import 'package:monopoly_banking/screens/wallet_screen.dart';
 import 'package:monopoly_banking/screens/splash_screen.dart';
+import 'package:monopoly_banking/services/notification_service.dart';
 
 class MonopolyApp extends StatefulWidget {
   const MonopolyApp({super.key});
@@ -42,6 +43,7 @@ class _MonopolyAppState extends State<MonopolyApp> {
         Provider<BalanceTweenController>.value(value: _tween),
       ],
       child: MaterialApp(
+        scaffoldMessengerKey: NotificationService().scaffoldMessengerKey,
         title: 'Monopoly Banking',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
@@ -65,6 +67,11 @@ class _MonopolyAppState extends State<MonopolyApp> {
           ),
           textTheme: const TextTheme(
             bodyMedium: TextStyle(color: kTextPrimary),
+          ),
+          pageTransitionsTheme: const PageTransitionsTheme(
+            builders: {
+              TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
+            },
           ),
         ),
         home: const _RootRouter(),
@@ -121,7 +128,9 @@ class _RootRouterState extends State<_RootRouter> {
         opacity: anim,
         child: child,
       ),
-      child: hasSession ? const WalletScreen(key: ValueKey('wallet')) : const RoleSelectionScreen(key: ValueKey('role')),
+      child: hasSession
+          ? const WalletScreen(key: ValueKey('wallet'))
+          : const RoleSelectionScreen(key: ValueKey('role')),
     );
   }
 }

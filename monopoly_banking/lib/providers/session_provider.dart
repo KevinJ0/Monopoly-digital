@@ -66,6 +66,7 @@ class SessionProvider extends ChangeNotifier {
 
     _wallet.rawBalance.value = session.balance;
     _wallet.bankruptNotifier.value = session.isBankrupt;
+    _wallet.syncTierWithBalance();
 
     if (session.isBankrupt) {
       await P2PService().shutdown();
@@ -100,6 +101,7 @@ class SessionProvider extends ChangeNotifier {
 
     await HiveService.sessionBox.put('current', session);
     _wallet.rawBalance.value = initialBalance;
+    _wallet.syncTierWithBalance();
     _initialized = true;
     notifyListeners();
   }

@@ -17,7 +17,8 @@ class OdometerWidget extends StatefulWidget {
   State<OdometerWidget> createState() => _OdometerWidgetState();
 }
 
-class _OdometerWidgetState extends State<OdometerWidget> with SingleTickerProviderStateMixin {
+class _OdometerWidgetState extends State<OdometerWidget>
+    with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
   late Animation<double> _anim;
   double _prev = 0;
@@ -66,35 +67,31 @@ class _OdometerWidgetState extends State<OdometerWidget> with SingleTickerProvid
     return AnimatedBuilder(
       animation: _anim,
       builder: (_, __) {
-        final formatted = _formatAmount(_anim.value);
+        final formatted = formatMoneyAmount(_anim.value);
         return ShaderMask(
           shaderCallback: (bounds) {
             final color = widget.color ?? kGreen;
             return LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [color.withValues(alpha: 0.6), color, color.withValues(alpha: 0.6)],
+              colors: [
+                color.withValues(alpha: 0.6),
+                color,
+                color.withValues(alpha: 0.6)
+              ],
             ).createShader(bounds);
           },
-          child: Text(
-            '$kMoneySymbol$formatted',
-            style: base.copyWith(color: Colors.white),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '$kMoneySymbol$formatted',
+              style: base.copyWith(color: Colors.white, fontSize: 32),
+              maxLines: 1,
+            ),
           ),
         );
       },
     );
-  }
-
-  String _formatAmount(double val) {
-    if (val.isInfinite) return '∞';
-    if (val.isNaN) return 'NaN';
-    final rounded = val.round();
-    final str = rounded.abs().toString();
-    final buffer = StringBuffer();
-    for (var i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buffer.write(',');
-      buffer.write(str[i]);
-    }
-    return rounded < 0 ? '-${buffer.toString()}' : buffer.toString();
   }
 }

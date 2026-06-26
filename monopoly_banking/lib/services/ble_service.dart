@@ -30,7 +30,8 @@ class BleService {
     _gameId = gameId;
   }
 
-  Future<void> scanAndConnect(String gameId, BlePayloadHandler onPayload) async {
+  Future<void> scanAndConnect(
+      String gameId, BlePayloadHandler onPayload) async {
     _gameId = gameId;
     final serviceUuid = _buildServiceUuid(gameId);
 

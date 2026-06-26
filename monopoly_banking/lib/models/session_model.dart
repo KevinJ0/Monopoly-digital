@@ -33,20 +33,23 @@ class SessionModel extends HiveObject {
   @HiveField(9)
   final bool isHandshakeDone;
 
-  @HiveField(10)
+  @HiveField(10, defaultValue: 0.0)
   double vaultInvestedAmount;
 
   @HiveField(11)
   List<double> balanceHistory;
 
-  @HiveField(12)
+  @HiveField(12, defaultValue: 0.0)
   double vaultGeneratedAmount;
 
-  @HiveField(13)
+  @HiveField(13, defaultValue: 0)
   int vaultTargetPasses;
 
-  @HiveField(14)
+  @HiveField(14, defaultValue: 0)
   int vaultCurrentPasses;
+
+  @HiveField(15, defaultValue: 0)
+  int maxTier;
 
   SessionModel({
     required this.role,
@@ -63,6 +66,7 @@ class SessionModel extends HiveObject {
     this.vaultGeneratedAmount = 0.0,
     this.vaultTargetPasses = 0,
     this.vaultCurrentPasses = 0,
+    this.maxTier = 0,
     List<double>? balanceHistory,
   }) : balanceHistory = balanceHistory ?? [];
 }

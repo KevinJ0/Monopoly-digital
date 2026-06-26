@@ -19,8 +19,10 @@ class BancoServer {
   final _stateController = StreamController<TransferState>.broadcast();
   Stream<TransferState> get stateStream => _stateController.stream;
 
-  final _clientsController = StreamController<List<Map<String, dynamic>>>.broadcast();
-  Stream<List<Map<String, dynamic>>> get connectedPlayers => _clientsController.stream;
+  final _clientsController =
+      StreamController<List<Map<String, dynamic>>>.broadcast();
+  Stream<List<Map<String, dynamic>>> get connectedPlayers =>
+      _clientsController.stream;
 
   Future<void> start() async {
     try {
@@ -111,16 +113,19 @@ class BancoServer {
   }
 
   void _processConfirmation(String userId) {
-    if (state == TransferState.waitingSender && userId == _transactionTemp?['from']) {
+    if (state == TransferState.waitingSender &&
+        userId == _transactionTemp?['from']) {
       _debitSender();
-    } else if (state == TransferState.waitingReceiver && userId == _transactionTemp?['to']) {
+    } else if (state == TransferState.waitingReceiver &&
+        userId == _transactionTemp?['to']) {
       _creditReceiver();
     }
   }
 
   void _debitSender() {
     List users = _db['users'];
-    int idx = users.indexWhere((u) => u['USUARIOID'] == _transactionTemp?['from']);
+    int idx =
+        users.indexWhere((u) => u['USUARIOID'] == _transactionTemp?['from']);
     users[idx]['TREVNOT'] -= _transactionTemp?['amount'];
     _saveDatabase();
     _broadcastPlayers();
@@ -133,7 +138,8 @@ class BancoServer {
 
   void _creditReceiver() {
     List users = _db['users'];
-    int idx = users.indexWhere((u) => u['USUARIOID'] == _transactionTemp?['to']);
+    int idx =
+        users.indexWhere((u) => u['USUARIOID'] == _transactionTemp?['to']);
     users[idx]['TREVNOT'] += _transactionTemp?['amount'];
     _saveDatabase();
     _broadcastPlayers();
@@ -168,13 +174,40 @@ class JugadorClient {
   Stream<Map<String, dynamic>> get messages => _messageController.stream;
 
   Future<void> connect(Map<String, dynamic> userData) async {
+    final potentialGws = <String>{'192.168.43.1', '172.20.10.1', '10.0.0.1'};
+
     try {
-      _socket = await Socket.connect('192.168.43.1', 8080);
-      _socket!.write(jsonEncode({'type': 'register', 'user': userData}));
-      _socket!.listen(_handleMessage);
-    } catch (e) {
-      rethrow;
+      final interfaces = await NetworkInterface.list();
+      for (var interface in interfaces) {
+        for (var addr in interface.addresses) {
+          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+            final parts = addr.address.split('.');
+            if (parts.length == 4) {
+              potentialGws.add('${parts[0]}.${parts[1]}.${parts[2]}.1');
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Limitar a máximo 5 intentos para evitar timeouts largos
+    final ips = potentialGws.take(5).toList();
+    String lastError = 'No se encontró el servidor del Banco';
+
+    for (final ip in ips) {
+      try {
+        _socket =
+            await Socket.connect(ip, 8080, timeout: const Duration(seconds: 1));
+        _socket!.write(jsonEncode({'type': 'register', 'user': userData}));
+        _socket!.listen(_handleMessage,
+            onDone: () => _socket = null, onError: (_) => _socket = null);
+        return;
+      } catch (e) {
+        lastError = e.toString();
+      }
     }
+    throw Exception(
+        'Error de conexión: $lastError. Verifica que el Banco tenga el Punto de Acceso activo.');
   }
 
   void _handleMessage(List<int> data) {

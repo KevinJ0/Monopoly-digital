@@ -14,9 +14,27 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
+    if (project.name == "jni") {
+        val flutterConfig = groovy.util.Expando()
+        flutterConfig.setProperty("ndkVersion", "29.0.14206865")
+        extensions.extraProperties["flutter"] = flutterConfig
+    }
 }
 subprojects {
     project.evaluationDependsOn(":app")
+}
+
+subprojects {
+    plugins.withId("com.android.application") {
+        extensions.configure<com.android.build.gradle.AppExtension>("android") {
+            ndkVersion = "29.0.14206865"
+        }
+    }
+    plugins.withId("com.android.library") {
+        extensions.configure<com.android.build.gradle.LibraryExtension>("android") {
+            ndkVersion = "29.0.14206865"
+        }
+    }
 }
 
 tasks.register<Delete>("clean") {

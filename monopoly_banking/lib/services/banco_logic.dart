@@ -15,8 +15,10 @@ class BancoLogic {
   String? _emisorPendiente;
   double _montoPendiente = 0;
 
-  final StreamController<BancoState> estadoController = StreamController<BancoState>.broadcast();
-  final StreamController<List<UsuarioModel>> usuariosController = StreamController<List<UsuarioModel>>.broadcast();
+  final StreamController<BancoState> estadoController =
+      StreamController<BancoState>.broadcast();
+  final StreamController<List<UsuarioModel>> usuariosController =
+      StreamController<List<UsuarioModel>>.broadcast();
 
   Future<void> iniciarServidor() async {
     await _cargarUsuarios();
@@ -74,7 +76,11 @@ class BancoLogic {
 
   void _notificarUsuarios() {
     usuariosController.add(usuarios);
-    final msg = jsonEncode({'tipo': 'usuarios', 'data': usuarios.map((u) => u.toJson()).toList()}) + '\n';
+    final msg = jsonEncode({
+          'tipo': 'usuarios',
+          'data': usuarios.map((u) => u.toJson()).toList()
+        }) +
+        '\n';
     for (var cliente in _clientes) {
       try {
         cliente.write(msg);
@@ -90,16 +96,19 @@ class BancoLogic {
       final tipo = data['tipo'];
 
       if (tipo == 'transferencia_directa') {
-        _transferenciaDirecta(data['emisor'], data['receptor'], (data['monto'] ?? 0).toDouble());
+        _transferenciaDirecta(
+            data['emisor'], data['receptor'], (data['monto'] ?? 0).toDouble());
       } else if (tipo == 'transferencia_fisica') {
-        _procesarTransferenciaFisica(data['rol'], data['usuarioId'], (data['monto'] ?? 0).toDouble());
+        _procesarTransferenciaFisica(
+            data['rol'], data['usuarioId'], (data['monto'] ?? 0).toDouble());
       } else if (tipo == 'consultar_usuarios') {
         _notificarUsuarios();
       }
     } catch (e) {}
   }
 
-  void _transferenciaDirecta(String emisorId, String receptorId, double monto) async {
+  void _transferenciaDirecta(
+      String emisorId, String receptorId, double monto) async {
     try {
       var emisor = usuarios.firstWhere((u) => u.usuarioId == emisorId);
       var receptor = usuarios.firstWhere((u) => u.usuarioId == receptorId);
@@ -111,7 +120,8 @@ class BancoLogic {
     } catch (e) {}
   }
 
-  void _procesarTransferenciaFisica(String rol, String usuarioId, double monto) async {
+  void _procesarTransferenciaFisica(
+      String rol, String usuarioId, double monto) async {
     try {
       if (rol == 'Entrega' && estado == BancoState.WAIT_EMISOR) {
         var emisor = usuarios.firstWhere((u) => u.usuarioId == usuarioId);
@@ -140,7 +150,8 @@ class BancoLogic {
   void cancelarTransferenciaFisica() async {
     if (_emisorPendiente != null && _montoPendiente > 0) {
       try {
-        var emisor = usuarios.firstWhere((u) => u.usuarioId == _emisorPendiente);
+        var emisor =
+            usuarios.firstWhere((u) => u.usuarioId == _emisorPendiente);
         emisor.trevnot += _montoPendiente;
         await _guardarUsuarios();
       } catch (e) {}
@@ -153,7 +164,9 @@ class BancoLogic {
   void _cambiarEstado(BancoState nuevoEstado) {
     estado = nuevoEstado;
     estadoController.add(estado);
-    final msg = jsonEncode({'tipo': 'estado_banco', 'estado': estado.toString()}) + '\n';
+    final msg =
+        jsonEncode({'tipo': 'estado_banco', 'estado': estado.toString()}) +
+            '\n';
     for (var cliente in _clientes) {
       try {
         cliente.write(msg);

@@ -4,8 +4,13 @@ import 'package:provider/provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
+import 'package:monopoly_banking/services/sound_service.dart';
+import 'package:monopoly_banking/screens/nfc_test_screen.dart';
+import 'package:monopoly_banking/screens/ble_test_screen.dart';
+import 'package:monopoly_banking/widgets/animated_entry.dart';
+import 'package:monopoly_banking/services/error_translator_service.dart';
 
-const _avatars = ['🎩', '🚗', '🐶', '⚓', '🎸', '👢', '🏦', '🛳️'];
+const _avatars = ['🎩', '🚗', '🐶', '⚓', '🎸', '👢', '💰', '🛳️'];
 const _colors = [
   Color(0xFFE53935),
   Color(0xFF8E24AA),
@@ -24,7 +29,8 @@ class RoleSelectionScreen extends StatefulWidget {
   State<RoleSelectionScreen> createState() => _RoleSelectionScreenState();
 }
 
-class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerProviderStateMixin {
+class _RoleSelectionScreenState extends State<RoleSelectionScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedAvatar = 0;
   int _selectedColor = 0;
 
@@ -43,8 +49,10 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
     )..forward();
     _fade = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
 
-    _bgAnimCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 20))..repeat();
-
+    _bgAnimCtrl =
+        AnimationController(vsync: this, duration: const Duration(seconds: 20))
+          ..repeat();
+    WidgetsBinding.instance.addObserver(this);
     _playBackgroundMusic();
   }
 
@@ -59,10 +67,20 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _fadeCtrl.dispose();
     _bgAnimCtrl.dispose();
     _musicPlayer.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _musicPlayer.pause();
+    } else if (state == AppLifecycleState.resumed) {
+      _musicPlayer.resume();
+    }
   }
 
   Future<void> _pickRole(String role) async {
@@ -71,7 +89,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
     String colorId;
 
     if (role == 'banco') {
-      avatarId = '🏦';
+      avatarId = '💰';
       colorId = '4'; // Gold index
     } else {
       name = await _showNameDialog();
@@ -81,13 +99,18 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
     }
 
     final session = context.read<SessionProvider>();
-    await session.createSession(
-      role: role,
-      avatarId: avatarId,
-      colorId: colorId,
-      initialBalance: role == 'banco' ? double.infinity : kInitialBalance,
-      name: name,
-    );
+    try {
+      await session.createSession(
+        role: role,
+        avatarId: avatarId,
+        colorId: colorId,
+        initialBalance: role == 'banco' ? double.infinity : kInitialBalance,
+        name: name,
+      );
+    } catch (e, s) {
+      if (mounted) context.showFriendlyError(e, s);
+      return;
+    }
     if (mounted) setState(() {});
   }
 
@@ -99,7 +122,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
       builder: (ctx) => AlertDialog(
         backgroundColor: kBgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('¿Cómo te llamas?', style: TextStyle(color: kTextPrimary)),
+        title: const Text('¿Cómo te llamas?',
+            style: TextStyle(color: kTextPrimary)),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -109,20 +133,32 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
             hintStyle: TextStyle(color: kTextSecondary.withValues(alpha: 0.5)),
             filled: true,
             fillColor: kBgDark,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none),
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(ctx);
+            },
+            child:
+                const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, controller.text),
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(ctx, controller.text);
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: _colors[_selectedColor],
-              foregroundColor: _colors[_selectedColor].computeLuminance() > 0.5 ? Colors.black : Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              foregroundColor: _colors[_selectedColor].computeLuminance() > 0.5
+                  ? Colors.black
+                  : Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('Continuar'),
           ),
@@ -148,22 +184,74 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
               },
             ),
           ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: SafeArea(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.bluetooth_rounded,
+                        color: kTextSecondary),
+                    tooltip: 'BLE Debug',
+                    onPressed: () {
+                      SoundService.playClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const BleTestScreen()),
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.nfc_rounded, color: kTextSecondary),
+                    tooltip: 'NFC Debug',
+                    onPressed: () {
+                      SoundService.playClick();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                            builder: (_) => const NfcTestScreen()),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
           FadeTransition(
             opacity: _fade,
             child: SafeArea(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 32),
-                    _buildBankSection(),
-                    const SizedBox(height: 40),
-                    _buildDivider(),
-                    const SizedBox(height: 32),
-                    _buildClientSection(),
-                  ],
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 600),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const AnimatedEntry(
+                          delay: Duration(milliseconds: 200),
+                          child: _HeaderWidget(),
+                        ),
+                        const SizedBox(height: 32),
+                        AnimatedEntry(
+                          delay: const Duration(milliseconds: 400),
+                          child: _buildBankSection(),
+                        ),
+                        const SizedBox(height: 40),
+                        const AnimatedEntry(
+                          delay: Duration(milliseconds: 600),
+                          child: _DividerWidget(),
+                        ),
+                        const SizedBox(height: 32),
+                        AnimatedEntry(
+                          delay: const Duration(milliseconds: 800),
+                          child: _buildClientSection(),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -173,82 +261,14 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
     );
   }
 
-  Widget _buildHeader() {
-    return Column(
-      children: [
-        Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            // Money flying decorations
-            Positioned(
-              top: -20,
-              right: -30,
-              child: Transform.rotate(
-                angle: 0.5,
-                child: Icon(Icons.payments_rounded, color: Colors.white.withValues(alpha: 0.1), size: 40),
-              ),
-            ),
-            Positioned(
-              bottom: -15,
-              left: -35,
-              child: Transform.rotate(
-                angle: -0.4,
-                child: Icon(Icons.currency_exchange_rounded, color: Colors.white.withValues(alpha: 0.08), size: 35),
-              ),
-            ),
-            Positioned(
-              top: 5,
-              left: -50,
-              child: Transform.rotate(
-                angle: 0.2,
-                child: Icon(Icons.payments_rounded, color: Colors.white.withValues(alpha: 0.05), size: 45),
-              ),
-            ),
-            const Text(
-              'MONOPOLY',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 42,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 8,
-                shadows: [
-                  Shadow(color: Colors.white24, blurRadius: 20),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'BANCA DIGITAL',
-          style: TextStyle(
-            color: kTextSecondary,
-            fontSize: 14,
-            letterSpacing: 4,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 24),
-        Container(
-          height: 1,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.transparent, kGold.withValues(alpha: 0.5), Colors.transparent],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildAvatarPicker() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
           'Elige tu ficha',
-          style: TextStyle(color: kTextSecondary, fontSize: 13, letterSpacing: 1),
+          style:
+              TextStyle(color: kTextSecondary, fontSize: 13, letterSpacing: 1),
         ),
         const SizedBox(height: 14),
         Wrap(
@@ -257,7 +277,10 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
           children: List.generate(_avatars.length, (i) {
             final selected = i == _selectedAvatar;
             return GestureDetector(
-              onTap: () => setState(() => _selectedAvatar = i),
+              onTap: () {
+                SoundService.playClick();
+                setState(() => _selectedAvatar = i);
+              },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 width: 64,
@@ -269,10 +292,13 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
                     color: selected ? kGreen : kBorder,
                     width: selected ? 2 : 1,
                   ),
-                  boxShadow: selected ? [BoxShadow(color: kGreenGlow, blurRadius: 12)] : null,
+                  boxShadow: selected
+                      ? [BoxShadow(color: kGreenGlow, blurRadius: 12)]
+                      : null,
                 ),
                 child: Center(
-                  child: Text(_avatars[i], style: const TextStyle(fontSize: 28)),
+                  child:
+                      Text(_avatars[i], style: const TextStyle(fontSize: 28)),
                 ),
               ),
             );
@@ -288,7 +314,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
       children: [
         const Text(
           'Elige tu color',
-          style: TextStyle(color: kTextSecondary, fontSize: 13, letterSpacing: 1),
+          style:
+              TextStyle(color: kTextSecondary, fontSize: 13, letterSpacing: 1),
         ),
         const SizedBox(height: 14),
         Row(
@@ -296,7 +323,10 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
           children: List.generate(_colors.length, (i) {
             final selected = i == _selectedColor;
             return GestureDetector(
-              onTap: () => setState(() => _selectedColor = i),
+              onTap: () {
+                SoundService.playClick();
+                setState(() => _selectedColor = i);
+              },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 width: 34,
@@ -308,28 +338,18 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
                     color: selected ? Colors.white : Colors.transparent,
                     width: 3,
                   ),
-                  boxShadow: selected ? [BoxShadow(color: _colors[i].withValues(alpha: 0.6), blurRadius: 10)] : null,
+                  boxShadow: selected
+                      ? [
+                          BoxShadow(
+                              color: _colors[i].withValues(alpha: 0.6),
+                              blurRadius: 10)
+                        ]
+                      : null,
                 ),
               ),
             );
           }),
         ),
-      ],
-    );
-  }
-
-  Widget _buildDivider() {
-    return Row(
-      children: [
-        Expanded(child: Container(height: 1, color: kBorder.withValues(alpha: 0.3))),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'O TAMBIÉN',
-            style: TextStyle(color: kTextSecondary.withValues(alpha: 0.5), fontSize: 10, letterSpacing: 2),
-          ),
-        ),
-        Expanded(child: Container(height: 1, color: kBorder.withValues(alpha: 0.3))),
       ],
     );
   }
@@ -341,7 +361,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
           label: 'SER EL BANCO',
           subtitle: 'Control total de la partida',
           icon: Icons.account_balance_rounded,
-          gradient: const LinearGradient(colors: [Color(0xFFB8860B), Color(0xFF8B4513)]),
+          gradient: const LinearGradient(
+              colors: [Color(0xFFB8860B), Color(0xFF8B4513)]),
           onTap: () => _pickRole('banco'),
         ),
       ],
@@ -362,7 +383,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
           label: 'ENTRAR COMO CLIENTE',
           subtitle: 'Recibe capital al vincular con Banca',
           icon: Icons.person_rounded,
-          gradient: LinearGradient(colors: [color, color.withValues(alpha: 0.7)]),
+          gradient:
+              LinearGradient(colors: [color, color.withValues(alpha: 0.7)]),
           foregroundColor: isLight ? Colors.black : Colors.white,
           onTap: () => _pickRole('cliente'),
         ),
@@ -391,7 +413,10 @@ class _RoleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        SoundService.playClick();
+        onTap();
+      },
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
@@ -462,13 +487,18 @@ class _MonopolyBackgroundPainter extends CustomPainter {
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
-    final double gridOffset = animationValue * 150; // desplazamiento total a lo largo de la animación
+    final double gridOffset =
+        animationValue * 150; // desplazamiento total a lo largo de la animación
     const double gridSize = 80;
 
-    for (double x = -gridSize + (gridOffset % gridSize); x < size.width; x += gridSize) {
+    for (double x = -gridSize + (gridOffset % gridSize);
+        x < size.width;
+        x += gridSize) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
     }
-    for (double y = -gridSize + (gridOffset % gridSize); y < size.height; y += gridSize) {
+    for (double y = -gridSize + (gridOffset % gridSize);
+        y < size.height;
+        y += gridSize) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
     }
 
@@ -478,13 +508,19 @@ class _MonopolyBackgroundPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     for (int i = 0; i < 5; i++) {
-      final double x = (size.width * 0.2 * i + (animationValue * size.width * (i.isEven ? 0.3 : -0.2))) % size.width;
-      final double y = (size.height * 0.3 * i + (animationValue * size.height * (i.isEven ? -0.2 : 0.4))) % size.height;
+      final double x = (size.width * 0.2 * i +
+              (animationValue * size.width * (i.isEven ? 0.3 : -0.2))) %
+          size.width;
+      final double y = (size.height * 0.3 * i +
+              (animationValue * size.height * (i.isEven ? -0.2 : 0.4))) %
+          size.height;
 
       canvas.save();
       canvas.translate(x, y);
       canvas.rotate(animationValue * 2 * math.pi * (i.isEven ? 1 : -1));
-      canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: 40, height: 60), shapePaint);
+      canvas.drawRect(
+          Rect.fromCenter(center: Offset.zero, width: 40, height: 60),
+          shapePaint);
       canvas.restore();
     }
 
@@ -493,8 +529,12 @@ class _MonopolyBackgroundPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     for (int i = 0; i < 4; i++) {
-      final double x = (size.width * 0.25 * i + (animationValue * size.width * (i.isEven ? -0.4 : 0.3))) % size.width;
-      final double y = (size.height * 0.25 * i + (animationValue * size.height * (i.isEven ? 0.3 : -0.3))) % size.height;
+      final double x = (size.width * 0.25 * i +
+              (animationValue * size.width * (i.isEven ? -0.4 : 0.3))) %
+          size.width;
+      final double y = (size.height * 0.25 * i +
+              (animationValue * size.height * (i.isEven ? 0.3 : -0.3))) %
+          size.height;
 
       canvas.save();
       canvas.translate(x, y);
@@ -517,5 +557,112 @@ class _MonopolyBackgroundPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _MonopolyBackgroundPainter oldDelegate) {
     return oldDelegate.animationValue != animationValue;
+  }
+}
+
+class _HeaderWidget extends StatelessWidget {
+  const _HeaderWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            // Money flying decorations
+            Positioned(
+              top: -20,
+              right: -30,
+              child: Transform.rotate(
+                angle: 0.5,
+                child: Icon(Icons.payments_rounded,
+                    color: Colors.white.withValues(alpha: 0.1), size: 40),
+              ),
+            ),
+            Positioned(
+              bottom: -15,
+              left: -35,
+              child: Transform.rotate(
+                angle: -0.4,
+                child: Icon(Icons.currency_exchange_rounded,
+                    color: Colors.white.withValues(alpha: 0.08), size: 35),
+              ),
+            ),
+            Positioned(
+              top: 5,
+              left: -50,
+              child: Transform.rotate(
+                angle: 0.2,
+                child: Icon(Icons.payments_rounded,
+                    color: Colors.white.withValues(alpha: 0.05), size: 45),
+              ),
+            ),
+            const Text(
+              'MONOPOLY',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 42,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 8,
+                shadows: [
+                  Shadow(color: Colors.white24, blurRadius: 20),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'BANCA DIGITAL',
+          style: TextStyle(
+            color: kTextSecondary,
+            fontSize: 14,
+            letterSpacing: 4,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 24),
+        Container(
+          height: 1,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.transparent,
+                kGold.withValues(alpha: 0.5),
+                Colors.transparent
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DividerWidget extends StatelessWidget {
+  const _DividerWidget();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+            child: Container(height: 1, color: kBorder.withValues(alpha: 0.3))),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            'O TAMBIÉN',
+            style: TextStyle(
+                color: kTextSecondary.withValues(alpha: 0.5),
+                fontSize: 10,
+                letterSpacing: 2),
+          ),
+        ),
+        Expanded(
+            child: Container(height: 1, color: kBorder.withValues(alpha: 0.3))),
+      ],
+    );
   }
 }
