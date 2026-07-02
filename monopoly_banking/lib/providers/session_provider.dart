@@ -3,9 +3,11 @@ import 'package:monopoly_banking/models/session_model.dart';
 import 'package:monopoly_banking/providers/stats_provider.dart';
 import 'package:monopoly_banking/providers/wallet_controller.dart';
 import 'package:monopoly_banking/services/hive_service.dart';
+import 'package:monopoly_banking/services/bank_ledger_service.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
 
 class SessionProvider extends ChangeNotifier {
+  static const _playerBankSessionKey = 'player_bank_session_id_v1';
   final StatsProvider _stats;
   final WalletController _wallet;
 
@@ -64,7 +66,11 @@ class SessionProvider extends ChangeNotifier {
       passGo: session.passGoCount,
     );
 
-    _wallet.rawBalance.value = session.balance;
+    final double restoredBalance =
+        session.role == 'banco' || session.isHandshakeDone
+            ? session.balance
+            : 0;
+    _wallet.rawBalance.value = restoredBalance;
     _wallet.bankruptNotifier.value = session.isBankrupt;
     _wallet.syncTierWithBalance();
 
@@ -107,8 +113,10 @@ class SessionProvider extends ChangeNotifier {
   }
 
   Future<void> clearSession() async {
+    if (isBank) await BankLedgerService().closeBankSession();
     await HiveService.sessionBox.delete('current');
     await HiveService.txBox.clear();
+    await HiveService.settingsBox.delete(_playerBankSessionKey);
     _role = '';
     _avatarId = '';
     _colorId = '0';
@@ -118,6 +126,40 @@ class SessionProvider extends ChangeNotifier {
     _wallet.bankruptNotifier.value = false;
     _stats.restore(volume: 0, count: 0, passGo: 0);
     notifyListeners();
+  }
+
+  Future<bool> adoptBankSession(String? bankSessionId) async {
+    final incoming = bankSessionId?.trim();
+    if (incoming == null || incoming.isEmpty || isBank) return false;
+    final stored =
+        HiveService.settingsBox.get(_playerBankSessionKey) as String?;
+    if (stored == null || stored.isEmpty) {
+      await HiveService.settingsBox.put(_playerBankSessionKey, incoming);
+      return false;
+    }
+    if (stored == incoming) return false;
+
+    final current = HiveService.sessionBox.get('current');
+    final avatar = current?.avatarId ?? _avatarId;
+    final color = current?.colorId ?? _colorId;
+    final playerName = current?.name ?? _name;
+    await HiveService.txBox.clear();
+    _stats.restore(volume: 0, count: 0, passGo: 0);
+    await createSession(
+      role: 'cliente',
+      avatarId: avatar,
+      colorId: color,
+      initialBalance: 0,
+      name: playerName,
+      isHandshakeDone: false,
+    );
+    _wallet.vaultInvestedAmount.value = 0;
+    _wallet.vaultGeneratedAmount.value = 0;
+    _wallet.vaultTargetPasses.value = 0;
+    _wallet.vaultCurrentPasses.value = 0;
+    _wallet.bankruptNotifier.value = false;
+    await HiveService.settingsBox.put(_playerBankSessionKey, incoming);
+    return true;
   }
 
   Future<void> applyHandshake(Map<String, dynamic> payload) async {

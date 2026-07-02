@@ -184,6 +184,16 @@ Responde EXACTAMENTE así:
   FriendlyError _fallback(String raw) {
     final lower = raw.toLowerCase();
 
+    if (lower.contains('bluetooth') ||
+        lower.contains('ble') ||
+        lower.contains('rssi') ||
+        lower.contains('proximidad')) {
+      return const FriendlyError(
+        message:
+            'Problema con la conexión BLE. Verifica que Bluetooth esté activo, mantén las aplicaciones abiertas y acerca ambos dispositivos.',
+        severity: ErrorSeverity.warning,
+      );
+    }
     if (lower.contains('nfc') ||
         lower.contains('tag') ||
         lower.contains('isodep') ||

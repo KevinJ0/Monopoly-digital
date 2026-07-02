@@ -9,14 +9,28 @@ class NotificationService {
       GlobalKey<ScaffoldMessengerState>();
 
   final List<_Notification> _queue = [];
+  final Map<String, DateTime> _recentNotifications = {};
   static const int _maxQueue = 3;
+  static const Duration _dedupeWindow = Duration(seconds: 5);
   bool _isShowing = false;
 
   void show(
     String message, {
     Color? backgroundColor,
     Duration? duration,
+    String? dedupeKey,
   }) {
+    if (dedupeKey != null) {
+      final now = DateTime.now();
+      final lastShown = _recentNotifications[dedupeKey];
+      if (lastShown != null && now.difference(lastShown) < _dedupeWindow) {
+        return;
+      }
+      _recentNotifications[dedupeKey] = now;
+      _recentNotifications.removeWhere(
+        (_, timestamp) => now.difference(timestamp) >= _dedupeWindow,
+      );
+    }
     _queue.add(_Notification(message, backgroundColor, duration));
     while (_queue.length > _maxQueue) {
       _queue.removeAt(0);

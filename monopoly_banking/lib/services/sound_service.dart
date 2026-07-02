@@ -3,15 +3,29 @@ import 'package:audioplayers/audioplayers.dart';
 
 class SoundService {
   static const int _poolSize = 5;
+  static final AudioContext effectsAudioContext = AudioContext(
+    android: const AudioContextAndroid(
+      contentType: AndroidContentType.sonification,
+      usageType: AndroidUsageType.game,
+      audioFocus: AndroidAudioFocus.none,
+    ),
+    iOS: AudioContextIOS(
+      category: AVAudioSessionCategory.playback,
+      options: const {AVAudioSessionOptions.mixWithOthers},
+    ),
+  );
   static final List<AudioPlayer> _pool = [];
   static int _poolIndex = 0;
   static bool _initialized = false;
 
   static Future<void> init() async {
     if (_initialized && _pool.isNotEmpty) return;
+    await AudioPlayer.global.setAudioContext(effectsAudioContext);
     _pool.clear();
     for (int i = 0; i < _poolSize; i++) {
-      _pool.add(AudioPlayer());
+      final player = AudioPlayer();
+      await player.setAudioContext(effectsAudioContext);
+      _pool.add(player);
     }
     _initialized = true;
   }

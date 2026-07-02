@@ -3,15 +3,15 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:nfc_manager/nfc_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
-import 'package:monopoly_banking/providers/wallet_controller.dart';
+import 'package:monopoly_banking/services/bank_ledger_service.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
 import 'package:monopoly_banking/services/transports/ble_transport.dart';
 import 'package:monopoly_banking/services/transports/nfc_transport.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
-import 'package:monopoly_banking/services/network_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
@@ -30,9 +30,11 @@ class _BankScreenState extends State<BankScreen>
   final _amountCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _sending = false;
+  bool _transferHoldDialogOpen = false;
   String _selectedOp = 'payment';
   String _connectedPlayerName = 'Jugador';
   StreamSubscription<Map<String, dynamic>>? _payloadSub;
+  final Map<String, Completer<Map<String, dynamic>>> _pendingDeliveryAcks = {};
   late final AnimationController _slideCtrl;
   late final Animation<Offset> _slide;
 
@@ -57,11 +59,6 @@ class _BankScreenState extends State<BankScreen>
         label: 'Pasar por GO',
         icon: Icons.flag_rounded,
         color: kGold),
-    _OpOption(
-        id: 'manual',
-        label: 'Intermediario Físico',
-        icon: Icons.handshake_rounded,
-        color: Colors.cyan),
   ];
 
   @override
@@ -79,10 +76,52 @@ class _BankScreenState extends State<BankScreen>
 
     _payloadSub = P2PService().payloadStream.listen((payload) {
       if (!mounted) return;
+      if (payload['type'] == 'bank_state_ack') {
+        final bankTxId = payload['bankTxId'] as String?;
+        if (bankTxId != null) {
+          final completer = _pendingDeliveryAcks[bankTxId];
+          if (completer != null && !completer.isCompleted) {
+            completer.complete(payload);
+          }
+        }
+        return;
+      }
       if (payload['type'] == 'handshake_confirm') {
+        final bankTxId = payload['bankTxId'] as String?;
+        if (bankTxId != null) {
+          final completer = _pendingDeliveryAcks[bankTxId];
+          if (completer != null && !completer.isCompleted) {
+            completer.complete(payload);
+          }
+        }
+      }
+      if (payload['type'] == 'handshake_confirm' ||
+          payload['type'] == 'ble_identity') {
         final name = payload['name'] as String? ?? 'Jugador';
         _connectedPlayerName = name;
-        _toast('✅ $name se ha unido a la partida', kGold);
+        if (payload['type'] == 'ble_identity') {
+          final account = BankLedgerService().accountFor(name);
+          final installationId =
+              (payload['deviceInstallationId'] as String?) ?? '';
+          final isReturningPlayer = account != null &&
+              !account.bankrupt &&
+              account.deviceInstallationId.isNotEmpty &&
+              account.deviceInstallationId == installationId;
+          if (isReturningPlayer) {
+            final bleDeviceId = payload['_bleDeviceId'] as String?;
+            if (bleDeviceId != null && bleDeviceId.isNotEmpty) {
+              P2PService().bleTransport.markPlayerActive(bleDeviceId);
+            }
+          }
+          NotificationService().show(
+            isReturningPlayer
+                ? '$name se reconectó a la partida'
+                : '$name se conectó al banco',
+            backgroundColor: kGreen,
+            duration: const Duration(seconds: 4),
+            dedupeKey: 'ble-connected:${payload['_bleDeviceId'] ?? name}',
+          );
+        }
       }
     }, onError: (e, s) {
       if (mounted) context.showFriendlyError(e, s);
@@ -91,6 +130,12 @@ class _BankScreenState extends State<BankScreen>
 
   @override
   void dispose() {
+    for (final completer in _pendingDeliveryAcks.values) {
+      if (!completer.isCompleted) {
+        completer.completeError(StateError('Pantalla del banco cerrada'));
+      }
+    }
+    _pendingDeliveryAcks.clear();
     WidgetsBinding.instance.removeObserver(this);
     _payloadSub?.cancel();
     _amountCtrl.dispose();
@@ -110,7 +155,10 @@ class _BankScreenState extends State<BankScreen>
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _sending = true);
-    final dialog = _BankOperationDialogController();
+    final bankSession = context.read<SessionProvider>();
+    final dialog = _BankOperationDialogController(
+      transportType: P2PService().currentType,
+    );
     var dialogOpen = false;
 
     if (_selectedOp != 'manual') {
@@ -122,6 +170,29 @@ class _BankScreenState extends State<BankScreen>
     }
 
     try {
+      if (dialog.transportType == TransportType.ble &&
+          !await _waitForBlePlayerReady(dialog)) {
+        await _failOperationDialog(
+          dialog,
+          'Jugador no disponible',
+          'El dispositivo aparece conectado, pero no terminó de preparar el canal BLE. Mantén ambas aplicaciones abiertas e intenta nuevamente.',
+          icon: Icons.phonelink_off_rounded,
+          color: Colors.orange,
+        );
+        return;
+      }
+      if (dialog.transportType == TransportType.nfc &&
+          !await _waitForNfcPlayerReady(dialog)) {
+        await _failOperationDialog(
+          dialog,
+          'No se detectó ningún jugador',
+          'Mantén ambos teléfonos juntos, con NFC activado, hasta que el banco identifique al jugador.',
+          icon: Icons.nfc_rounded,
+          color: Colors.orange,
+        );
+        return;
+      }
+
       final contactReady = await _waitForBleContactIfNeeded(dialog);
       if (!contactReady) return;
 
@@ -130,37 +201,175 @@ class _BankScreenState extends State<BankScreen>
         message: _operationWaitMessage(),
       );
 
+      final ledger = BankLedgerService();
+      final isNfc = dialog.transportType == TransportType.nfc;
+      final targetPlayer = isNfc ? null : _contactPlayer();
+      final playerId =
+          isNfc ? ledger.lastNfcPlayerId : targetPlayer?.displayName;
+      if (playerId == null || playerId.isEmpty) {
+        throw const BankLedgerException(
+          'No se pudo identificar al jugador. Acércalo primero por NFC para registrarlo en el banco.',
+        );
+      }
+      final existingNfcAccount = isNfc ? ledger.accountFor(playerId) : null;
+      final deviceInstallationId = isNfc
+          ? (ledger.lastNfcDeviceInstallationId ??
+              existingNfcAccount?.deviceInstallationId ??
+              '')
+          : (targetPlayer?.deviceInstallationId ?? '');
+      final playerIsActive = isNfc
+          ? existingNfcAccount != null && !existingNfcAccount.bankrupt
+          : (targetPlayer?.playing ?? false);
+      if (deviceInstallationId.isEmpty) {
+        await _failOperationDialog(
+          dialog,
+          'Identidad pendiente',
+          'Espera un momento mientras el banco verifica la identidad del dispositivo.',
+          icon: Icons.phonelink_lock_rounded,
+          color: Colors.orange,
+        );
+        return;
+      }
+
       if (_selectedOp == 'handshake') {
+        if (ledger.isDeviceBanned(deviceInstallationId)) {
+          await _sendToConnectedPlayer({
+            'type': 'bank_access_denied',
+            'bankSessionId': ledger.currentBankSessionId,
+            'targetPlayerId': playerId,
+            'balance': 0,
+            'isBankrupt': true,
+            'eventType': 'bankruptcy_blocked',
+            'amount': 0,
+          });
+          await _failOperationDialog(
+            dialog,
+            'Dispositivo bloqueado',
+            'Este dispositivo fue expulsado de la partida y no puede volver a ingresar hasta que el banco cierre la sesión.',
+            icon: Icons.phonelink_erase_rounded,
+            color: kRed,
+          );
+          return;
+        }
+        final existingAccount = ledger.accountFor(playerId);
+        if (existingAccount != null &&
+            existingAccount.deviceInstallationId.isNotEmpty &&
+            existingAccount.deviceInstallationId != deviceInstallationId) {
+          await _failOperationDialog(
+            dialog,
+            'Nombre no disponible',
+            'El nombre "$playerId" ya pertenece a otro jugador de esta partida. Debe elegir un nombre diferente.',
+            icon: Icons.badge_outlined,
+            color: Colors.orange,
+          );
+          return;
+        }
+        if (playerIsActive) {
+          await _failOperationDialog(
+            dialog,
+            'Jugador activo',
+            'El jugador $playerId ya completó la vinculación inicial y se encuentra activo en la partida.',
+            icon: Icons.verified_user_rounded,
+            color: kGreen,
+          );
+          return;
+        }
         final amountText = _amountCtrl.text.isEmpty
             ? '2000'
             : _amountCtrl.text.replaceAll(',', '');
         final amount = double.parse(amountText);
-        final session = context.read<SessionProvider>();
+        final result = await ledger.ensurePlayer(
+          playerId,
+          amount,
+          deviceInstallationId: deviceInstallationId,
+        );
         await _sendToConnectedPlayer({
           'type': 'handshake',
-          'balance': amount,
-          'avatarId': session.avatarId,
-          'colorId': session.colorId,
+          'bankSessionId': ledger.currentBankSessionId,
+          'targetPlayerId': playerId,
+          'avatarId': bankSession.avatarId,
+          'colorId': bankSession.colorId,
           'gameId': 'monopoly',
-          'name': session.name,
+          'name': bankSession.name,
+          'bankTxId': result.transactionId,
+          'eventType': result.eventType,
+          'amount': result.amount,
+          ...result.account.toClientState(),
         });
-        _toast('Handshake enviado con ${formatMoney(amount)}', kGold);
       } else if (_selectedOp == 'passGo') {
-        _toast('Enviando Pass GO al jugador conectado...', kGold);
-        await _sendToConnectedPlayer({'type': 'passGo'});
-        _toast('✅ Pass GO enviado (+${formatMoney(kPassGoAmount)})', kGold);
+        if (!playerIsActive) {
+          await _failOperationDialog(
+            dialog,
+            'Handshake requerido',
+            'El jugador debe recibir el handshake inicial antes de jugar.',
+          );
+          return;
+        }
+        final result = await ledger.passGo(playerId);
+        await _sendToConnectedPlayer(result.toClientPayload());
       } else {
+        if (!playerIsActive) {
+          await _failOperationDialog(
+            dialog,
+            'Handshake requerido',
+            'El jugador debe recibir el handshake inicial antes de jugar.',
+          );
+          return;
+        }
         final amount = double.parse(_amountCtrl.text.replaceAll(',', ''));
         if (_selectedOp == 'receive') {
-          final wallet = context.read<WalletController>();
-          await _sendToConnectedPlayer({'type': 'payment', 'amount': amount});
-          await wallet.subtractFunds(amount);
-          _toast('Pago de ${formatMoney(amount)} enviado', kGreen);
+          final result = await ledger.credit(
+            playerId,
+            amount,
+            type: 'payment',
+            counterpartyId: 'Banco',
+          );
+          await _sendToConnectedPlayer(result.toClientPayload());
         } else {
-          final wallet = context.read<WalletController>();
-          await _sendToConnectedPlayer({'type': 'charge', 'amount': amount});
-          await wallet.addFunds(amount);
-          _toast('Cobro de ${formatMoney(amount)} realizado', kRed);
+          final account = ledger.accountFor(playerId);
+          if (account == null) {
+            throw const BankLedgerException(
+              'El jugador necesita completar el handshake inicial.',
+            );
+          }
+          if (amount > account.balance) {
+            final proceed = await _confirmBankruptcy(
+              playerId: playerId,
+              availableBalance: account.balance,
+              chargeAmount: amount,
+            );
+            if (proceed != true) {
+              await _failOperationDialog(
+                dialog,
+                'Cobro cancelado',
+                'El jugador conserva su saldo y continúa activo en la partida.',
+                icon: Icons.shield_outlined,
+                color: Colors.orange,
+              );
+              return;
+            }
+
+            final result = await ledger.markBankrupt(
+              playerId,
+              attemptedCharge: amount,
+              deviceInstallationId: deviceInstallationId,
+            );
+            await _sendToConnectedPlayer(result.toClientPayload());
+            if (targetPlayer != null) {
+              P2PService().bleTransport.markPlayerInactive(targetPlayer.id);
+            }
+            dialog.complete(
+              '$playerId fue declarado en bancarrota y expulsado de la partida.',
+            );
+            return;
+          }
+          final result = await ledger.debit(
+            playerId,
+            amount,
+            type: 'charge',
+            counterpartyId: 'Banco',
+          );
+          await _sendToConnectedPlayer(result.toClientPayload());
         }
       }
       dialog
@@ -186,8 +395,144 @@ class _BankScreenState extends State<BankScreen>
     }
   }
 
+  Future<void> _failOperationDialog(
+    _BankOperationDialogController dialog,
+    String title,
+    String message, {
+    IconData icon = Icons.close_rounded,
+    Color color = kRed,
+  }) async {
+    dialog.fail(title: title, message: message, icon: icon, color: color);
+    await Future<void>.delayed(const Duration(seconds: 2));
+  }
+
+  Future<bool?> _confirmBankruptcy({
+    required String playerId,
+    required double availableBalance,
+    required double chargeAmount,
+  }) {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: kBgCard,
+        icon: const Icon(
+          Icons.warning_amber_rounded,
+          color: kRed,
+          size: 54,
+        ),
+        title: const Text(
+          'Riesgo de bancarrota',
+          textAlign: TextAlign.center,
+        ),
+        content: Text(
+          '$playerId dispone de ${formatMoney(availableBalance)}, pero el cobro es de ${formatMoney(chargeAmount)}. '
+          'Si continúas, el jugador perderá la partida y este dispositivo quedará bloqueado hasta que cierres la sesión del banco.\n\n'
+          '¿Deseas declarar al jugador en bancarrota?',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: kTextSecondary, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kRed,
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.gavel_rounded),
+            label: const Text('Declarar bancarrota'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _waitForBlePlayerReady(
+      _BankOperationDialogController dialog) async {
+    final notifier = P2PService().bleTransport.connectedPlayersNotifier;
+
+    bool hasReadyPlayer() => notifier.value.any(
+          (player) =>
+              player.subscribed &&
+              player.name.trim().isNotEmpty &&
+              player.deviceInstallationId.trim().isNotEmpty,
+        );
+
+    if (hasReadyPlayer()) return true;
+
+    dialog.update(
+      title: 'Preparando conexión',
+      message: 'Esperando que el jugador complete el canal BLE...',
+    );
+    final completer = Completer<bool>();
+
+    void finish(bool value) {
+      if (!completer.isCompleted) completer.complete(value);
+    }
+
+    void playerListener() {
+      if (hasReadyPlayer()) finish(true);
+    }
+
+    void cancelListener() {
+      if (dialog.cancelled.value) finish(false);
+    }
+
+    notifier.addListener(playerListener);
+    dialog.cancelled.addListener(cancelListener);
+    final timeout = Timer(const Duration(seconds: 8), () => finish(false));
+    playerListener();
+
+    final result = await completer.future;
+    timeout.cancel();
+    notifier.removeListener(playerListener);
+    dialog.cancelled.removeListener(cancelListener);
+    return result;
+  }
+
+  Future<bool> _waitForNfcPlayerReady(
+      _BankOperationDialogController dialog) async {
+    final ledger = BankLedgerService();
+    ledger.beginNfcPlayerDetection();
+    final notifier = ledger.lastNfcPlayerNotifier;
+    final completer = Completer<bool>();
+
+    dialog.update(
+      title: 'Esperando jugador por NFC',
+      message:
+          'Acerca el teléfono del jugador y mantenlo junto al banco para identificarlo...',
+    );
+
+    void finish(bool value) {
+      if (!completer.isCompleted) completer.complete(value);
+    }
+
+    void playerListener() {
+      if (notifier.value?.trim().isNotEmpty == true) finish(true);
+    }
+
+    void cancelListener() {
+      if (dialog.cancelled.value) finish(false);
+    }
+
+    notifier.addListener(playerListener);
+    dialog.cancelled.addListener(cancelListener);
+    final timeout = Timer(const Duration(seconds: 15), () => finish(false));
+
+    final result = await completer.future;
+    timeout.cancel();
+    notifier.removeListener(playerListener);
+    dialog.cancelled.removeListener(cancelListener);
+    return result;
+  }
+
   Future<bool> _waitForBleContactIfNeeded(
       _BankOperationDialogController dialog) async {
+    if (dialog.transportType != TransportType.ble) return true;
     final transport = P2PService().bleTransport;
     if (!transport.serverActiveNotifier.value ||
         !transport.clientConnectedNotifier.value) {
@@ -209,12 +554,13 @@ class _BankScreenState extends State<BankScreen>
     }
 
     void contactListener() {
-      if (transport.contactReadyNotifier.value) {
+      if (_hasBleContact(transport)) {
         finish(true);
       }
     }
 
     transport.contactReadyNotifier.addListener(contactListener);
+    transport.connectedPlayersNotifier.addListener(contactListener);
     void cancelListener() {
       if (dialog.cancelled.value) finish(false);
     }
@@ -222,7 +568,8 @@ class _BankScreenState extends State<BankScreen>
     dialog.cancelled.addListener(cancelListener);
 
     void rssiListener() {
-      final rssi = transport.contactRssiNotifier.value;
+      final rssi =
+          _closestBleRssi(transport) ?? transport.contactRssiNotifier.value;
       if (rssi == null) return;
       dialog.update(
         title: 'Acerca el jugador al banco',
@@ -231,13 +578,276 @@ class _BankScreenState extends State<BankScreen>
     }
 
     transport.contactRssiNotifier.addListener(rssiListener);
+    transport.connectedPlayersNotifier.addListener(rssiListener);
+    contactListener();
     rssiListener();
 
     final result = await completer.future;
     transport.contactReadyNotifier.removeListener(contactListener);
+    transport.connectedPlayersNotifier.removeListener(contactListener);
     transport.contactRssiNotifier.removeListener(rssiListener);
+    transport.connectedPlayersNotifier.removeListener(rssiListener);
     dialog.cancelled.removeListener(cancelListener);
     return result;
+  }
+
+  bool _hasBleContact(BleTransport transport) {
+    if (transport.contactReadyNotifier.value) return true;
+    return transport.connectedPlayersNotifier.value.any(
+      (player) => player.subscribed && player.contactReady,
+    );
+  }
+
+  BleConnectedPlayer? _contactPlayer() {
+    final players = P2PService().bleTransport.connectedPlayersNotifier.value;
+    final inContact = players
+        .where((player) => player.subscribed && player.contactReady)
+        .toList();
+    if (inContact.isEmpty) return null;
+    inContact.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
+    return inContact.first;
+  }
+
+  int? _closestBleRssi(BleTransport transport) {
+    final values = transport.connectedPlayersNotifier.value
+        .where((player) => player.subscribed && player.rssi != null)
+        .map((player) => player.rssi!)
+        .toList();
+    if (values.isEmpty) return null;
+    values.sort((a, b) => b.compareTo(a));
+    return values.first;
+  }
+
+  Future<void> _handleTransferHoldRequest(Map<String, dynamic> payload) async {
+    if (_transferHoldDialogOpen || !mounted) return;
+
+    final rawAmount = payload['amount'] as num?;
+    final amount = rawAmount?.toDouble() ?? 0;
+    if (amount <= 0 || !amount.isFinite) return;
+
+    final fromName = ((payload['fromPlayerId'] as String?) ??
+            (payload['fromName'] as String?) ??
+            'Jugador')
+        .trim();
+
+    _transferHoldDialogOpen = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        var delivering = false;
+        var completed = false;
+        var status =
+            'Acerca el celular del jugador que recibirá el dinero y pulsa entregar.';
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            Future<void> deliver() async {
+              if (delivering || completed) return;
+              setDialogState(() {
+                delivering = true;
+                status = 'Esperando contacto del jugador receptor...';
+              });
+
+              final receiver = await _waitForTransferReceiver();
+              if (receiver == null) {
+                if (!ctx.mounted) return;
+                setDialogState(() {
+                  delivering = false;
+                  status =
+                      'No detecté un jugador en contacto. Acércalo e intenta de nuevo.';
+                });
+                return;
+              }
+
+              try {
+                P2PService().setTransport(TransportType.ble);
+                await P2PService().sendPayload({
+                  'type': 'payment',
+                  'amount': amount,
+                  'targetPlayerId': receiver.displayName,
+                  'transferFrom': fromName,
+                });
+                if (!ctx.mounted) return;
+                setDialogState(() {
+                  delivering = false;
+                  completed = true;
+                  status =
+                      'Proceso completado con el jugador ${receiver.displayName}.';
+                });
+                Future.delayed(const Duration(seconds: 3), () {
+                  if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                    Navigator.of(ctx).pop();
+                  }
+                });
+              } catch (e, s) {
+                if (!mounted || !ctx.mounted) return;
+                context.showFriendlyError(e, s);
+                setDialogState(() {
+                  delivering = false;
+                  status = 'No pude entregar el dinero. Intenta de nuevo.';
+                });
+              }
+            }
+
+            return AlertDialog(
+              backgroundColor: kBgCard,
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+                side: BorderSide(
+                  color: completed
+                      ? kGreen.withValues(alpha: 0.45)
+                      : kGold.withValues(alpha: 0.35),
+                ),
+              ),
+              title: Text(
+                completed ? 'Transferencia completada' : 'Dinero retenido',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: kTextPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              content: SizedBox(
+                width: 300,
+                height: 226,
+                child: Column(
+                  children: [
+                    Icon(
+                      completed
+                          ? Icons.check_circle_rounded
+                          : Icons.account_balance_wallet_rounded,
+                      color: completed ? kGreen : kGold,
+                      size: 72,
+                    ),
+                    Text(
+                      formatMoney(amount),
+                      style: const TextStyle(
+                        color: kGold,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 30,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'De: ${fromName.isEmpty ? 'Jugador' : fromName}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: kTextSecondary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          status,
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: kTextSecondary,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                if (!completed)
+                  TextButton(
+                    onPressed: delivering
+                        ? null
+                        : () {
+                            SoundService.playClick();
+                            Navigator.of(ctx).pop();
+                          },
+                    child: const Text('Cerrar'),
+                  ),
+                SizedBox(
+                  width: completed ? double.infinity : 150,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: completed || delivering ? null : deliver,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: completed ? kGreen : kGold,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: delivering
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.black,
+                            ),
+                          )
+                        : Icon(completed
+                            ? Icons.check_rounded
+                            : Icons.touch_app_rounded),
+                    label: Text(
+                      completed ? 'Completado' : 'Entregar',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      _transferHoldDialogOpen = false;
+    });
+  }
+
+  Future<BleConnectedPlayer?> _waitForTransferReceiver() async {
+    final transport = P2PService().bleTransport;
+    final current = _currentTransferReceiver(transport);
+    if (current != null) return current;
+
+    final completer = Completer<BleConnectedPlayer?>();
+    Timer? timeout;
+    late VoidCallback listener;
+
+    void finish(BleConnectedPlayer? player) {
+      if (completer.isCompleted) return;
+      timeout?.cancel();
+      transport.connectedPlayersNotifier.removeListener(listener);
+      transport.contactReadyNotifier.removeListener(listener);
+      completer.complete(player);
+    }
+
+    listener = () {
+      final player = _currentTransferReceiver(transport);
+      if (player != null) finish(player);
+    };
+
+    transport.connectedPlayersNotifier.addListener(listener);
+    transport.contactReadyNotifier.addListener(listener);
+    timeout = Timer(const Duration(seconds: 15), () => finish(null));
+    return completer.future;
+  }
+
+  BleConnectedPlayer? _currentTransferReceiver(BleTransport transport) {
+    for (final player in transport.connectedPlayersNotifier.value) {
+      if (player.subscribed && player.contactReady && player.playing) {
+        return player;
+      }
+    }
+    for (final player in transport.connectedPlayersNotifier.value) {
+      if (player.subscribed && player.contactReady) return player;
+    }
+    return null;
   }
 
   Future<void> _showOperationDialog(_BankOperationDialogController controller) {
@@ -258,87 +868,144 @@ class _BankScreenState extends State<BankScreen>
                   return ValueListenableBuilder<bool>(
                     valueListenable: controller.completed,
                     builder: (context, completed, _) {
-                      if (completed && !autoCloseScheduled) {
-                        autoCloseScheduled = true;
-                        Future.delayed(const Duration(seconds: 3), () {
-                          if (ctx.mounted && Navigator.of(ctx).canPop()) {
-                            Navigator.of(ctx).pop();
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: controller.failed,
+                        builder: (context, failed, _) {
+                          final finished = completed || failed;
+                          if (finished && !autoCloseScheduled) {
+                            autoCloseScheduled = true;
+                            Future.delayed(
+                              Duration(seconds: completed ? 3 : 2),
+                              () {
+                                if (ctx.mounted && Navigator.of(ctx).canPop()) {
+                                  Navigator.of(ctx).pop();
+                                }
+                              },
+                            );
                           }
-                        });
-                      }
 
-                      return AlertDialog(
-                        backgroundColor: kBgCard,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          side: BorderSide(
-                            color: completed
-                                ? kGreen.withValues(alpha: 0.45)
-                                : Colors.blue.withValues(alpha: 0.35),
-                          ),
-                        ),
-                        title: Text(
-                          title,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: kTextPrimary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _OperationLoadingVisual(completed: completed),
-                            const SizedBox(height: 18),
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 220),
-                              child: Text(
-                                message,
-                                key: ValueKey(message),
-                                textAlign: TextAlign.center,
-                                style: const TextStyle(
-                                  color: kTextSecondary,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w600,
+                          return AlertDialog(
+                            insetPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 24,
+                            ),
+                            contentPadding:
+                                const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                            backgroundColor: kBgCard,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              side: BorderSide(
+                                color: completed
+                                    ? kGreen.withValues(alpha: 0.45)
+                                    : failed
+                                        ? controller.failedColor
+                                            .withValues(alpha: 0.45)
+                                        : (controller.transportType ==
+                                                    TransportType.nfc
+                                                ? kGold
+                                                : Colors.blue)
+                                            .withValues(alpha: 0.35),
+                              ),
+                            ),
+                            title: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 340),
+                              child: Center(
+                                child: Text(
+                                  title,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  style: const TextStyle(
+                                    color: kTextPrimary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                        actions: [
-                          SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: completed
-                                ? ElevatedButton(
-                                    onPressed: () {
-                                      SoundService.playClick();
-                                      Navigator.of(ctx).pop();
-                                    },
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: kGreen,
-                                      foregroundColor: Colors.black,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
+                            content: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: 340,
+                                maxHeight:
+                                    MediaQuery.sizeOf(context).height * 0.55,
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 136,
+                                    height: 136,
+                                    child: Center(
+                                      child: _OperationLoadingVisual(
+                                        completed: completed,
+                                        failed: failed,
+                                        transportType: controller.transportType,
+                                        failedIcon: controller.failedIcon,
+                                        failedColor: controller.failedColor,
                                       ),
                                     ),
-                                    child: const Text(
-                                      'Cerrar',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                    ),
-                                  )
-                                : TextButton(
-                                    onPressed: () {
-                                      SoundService.playClick();
-                                      controller.cancelled.value = true;
-                                      Navigator.of(ctx).pop();
-                                    },
-                                    child: const Text('Cancelar'),
                                   ),
-                          ),
-                        ],
+                                  const SizedBox(height: 18),
+                                  Flexible(
+                                    child: SingleChildScrollView(
+                                      child: Center(
+                                        child: AnimatedSwitcher(
+                                          duration:
+                                              const Duration(milliseconds: 220),
+                                          child: Text(
+                                            message,
+                                            key: ValueKey(message),
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                              color: kTextSecondary,
+                                              height: 1.35,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            actions: [
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: finished
+                                    ? ElevatedButton(
+                                        onPressed: () {
+                                          SoundService.playClick();
+                                          Navigator.of(ctx).pop();
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: completed
+                                              ? kGreen
+                                              : controller.failedColor,
+                                          foregroundColor: Colors.black,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          'Cerrar',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      )
+                                    : TextButton(
+                                        onPressed: () {
+                                          SoundService.playClick();
+                                          controller.cancelled.value = true;
+                                          Navigator.of(ctx).pop();
+                                        },
+                                        child: const Text('Cancelar'),
+                                      ),
+                              ),
+                            ],
+                          );
+                        },
                       );
                     },
                   );
@@ -349,7 +1016,7 @@ class _BankScreenState extends State<BankScreen>
         );
       },
     ).whenComplete(() {
-      if (!controller.completed.value) {
+      if (!controller.completed.value && !controller.failed.value) {
         controller.cancelled.value = true;
       }
     });
@@ -437,6 +1104,10 @@ class _BankScreenState extends State<BankScreen>
   }
 
   Future<void> _sendToConnectedPlayer(Map<String, dynamic> payload) async {
+    if (P2PService().currentType == TransportType.nfc) {
+      await _sendToNfcPlayer(payload);
+      return;
+    }
     final transport = P2PService().bleTransport;
     P2PService().setTransport(TransportType.ble);
 
@@ -452,16 +1123,115 @@ class _BankScreenState extends State<BankScreen>
       );
     }
 
-    if (!transport.contactReadyNotifier.value) {
-      final rssi = transport.contactRssiNotifier.value;
+    if (!_hasBleContact(transport)) {
+      final rssi =
+          _closestBleRssi(transport) ?? transport.contactRssiNotifier.value;
       throw TransportUnavailableException(
         rssi == null
-            ? 'Acerca el jugador al banco para simular contacto NFC.'
+            ? 'No se recibió señal de proximidad BLE. Acerca los dispositivos y mantenlos juntos.'
             : 'Jugador fuera de contacto BLE ($rssi dBm). Acerca los dispositivos.',
       );
     }
 
-    await P2PService().sendPayload(payload);
+    final bankTxId = payload['bankTxId'] as String?;
+    final requiresConfirmation =
+        (payload['type'] == 'bank_state' || payload['type'] == 'handshake') &&
+            bankTxId != null;
+    if (!requiresConfirmation) {
+      await P2PService().sendPayload(payload);
+      return;
+    }
+
+    final completer = Completer<Map<String, dynamic>>();
+    _pendingDeliveryAcks[bankTxId] = completer;
+    try {
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await P2PService().sendPayload(payload);
+        try {
+          final confirmation =
+              await completer.future.timeout(const Duration(seconds: 6));
+          final expectedPlayer = payload['targetPlayerId'] as String?;
+          final confirmedPlayer = confirmation['playerId'] as String?;
+          final expectedBalance = (payload['balance'] as num?)?.toDouble();
+          final confirmedBalance =
+              (confirmation['appliedBalance'] as num?)?.toDouble();
+          final playerMatches = expectedPlayer == null ||
+              (confirmedPlayer != null && confirmedPlayer == expectedPlayer);
+          final balanceMatches = expectedBalance == null ||
+              (confirmedBalance != null &&
+                  (confirmedBalance - expectedBalance).abs() < 0.001);
+          if (!playerMatches || !balanceMatches) {
+            throw TransportUnavailableException(
+              'El jugador respondió, pero no confirmó el saldo esperado. La operación no se marcará como completada.',
+            );
+          }
+          return;
+        } on TimeoutException {
+          if (attempt == 1) rethrow;
+        }
+      }
+    } on TimeoutException {
+      throw TransportUnavailableException(
+        'El jugador no confirmó que recibió y mostró la operación. Verifica su pantalla y vuelve a intentarlo.',
+      );
+    } finally {
+      _pendingDeliveryAcks.remove(bankTxId);
+    }
+  }
+
+  Future<void> _sendToNfcPlayer(Map<String, dynamic> payload) async {
+    final p2p = P2PService();
+    final nfc = p2p.nfcTransport;
+    final availability = await nfc.checkAvailability();
+    if (availability == NfcAvailability.disabled) {
+      throw const NfcDisabledException();
+    }
+    if (availability != NfcAvailability.enabled) {
+      throw TransportUnavailableException(
+        'NFC no está disponible en este dispositivo.',
+      );
+    }
+
+    p2p.setTransport(TransportType.nfc);
+    final bankTxId = payload['bankTxId'] as String?;
+    final requiresConfirmation =
+        (payload['type'] == 'bank_state' || payload['type'] == 'handshake') &&
+            bankTxId != null;
+    if (!requiresConfirmation) {
+      await p2p.sendPayload(payload);
+      return;
+    }
+
+    final completer = Completer<Map<String, dynamic>>();
+    _pendingDeliveryAcks[bankTxId] = completer;
+    try {
+      await p2p.sendPayload(payload);
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      await nfc.stopHce();
+      unawaited(p2p.startReceiving(null));
+      final confirmation =
+          await completer.future.timeout(const Duration(seconds: 10));
+      final expectedPlayer = payload['targetPlayerId'] as String?;
+      final confirmedPlayer = confirmation['playerId'] as String?;
+      final expectedBalance = (payload['balance'] as num?)?.toDouble();
+      final confirmedBalance =
+          (confirmation['appliedBalance'] as num?)?.toDouble();
+      if (expectedPlayer != confirmedPlayer ||
+          expectedBalance == null ||
+          confirmedBalance == null ||
+          (confirmedBalance - expectedBalance).abs() >= 0.001) {
+        throw TransportUnavailableException(
+          'La confirmación NFC no coincide con la operación enviada.',
+        );
+      }
+    } on TimeoutException {
+      throw TransportUnavailableException(
+        'No se recibió la confirmación NFC. Mantén ambos dispositivos juntos hasta completar.',
+      );
+    } finally {
+      _pendingDeliveryAcks.remove(bankTxId);
+      await nfc.stop();
+    }
   }
 
   Future<void> _showNfcDisabledDialog() async {
@@ -552,25 +1322,21 @@ class _BankScreenState extends State<BankScreen>
                           child: _buildOpSelector(),
                         ),
                         const SizedBox(height: 24),
-                        if (_selectedOp == 'manual')
-                          _buildManualTransferInterface()
-                        else ...[
-                          if (_selectedOp != 'passGo')
-                            AnimatedEntry(
-                              delay: const Duration(milliseconds: 300),
-                              child: _buildAmountField(),
-                            ),
-                          const SizedBox(height: 28),
+                        if (_selectedOp != 'passGo')
                           AnimatedEntry(
-                            delay: const Duration(milliseconds: 400),
-                            child: _buildQuickAmounts(),
+                            delay: const Duration(milliseconds: 300),
+                            child: _buildAmountField(),
                           ),
-                          const SizedBox(height: 32),
-                          AnimatedEntry(
-                            delay: const Duration(milliseconds: 500),
-                            child: _buildSendButton(),
-                          ),
-                        ],
+                        const SizedBox(height: 28),
+                        AnimatedEntry(
+                          delay: const Duration(milliseconds: 400),
+                          child: _buildQuickAmounts(),
+                        ),
+                        const SizedBox(height: 32),
+                        AnimatedEntry(
+                          delay: const Duration(milliseconds: 500),
+                          child: _buildSendButton(),
+                        ),
                       ],
                     ),
                   ),
@@ -581,144 +1347,6 @@ class _BankScreenState extends State<BankScreen>
         ),
       ),
     );
-  }
-
-  Widget _buildManualTransferInterface() {
-    return StreamBuilder<TransferState>(
-      stream: BancoServer().stateStream,
-      initialData: BancoServer().state,
-      builder: (context, snapshot) {
-        final state = snapshot.data!;
-        return Container(
-          padding: const EdgeInsets.all(24),
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: kBgCard,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: kBorder),
-          ),
-          child: Column(
-            children: [
-              _buildStateAnimation(state),
-              const SizedBox(height: 24),
-              Text(
-                _getStateLabel(state),
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    color: kTextPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _getStateSublabel(state),
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: kTextSecondary, fontSize: 14),
-              ),
-              if (state == TransferState.idle) ...[
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: () {
-                    SoundService.playClick();
-                    BancoServer().start();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.cyan,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Iniciar Servidor de Banco',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                ),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildStateAnimation(TransferState state) {
-    if (state == TransferState.idle) {
-      return const Icon(Icons.power_settings_new_rounded,
-          size: 80, color: kBorder);
-    }
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        SizedBox(
-          width: 100,
-          height: 100,
-          child: CircularProgressIndicator(
-            value: state == TransferState.holding ? 1.0 : null,
-            strokeWidth: 8,
-            color: _getStateColor(state),
-          ),
-        ),
-        Icon(_getStateIcon(state), size: 40, color: _getStateColor(state)),
-      ],
-    );
-  }
-
-  String _getStateLabel(TransferState state) {
-    switch (state) {
-      case TransferState.idle:
-        return 'Servidor de Banco Apagado';
-      case TransferState.listening:
-        return 'Banco Activo';
-      case TransferState.waitingSender:
-        return 'Esperando Emisor';
-      case TransferState.holding:
-        return 'Dinero Retenido';
-      case TransferState.waitingReceiver:
-        return 'Esperando Receptor';
-    }
-  }
-
-  String _getStateSublabel(TransferState state) {
-    switch (state) {
-      case TransferState.idle:
-        return 'Inicia el servidor para transacciones manuales';
-      case TransferState.listening:
-        return 'Esperando transferencia de un jugador...';
-      case TransferState.waitingSender:
-        return 'El emisor debe acercar el dispositivo';
-      case TransferState.holding:
-        return 'Validando saldo y procesando débito...';
-      case TransferState.waitingReceiver:
-        return 'Retención completa. Receptor acerque dispositivo';
-    }
-  }
-
-  Color _getStateColor(TransferState state) {
-    switch (state) {
-      case TransferState.listening:
-        return Colors.cyan;
-      case TransferState.waitingSender:
-        return kRed;
-      case TransferState.holding:
-        return kGold;
-      case TransferState.waitingReceiver:
-        return kGreen;
-      default:
-        return kBorder;
-    }
-  }
-
-  IconData _getStateIcon(TransferState state) {
-    switch (state) {
-      case TransferState.listening:
-        return Icons.sensors_rounded;
-      case TransferState.waitingSender:
-        return Icons.upload_rounded;
-      case TransferState.holding:
-        return Icons.lock_clock_rounded;
-      case TransferState.waitingReceiver:
-        return Icons.download_rounded;
-      default:
-        return Icons.error;
-    }
   }
 
   Widget _buildOpSelector() {
@@ -915,31 +1543,68 @@ class _BankScreenState extends State<BankScreen>
 }
 
 class _BankOperationDialogController {
-  final title = ValueNotifier<String>('Preparando operación');
-  final message = ValueNotifier<String>('Esperando contacto BLE...');
+  _BankOperationDialogController({required this.transportType})
+      : title = ValueNotifier<String>('Preparando operación'),
+        message = ValueNotifier<String>(
+          transportType == TransportType.nfc
+              ? 'Acerca el dispositivo para iniciar el contacto NFC...'
+              : 'Esperando contacto BLE...',
+        );
+
+  final TransportType transportType;
+  final ValueNotifier<String> title;
+  final ValueNotifier<String> message;
   final completed = ValueNotifier<bool>(false);
+  final failed = ValueNotifier<bool>(false);
   final cancelled = ValueNotifier<bool>(false);
+  IconData failedIcon = Icons.close_rounded;
+  Color failedColor = kRed;
 
   void update({
     required String title,
     required String message,
   }) {
-    if (completed.value || cancelled.value) return;
+    if (completed.value || failed.value || cancelled.value) return;
     this.title.value = title;
     this.message.value = message;
   }
 
   void complete(String message) {
     completed.value = true;
+    failed.value = false;
     title.value = 'Proceso completado';
+    this.message.value = message;
+  }
+
+  void fail({
+    required String title,
+    required String message,
+    IconData icon = Icons.close_rounded,
+    Color color = kRed,
+  }) {
+    failedIcon = icon;
+    failedColor = color;
+    failed.value = true;
+    completed.value = false;
+    this.title.value = title;
     this.message.value = message;
   }
 }
 
 class _OperationLoadingVisual extends StatefulWidget {
-  const _OperationLoadingVisual({required this.completed});
+  const _OperationLoadingVisual({
+    required this.completed,
+    required this.failed,
+    required this.transportType,
+    required this.failedIcon,
+    required this.failedColor,
+  });
 
   final bool completed;
+  final bool failed;
+  final TransportType transportType;
+  final IconData failedIcon;
+  final Color failedColor;
 
   @override
   State<_OperationLoadingVisual> createState() =>
@@ -967,102 +1632,153 @@ class _OperationLoadingVisualState extends State<_OperationLoadingVisual>
 
   @override
   Widget build(BuildContext context) {
+    final isNfc = widget.transportType == TransportType.nfc;
+    final waitingColor = isNfc ? kGold : Colors.blue;
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 320),
       switchInCurve: Curves.easeOutBack,
       switchOutCurve: Curves.easeIn,
-      child: widget.completed
+      child: widget.failed
           ? Container(
-              key: const ValueKey('completed'),
-              width: 116,
-              height: 116,
+              key: const ValueKey('failed'),
+              width: 136,
+              height: 136,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: kGreen.withValues(alpha: 0.14),
-                border: Border.all(color: kGreen.withValues(alpha: 0.55)),
+                color: widget.failedColor.withValues(alpha: 0.14),
+                border: Border.all(
+                  color: widget.failedColor.withValues(alpha: 0.55),
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: kGreen.withValues(alpha: 0.28),
+                    color: widget.failedColor.withValues(alpha: 0.24),
                     blurRadius: 28,
                     spreadRadius: 4,
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.check_rounded,
-                color: kGreen,
-                size: 58,
+              child: Icon(
+                widget.failedIcon,
+                color: widget.failedColor,
+                size: 64,
               ),
             )
-          : SizedBox(
-              key: const ValueKey('waiting'),
-              width: 136,
-              height: 136,
-              child: AnimatedBuilder(
-                animation: _pulseCtrl,
-                builder: (context, _) {
-                  final pulse = _pulseCtrl.value;
-                  return Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      _PulseRing(progress: pulse, delay: 0),
-                      _PulseRing(progress: pulse, delay: 0.33),
-                      _PulseRing(progress: pulse, delay: 0.66),
-                      Container(
-                        width: 82,
-                        height: 82,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.blue.withValues(alpha: 0.95),
-                              kGold.withValues(alpha: 0.88),
-                            ],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.blue.withValues(alpha: 0.35),
-                              blurRadius: 24,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: Transform.scale(
-                          scale: 1 + (0.06 * math.sin(pulse * math.pi * 2)),
-                          child: const Icon(
-                            Icons.bluetooth_searching_rounded,
-                            color: Colors.white,
-                            size: 40,
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 2,
-                        child: Container(
-                          width: 42,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
+          : widget.completed
+              ? Container(
+                  key: const ValueKey('completed'),
+                  width: 136,
+                  height: 136,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: kGreen.withValues(alpha: 0.14),
+                    border: Border.all(color: kGreen.withValues(alpha: 0.55)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: kGreen.withValues(alpha: 0.28),
+                        blurRadius: 28,
+                        spreadRadius: 4,
                       ),
                     ],
-                  );
-                },
-              ),
-            ),
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: kGreen,
+                    size: 64,
+                  ),
+                )
+              : SizedBox(
+                  key: const ValueKey('waiting'),
+                  width: 136,
+                  height: 136,
+                  child: AnimatedBuilder(
+                    animation: _pulseCtrl,
+                    builder: (context, _) {
+                      final pulse = _pulseCtrl.value;
+                      return Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          _PulseRing(
+                            progress: pulse,
+                            delay: 0,
+                            color: waitingColor,
+                          ),
+                          _PulseRing(
+                            progress: pulse,
+                            delay: 0.33,
+                            color: waitingColor,
+                          ),
+                          _PulseRing(
+                            progress: pulse,
+                            delay: 0.66,
+                            color: waitingColor,
+                          ),
+                          Positioned(
+                            left: 14,
+                            child: Icon(
+                              Icons.account_balance_rounded,
+                              color: kGold,
+                              size: 48,
+                            ),
+                          ),
+                          Positioned(
+                            right: 8 + (30 * pulse),
+                            child: Transform.rotate(
+                              angle: -0.10 * math.sin(pulse * math.pi),
+                              child: Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: kBgCard,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: waitingColor,
+                                    width: 2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          waitingColor.withValues(alpha: 0.3),
+                                      blurRadius: 16,
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  Icons.smartphone_rounded,
+                                  color: waitingColor,
+                                  size: 34,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 2,
+                            child: Container(
+                              width: 42,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: waitingColor.withValues(alpha: 0.25),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
     );
   }
 }
 
 class _PulseRing extends StatelessWidget {
-  const _PulseRing({required this.progress, required this.delay});
+  const _PulseRing({
+    required this.progress,
+    required this.delay,
+    required this.color,
+  });
 
   final double progress;
   final double delay;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -1076,7 +1792,7 @@ class _PulseRing extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: Colors.blue.withValues(alpha: opacity),
+          color: color.withValues(alpha: opacity),
           width: 2,
         ),
       ),
@@ -1315,9 +2031,9 @@ class _BleServerPanel extends StatelessWidget {
                         width: double.infinity,
                         child: active
                             ? OutlinedButton.icon(
-                                onPressed: () {
+                                onPressed: () async {
                                   SoundService.playClick();
-                                  transport.stopServer();
+                                  await transport.stopServer();
                                 },
                                 icon: const Icon(Icons.stop_circle_outlined,
                                     size: 16),
@@ -1335,7 +2051,7 @@ class _BleServerPanel extends StatelessWidget {
                                   final ready =
                                       await _ensureBleReady(context, transport);
                                   if (!ready || !context.mounted) return;
-                                  await transport.startServer();
+                                  await P2PService().startBleBankServer();
                                   P2PService().setTransport(TransportType.ble);
                                 },
                                 icon: const Icon(

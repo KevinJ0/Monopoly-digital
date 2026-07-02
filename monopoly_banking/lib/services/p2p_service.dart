@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:monopoly_banking/services/hive_service.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
 import 'package:monopoly_banking/services/transports/nfc_transport.dart';
 import 'package:monopoly_banking/services/transports/ble_transport.dart';
@@ -13,6 +14,7 @@ typedef P2PPayloadHandler = void Function(Map<String, dynamic> payload);
 enum TransportType { nfc, ble, wifi }
 
 class P2PService {
+  static const _transportSettingKey = 'connection_transport';
   static final P2PService _instance = P2PService._();
   factory P2PService() => _instance;
   P2PService._();
@@ -44,6 +46,17 @@ class P2PService {
     transports[TransportType.ble] = bleTransport;
     transports[TransportType.wifi] = wifiTransport;
 
+    final savedTransport = HiveService.settingsBox.get(_transportSettingKey);
+    if (savedTransport is String) {
+      for (final type in TransportType.values) {
+        if (type.name == savedTransport) {
+          _currentType = type;
+          _typeCtrl.value = type;
+          break;
+        }
+      }
+    }
+
     await nfcTransport.initialize();
     await bleTransport.initialize();
     await wifiTransport.initialize();
@@ -52,6 +65,7 @@ class P2PService {
   void setTransport(TransportType type) {
     _currentType = type;
     _typeCtrl.value = type;
+    unawaited(HiveService.settingsBox.put(_transportSettingKey, type.name));
   }
 
   Future<void> startReceiving(P2PPayloadHandler? legacyHandler) async {
@@ -64,6 +78,13 @@ class P2PService {
     if (!transport.isEnabled) return;
 
     await transport.startReceiving((payload) {
+      _payloadStreamCtrl.add(payload);
+    });
+  }
+
+  Future<void> startBleBankServer() async {
+    bleTransport.setBankMode(true);
+    await bleTransport.startReceiving((payload) {
       _payloadStreamCtrl.add(payload);
     });
   }

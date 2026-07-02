@@ -23,15 +23,17 @@ class _OdometerWidgetState extends State<OdometerWidget>
   late Animation<double> _anim;
   double _prev = 0;
 
+  double _safeMoneyValue(double value) => value.isFinite ? value : 0;
+
   @override
   void initState() {
     super.initState();
-    _prev = widget.value;
+    _prev = _safeMoneyValue(widget.value);
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
-    _anim = Tween<double>(begin: widget.value, end: widget.value).animate(
+    _anim = Tween<double>(begin: _prev, end: _prev).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeOutExpo),
     );
   }
@@ -39,11 +41,12 @@ class _OdometerWidgetState extends State<OdometerWidget>
   @override
   void didUpdateWidget(OdometerWidget old) {
     super.didUpdateWidget(old);
-    if (old.value != widget.value) {
-      _anim = Tween<double>(begin: _prev, end: widget.value).animate(
+    final nextValue = _safeMoneyValue(widget.value);
+    if (_safeMoneyValue(old.value) != nextValue) {
+      _anim = Tween<double>(begin: _prev, end: nextValue).animate(
         CurvedAnimation(parent: _ctrl, curve: Curves.easeOutExpo),
       );
-      _prev = widget.value;
+      _prev = nextValue;
       _ctrl.forward(from: 0);
     }
   }
@@ -67,7 +70,8 @@ class _OdometerWidgetState extends State<OdometerWidget>
     return AnimatedBuilder(
       animation: _anim,
       builder: (_, __) {
-        final formatted = formatMoneyAmount(_anim.value.round());
+        final currentValue = _safeMoneyValue(_anim.value);
+        final formatted = formatMoneyAmount(currentValue);
         return ShaderMask(
           shaderCallback: (bounds) {
             final color = widget.color ?? kGreen;

@@ -94,7 +94,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
       colorId = '4'; // Gold index
     } else {
       name = await _showNameDialog();
+      if (!mounted) return;
       if (name == null || name.trim().isEmpty) return;
+      name = name.trim();
       avatarId = _avatars[_selectedAvatar];
       colorId = _selectedColor.toString();
     }
@@ -105,7 +107,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
         role: role,
         avatarId: avatarId,
         colorId: colorId,
-        initialBalance: role == 'banco' ? double.infinity : kInitialBalance,
+        initialBalance: role == 'banco' ? double.infinity : 0,
         name: name,
       );
     } catch (e, s) {

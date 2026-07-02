@@ -17,8 +17,7 @@ const kInitialBalance = 2000.0;
 const kPassGoAmount = 200.0;
 
 String formatMoneyAmount(num value) {
-  if (value.isInfinite) return '∞';
-  if (value.isNaN) return 'NaN';
+  if (!value.isFinite) return '0';
 
   final negative = value < 0;
   final text = value.abs().round().toString();

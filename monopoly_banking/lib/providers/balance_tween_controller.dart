@@ -11,22 +11,26 @@ class BalanceTweenController {
   AnimationController? _animController;
   Animation<double>? _tween;
 
+  double _safeMoneyValue(double value) => value.isFinite ? value : 0;
+
   void attach(AnimationController controller) {
     _animController = controller;
   }
 
   void animateTo(double from, double to) {
+    final safeFrom = _safeMoneyValue(from);
+    final safeTo = _safeMoneyValue(to);
     final controller = _animController;
     if (controller == null) {
-      displayBalance.value = to;
+      displayBalance.value = safeTo;
       return;
     }
 
     controller.stop();
-    _tween = Tween<double>(begin: from, end: to).animate(
+    _tween = Tween<double>(begin: safeFrom, end: safeTo).animate(
       CurvedAnimation(parent: controller, curve: Curves.easeOutCubic),
     )..addListener(() {
-        displayBalance.value = _tween!.value.roundToDouble();
+        displayBalance.value = _safeMoneyValue(_tween!.value).roundToDouble();
       });
 
     controller.forward(from: 0);

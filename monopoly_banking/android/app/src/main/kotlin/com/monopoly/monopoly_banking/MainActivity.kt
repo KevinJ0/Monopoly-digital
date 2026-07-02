@@ -129,6 +129,11 @@ class MainActivity : FlutterActivity() {
                         result.success(mapOf("connected" to connected, "subscribed" to subscribed))
                     }
 
+                    "bleDisconnectClient" -> {
+                        val deviceId = call.argument<String>("deviceId") ?: ""
+                        result.success(bleServer?.disconnectClient(deviceId) == true)
+                    }
+
                     else -> result.notImplemented()
                 }
             }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:monopoly_banking/core/constants.dart';
+import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 
@@ -27,9 +29,59 @@ class TransportSelector extends StatelessWidget {
                 icon: Icons.nfc_rounded,
                 label: 'NFC',
                 selected: current == TransportType.nfc,
-                enabled: p2p.transports[TransportType.nfc]?.isEnabled ?? false,
-                onTap: () {
+                enabled: true,
+                onTap: () async {
                   SoundService.playClick();
+                  if (current == TransportType.nfc) return;
+
+                  final ble = p2p.bleTransport;
+                  final isPlayer = !context.read<SessionProvider>().isBank;
+                  if (isPlayer && ble.clientConnectedNotifier.value) {
+                    final bankName =
+                        ble.connectedDeviceNameNotifier.value.trim();
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogContext) => AlertDialog(
+                        backgroundColor: kBgCard,
+                        icon: const Icon(
+                          Icons.bluetooth_connected_rounded,
+                          color: Colors.blue,
+                          size: 48,
+                        ),
+                        title: const Text(
+                          'Conexión BLE activa',
+                          textAlign: TextAlign.center,
+                        ),
+                        content: Text(
+                          'Estás conectado por BLE ${bankName.isEmpty ? 'a un banco' : 'al banco $bankName'}. '
+                          '¿Quieres desconectarte y cambiar a NFC?',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: kTextSecondary,
+                            height: 1.4,
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, false),
+                            child: const Text('Cancelar'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(dialogContext, true),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: kGold,
+                              foregroundColor: Colors.black,
+                            ),
+                            child: const Text('Desconectar y cambiar'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed != true) return;
+                    await ble.stopClientScan();
+                    if (!context.mounted) return;
+                  }
                   p2p.setTransport(TransportType.nfc);
                 },
               ),
@@ -41,16 +93,6 @@ class TransportSelector extends StatelessWidget {
                 onTap: () {
                   SoundService.playClick();
                   p2p.setTransport(TransportType.ble);
-                },
-              ),
-              _Option(
-                icon: Icons.wifi_rounded,
-                label: 'WiFi',
-                selected: current == TransportType.wifi,
-                enabled: p2p.transports[TransportType.wifi]?.isEnabled ?? false,
-                onTap: () {
-                  SoundService.playClick();
-                  p2p.setTransport(TransportType.wifi);
                 },
               ),
             ],

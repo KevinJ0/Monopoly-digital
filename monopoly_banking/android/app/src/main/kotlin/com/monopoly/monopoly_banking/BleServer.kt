@@ -41,6 +41,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
 
     private val connectedDevices = mutableSetOf<android.bluetooth.BluetoothDevice>()
     private val subscribedDevices = mutableSetOf<android.bluetooth.BluetoothDevice>()
+    private val notificationsInFlight = mutableSetOf<android.bluetooth.BluetoothDevice>()
 
     private val gattServerCallback = object : BluetoothGattServerCallback() {
         override fun onConnectionStateChange(device: android.bluetooth.BluetoothDevice, status: Int, newState: Int) {
@@ -53,6 +54,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 connectedDevices.remove(device)
                 subscribedDevices.remove(device)
+                notificationsInFlight.remove(device)
                 mainHandler.post {
                     channel.invokeMethod("bleClientDisconnected", deviceInfo(device))
                 }
@@ -121,6 +123,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
             status: Int
         ) {
             Log.d(TAG, "onNotificationSent: ${device.address} status=$status")
+            notificationsInFlight.remove(device)
         }
     }
 
@@ -134,11 +137,13 @@ class BleServer(private val context: Context, private val channel: MethodChannel
         bluetoothAdapter = bluetoothManager?.adapter
         if (bluetoothAdapter == null) {
             Log.e(TAG, "Bluetooth no soportado")
+            channel.invokeMethod("bleServerAdvertisingFailed", mapOf("errorCode" to -1))
             return
         }
 
         if (!bluetoothAdapter!!.isEnabled) {
             Log.e(TAG, "Bluetooth desactivado")
+            channel.invokeMethod("bleServerAdvertisingFailed", mapOf("errorCode" to -2))
             return
         }
 
@@ -170,6 +175,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
         bleAdvertiser = bluetoothAdapter?.bluetoothLeAdvertiser
         if (bleAdvertiser == null) {
             Log.e(TAG, "BLE advertiser no disponible")
+            channel.invokeMethod("bleServerAdvertisingFailed", mapOf("errorCode" to -3))
             return
         }
 
@@ -181,21 +187,36 @@ class BleServer(private val context: Context, private val channel: MethodChannel
             .build()
 
         val data = AdvertiseData.Builder()
-            .setIncludeDeviceName(true)
             .addServiceUuid(ParcelUuid(serviceUuid))
+            .build()
+
+        val scanResponse = AdvertiseData.Builder()
+            .setIncludeDeviceName(true)
             .build()
 
         advertiseCallback = object : AdvertiseCallback() {
             override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
                 Log.d(TAG, "BLE advertising iniciado exitosamente")
+                channel.invokeMethod("bleServerAdvertisingStarted", null)
             }
 
             override fun onStartFailure(errorCode: Int) {
                 Log.e(TAG, "BLE advertising falló: errorCode=$errorCode")
+                channel.invokeMethod(
+                    "bleServerAdvertisingFailed",
+                    mapOf("errorCode" to errorCode)
+                )
             }
         }
 
-        bleAdvertiser?.startAdvertising(settings, data, null, advertiseCallback)
+        // addService() termina de forma asíncrona. Darle tiempo a Android para
+        // publicar el servicio evita que un cliente se conecte y descubra un
+        // servidor GATT todavía vacío.
+        mainHandler.postDelayed({
+            if (gattServer != null) {
+                bleAdvertiser?.startAdvertising(settings, data, scanResponse, advertiseCallback)
+            }
+        }, 350)
     }
 
     fun sendNotification(jsonPayload: String): Boolean {
@@ -209,6 +230,10 @@ class BleServer(private val context: Context, private val channel: MethodChannel
 
         var sent = false
         for (device in subscribedDevices) {
+            if (device in notificationsInFlight) {
+                Log.w(TAG, "Notificación anterior aún pendiente para ${device.address}")
+                continue
+            }
             try {
                 val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     gattServer?.notifyCharacteristicChanged(device, char, false, bytes) ==
@@ -220,6 +245,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
                     gattServer?.notifyCharacteristicChanged(device, char, false) == true
                 }
                 if (result) {
+                    notificationsInFlight.add(device)
                     Log.d(TAG, "Notificación enviada a ${device.address}")
                     sent = true
                 } else {
@@ -234,6 +260,22 @@ class BleServer(private val context: Context, private val channel: MethodChannel
 
     fun isClientConnected(): Boolean = connectedDevices.isNotEmpty()
     fun isClientSubscribed(): Boolean = subscribedDevices.isNotEmpty()
+
+    fun disconnectClient(deviceId: String): Boolean {
+        val device = connectedDevices.firstOrNull { it.address == deviceId }
+            ?: subscribedDevices.firstOrNull { it.address == deviceId }
+            ?: return false
+        connectedDevices.remove(device)
+        subscribedDevices.remove(device)
+        notificationsInFlight.remove(device)
+        return try {
+            gattServer?.cancelConnection(device)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error desconectando cliente $deviceId", e)
+            false
+        }
+    }
 
     private fun deviceInfo(device: android.bluetooth.BluetoothDevice): Map<String, String> {
         return mapOf(
@@ -257,6 +299,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
         }
         connectedDevices.clear()
         subscribedDevices.clear()
+        notificationsInFlight.clear()
 
         try {
             gattServer?.clearServices()
