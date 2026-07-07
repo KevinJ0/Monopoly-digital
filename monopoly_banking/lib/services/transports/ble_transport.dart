@@ -1043,8 +1043,11 @@ class BleTransport extends P2PTransport {
     _audit('connectToBank',
         data: {'bankId': bank.id, 'bankName': bank.name, 'rssi': bank.rssi});
     final savedBanks = [...discoveredBanksNotifier.value];
+    final savedCallback = _receiveCallback;
     await _fullStop();
     _transportDisposed = false;
+    _reconnectAllowed = true;
+    _receiveCallback = savedCallback;
     discoveredBanksNotifier.value = savedBanks;
     await _scanSub?.cancel();
     _scanSub = null;
