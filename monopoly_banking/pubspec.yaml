@@ -24,6 +24,7 @@ dependencies:
   confetti: 0.7.0
   flutter_tts: 4.2.2
   fl_chart: 0.71.0
+  flutter_animate: ^4.5.2
   sqflite: ^2.4.1
   google_generative_ai: ^0.4.6
   crypto: ^3.0.6

@@ -7,7 +7,9 @@ import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/services/hive_service.dart';
 import 'package:monopoly_banking/services/device_identity_service.dart';
+import 'package:monopoly_banking/services/app_audit_logger.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
+import 'package:monopoly_banking/services/transports/ble_protocol.dart';
 
 enum BleAvailabilityStatus {
   ready,
@@ -188,8 +190,8 @@ class BleTransport extends P2PTransport {
 
   static const _channel = MethodChannel('com.monopoly/ble');
 
-  static const String _serviceUuid = '12345678-0000-1000-8000-00805f9b34fb';
-  static const String _charUuid = '12345678-0001-1000-8000-00805f9b34fb';
+  static const String _serviceUuid = BleProtocol.serviceUuid;
+  static const String _charUuid = BleProtocol.characteristicUuid;
 
   final _ble = FlutterReactiveBle();
 
@@ -222,12 +224,22 @@ class BleTransport extends P2PTransport {
   StreamSubscription<List<int>>? _notifySub;
   Timer? _proximityTimer;
   Timer? _bankConnectionWatchdog;
+  Timer? _identityBootstrapTimer;
+  Timer? _keepAliveTimer;
+  DateTime? _lastPongReceived;
+  int _pongMissedCount = 0;
   int _nearContactSampleCount = 0;
   final Map<String, int> _bankContactSampleCounts = {};
   bool _proximityBusy = false;
   bool _clientConnected = false;
+  bool _dataChannelReady = false;
+  bool _clientCharacteristicReady = false;
+  bool _preparingNotificationChannel = false;
   bool _reconnectAllowed = false;
   bool _notificationRetryScheduled = false;
+  bool _schedulingReconnect = false;
+  bool _transportDisposed = false;
+  Completer<DiscoveredDevice>? _pendingScanCompleter;
   int _consecutiveConnectionFailures = 0;
   String? _connectedDeviceId;
   Map<String, dynamic>? _clientIdentity;
@@ -237,7 +249,41 @@ class BleTransport extends P2PTransport {
   void Function(Map<String, dynamic>)? _receiveCallback;
 
   BleTransport() {
+    AppAuditLogger.instance.event('LIFECYCLE', 'BleTransport.created');
     _channel.setMethodCallHandler(_handleNativeCalls);
+  }
+
+  void _audit(String action, {Map<String, dynamic>? data}) {
+    AppAuditLogger.instance.event('BLE_TRANSPORT', action, data: data);
+  }
+
+  Future<void> _checkBatteryOptimizationAndKeepScreenOn() async {
+    try {
+      final ignoring =
+          await _channel.invokeMethod<bool>('isIgnoringBatteryOptimizations') ?? false;
+      _audit('battery_optimization_check', data: {'ignoring': ignoring});
+      if (!ignoring) {
+        await _channel.invokeMethod<void>('requestIgnoreBatteryOptimizations');
+      }
+      await _channel.invokeMethod<void>('keepScreenOn', {'keepOn': true});
+    } catch (error, stack) {
+      AppAuditLogger.instance.event(
+        'BLE_TRANSPORT',
+        'No se pudo configurar wake lock/batería',
+        error: error,
+        stack: stack,
+      );
+    }
+  }
+
+  Map<String, dynamic> _safeArgs(dynamic arguments) {
+    if (arguments is Map) {
+      return arguments.map((key, value) => MapEntry(key.toString(), value?.toString() ?? ''));
+    }
+    if (arguments != null) {
+      return {'value': arguments.toString()};
+    }
+    return const {};
   }
 
   BleContactProfile get contactProfile =>
@@ -458,12 +504,24 @@ class BleTransport extends P2PTransport {
   }
 
   Future<dynamic> _handleNativeCalls(MethodCall call) async {
+    AppAuditLogger.instance.event(
+      'BLE_NATIVE',
+      '${call.method}: ${call.arguments}',
+    );
+    _audit('native_${call.method}', data: _safeArgs(call.arguments));
     switch (call.method) {
       case 'bleDataReceived':
         try {
           final deviceId = _deviceIdFrom(call.arguments);
           final deviceName = _deviceNameFrom(call.arguments);
           final jsonStr = _payloadFrom(call.arguments);
+          if (_isBank && jsonStr == '{"type":"ping"}') {
+            _audit('received_ping');
+            await _channel.invokeMethod<bool>('bleSendNotification', {
+              'payload': '{"type":"pong"}',
+            });
+            break;
+          }
           final data = _decodeBleFrame(jsonStr);
           if (data == null) break;
           if (deviceId != null) data['_bleDeviceId'] = deviceId;
@@ -533,8 +591,11 @@ class BleTransport extends P2PTransport {
           playing: false,
           contactReady: false,
         );
-        contactReadyNotifier.value = false;
-        contactRssiNotifier.value = null;
+        if (connectedPlayersNotifier.value.every(
+            (player) => !player.contactReady)) {
+          contactReadyNotifier.value = false;
+          contactRssiNotifier.value = null;
+        }
         if (_isBank) {
           connectionStatusNotifier.value =
               'Jugador conectado al banco y listo para recibir';
@@ -547,15 +608,21 @@ class BleTransport extends P2PTransport {
           subscribed: false,
           contactReady: false,
         );
-        contactReadyNotifier.value = false;
-        contactRssiNotifier.value = null;
+        if (connectedPlayersNotifier.value.every(
+            (player) => !player.contactReady)) {
+          contactReadyNotifier.value = false;
+          contactRssiNotifier.value = null;
+        }
         if (_isBank && _serverActive) {
           connectionStatusNotifier.value =
               'Jugador conectado, esperando que quede listo para recibir...';
         }
         break;
       case 'bleClientDisconnected':
-        _removeConnectedPlayer(_deviceIdFrom(call.arguments));
+        final deviceId = _deviceIdFrom(call.arguments);
+        final status = call.arguments is Map ? (call.arguments as Map)['status']?.toString() : null;
+        _audit('native_bleClientDisconnected', data: {'deviceId': deviceId, 'status': status});
+        _removeConnectedPlayer(deviceId);
         contactReadyNotifier.value = false;
         contactRssiNotifier.value = null;
         if (_isBank && _serverActive) {
@@ -598,15 +665,23 @@ class BleTransport extends P2PTransport {
   }
 
   void _markClientDisconnected({String status = 'Desconectado'}) {
+    _stopKeepAlive();
     final connection = _connectSub;
     _connectSub = null;
     unawaited(connection?.cancel());
     _clientConnected = false;
+    _dataChannelReady = false;
+    _clientCharacteristicReady = false;
+    _preparingNotificationChannel = false;
+    _notificationChannelPrepareAttempts = 0;
+    _identityBootstrapTimer?.cancel();
+    _identityBootstrapTimer = null;
     _notificationRetryScheduled = false;
     _consecutiveConnectionFailures = 0;
     _proximityBusy = false;
     _nearContactSampleCount = 0;
     _connectedDeviceId = null;
+    _autoConnectingDeviceIds.clear();
     _proximityTimer?.cancel();
     _proximityTimer = null;
     _bankConnectionWatchdog?.cancel();
@@ -639,6 +714,7 @@ class BleTransport extends P2PTransport {
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
+    _audit('initialize');
 
     final storedProfile =
         HiveService.settingsBox.get('ble_contact_profile_index');
@@ -714,6 +790,7 @@ class BleTransport extends P2PTransport {
   Future<void> startReceiving(
       void Function(Map<String, dynamic>) onData) async {
     _receiveCallback = onData;
+    _audit('startReceiving', data: {'isBank': _isBank});
 
     if (_isBank) {
       await _startBankServer();
@@ -727,6 +804,7 @@ class BleTransport extends P2PTransport {
   Future<void> _startBankServer() async {
     if (_serverActive || _serverStarting) return;
     _serverStarting = true;
+    _audit('startBankServer');
     serverActiveNotifier.value = false;
     connectedPlayersNotifier.value = const [];
     _bankContactSampleCounts.clear();
@@ -750,6 +828,7 @@ class BleTransport extends P2PTransport {
 
   @override
   Future<void> sendPayload(Map<String, dynamic> payload) async {
+    _audit('sendPayload', data: {'type': payload['type'], 'isBank': _isBank});
     if (_isBank) {
       await _sendViaServer(payload);
     } else {
@@ -774,12 +853,14 @@ class BleTransport extends P2PTransport {
           if (!sent) {
             final status =
                 await _channel.invokeMethod<Map>('bleIsClientConnected') ?? {};
-            if (status['subscribed'] != true) {
+            if (status['subscribed'] != true && attempt >= 15) {
               throw TransportUnavailableException(
-                'El jugador todavía no está listo para recibir datos por BLE.',
+                'El jugador todav\u00eda no est\u00e1 listo para recibir datos por BLE.',
               );
             }
-            await Future<void>.delayed(const Duration(milliseconds: 45));
+            await Future<void>.delayed(
+              Duration(milliseconds: status['subscribed'] == true ? 45 : 200),
+            );
           }
         }
         if (!sent) {
@@ -796,136 +877,224 @@ class BleTransport extends P2PTransport {
 
   // ── Modo CLIENTE: escanear y conectar ────────────────────────────
 
+  final Set<String> _autoConnectingDeviceIds = {};
+
   Future<void> _startClientScan(
       void Function(Map<String, dynamic>) onData) async {
     _receiveCallback = onData;
     _reconnectAllowed = true;
+    _transportDisposed = false;
     _clientConnected = false;
     _nearContactSampleCount = 0;
     clientConnectedNotifier.value = false;
     connectionStatusNotifier.value = 'Buscando bancos por Bluetooth...';
     discoveredBanksNotifier.value = const [];
+    _audit('startClientScan');
 
     final serviceUuid = Uuid.parse(_serviceUuid);
+
+    final completer = Completer<DiscoveredDevice>();
+    _pendingScanCompleter = completer;
     _scanSub = _ble.scanForDevices(
-      withServices: [serviceUuid],
+      withServices: const [],
       scanMode: ScanMode.lowLatency,
     ).listen((device) {
-      if (_clientConnected) return;
+      final matched = device.serviceUuids.contains(serviceUuid);
       debugPrint(
-          '[BLE client] Banco descubierto id=${device.id} rssi=${device.rssi}');
-      final suffix =
-          device.id.length > 6 ? device.id.substring(0, 6) : device.id;
-      final displayName =
-          device.name.trim().isEmpty ? 'Banco cercano $suffix' : device.name;
-      final next = [...discoveredBanksNotifier.value];
-      final index = next.indexWhere((bank) => bank.id == device.id);
-      final bank = BleBankDevice(
-        id: device.id,
-        name: displayName,
-        rssi: device.rssi,
-      );
-      if (index >= 0) {
-        next[index] = bank;
-      } else {
-        next.add(bank);
-      }
-      next.sort((a, b) => b.rssi.compareTo(a.rssi));
-      discoveredBanksNotifier.value = next;
-      if (_receiveCallback != null) return;
+          '[BLE client] Descubierto id=${device.id} rssi=${device.rssi} match=${matched ? "SÍ" : "NO"}');
 
-      _scanSub?.cancel();
+      if (matched) {
+        final suffix =
+            device.id.length > 6 ? device.id.substring(0, 6) : device.id;
+        final displayName =
+            device.name.trim().isEmpty ? 'Banco cercano $suffix' : device.name;
+        final next = [...discoveredBanksNotifier.value];
+        final index = next.indexWhere((bank) => bank.id == device.id);
+        final bank = BleBankDevice(
+          id: device.id,
+          name: displayName,
+          rssi: device.rssi,
+        );
+        if (index >= 0) {
+          next[index] = bank;
+        } else {
+          next.add(bank);
+        }
+        next.sort((a, b) => b.rssi.compareTo(a.rssi));
+        discoveredBanksNotifier.value = next;
+      }
+
+      if (!matched) return;
+
+      if (!completer.isCompleted) {
+        completer.complete(device);
+      }
+    }, onError: (Object error, StackTrace stack) {
+      if (!completer.isCompleted) {
+        completer.completeError(error, stack);
+      }
+    });
+
+    unawaited(_awaitScanAndConnect(completer, serviceUuid));
+  }
+
+  Future<void> _awaitScanAndConnect(
+      Completer<DiscoveredDevice> completer, Uuid serviceUuid) async {
+    try {
+      final device =
+          await completer.future.timeout(const Duration(seconds: 20));
+      if (_transportDisposed || !_reconnectAllowed) return;
+      await _scanSub?.cancel();
       _scanSub = null;
+      _pendingScanCompleter = null;
 
       connectedDeviceNameNotifier.value = device.name;
       connectionStatusNotifier.value = 'Conectando a ${device.name}...';
       _connectedDeviceId = device.id;
-      _connectSub = _ble.connectToDevice(
-        id: device.id,
-        servicesWithCharacteristicsToDiscover: {
-          Uuid.parse(_serviceUuid): [Uuid.parse(_charUuid)],
-        },
-      ).listen((state) {
-        if (state.connectionState == DeviceConnectionState.connected) {
-          _clientConnected = true;
-          _consecutiveConnectionFailures = 0;
-          clientConnectedNotifier.value = true;
-          connectionStatusNotifier.value = 'Conectado al banco';
-          _prepareNotificationChannel(device.id);
-        } else if (state.connectionState ==
-            DeviceConnectionState.disconnecting) {
-          connectionStatusNotifier.value = 'Desconectando...';
-        } else if (state.connectionState ==
-            DeviceConnectionState.disconnected) {
-          _markClientDisconnected();
-          if (_receiveCallback != null) {
-            if (_reconnectAllowed) _reconnectScan();
-          }
-        }
-      }, onError: (_) {
-        _markClientDisconnected(
-          status: 'Conexión perdida. Intentando reconectar...',
-        );
-        Future.delayed(const Duration(seconds: 2), () {
-          if (_reconnectAllowed) _reconnectScan();
-        });
-      });
-    }, onError: (_) {
+      _connect(device.id);
+    } on TimeoutException {
+      _pendingScanCompleter = null;
+      await _scanSub?.cancel();
+      _scanSub = null;
+      if (_transportDisposed || !_reconnectAllowed) return;
+      debugPrint('[BLE client] No se encontró el servidor en 20 segundos');
+      connectionStatusNotifier.value =
+          'No se encontraron bancos. Reintentando...';
+      _scheduleDelayedReconnect();
+    } catch (error) {
+      _pendingScanCompleter = null;
+      await _scanSub?.cancel();
+      _scanSub = null;
+      if (_transportDisposed || !_reconnectAllowed) return;
+      debugPrint('[BLE client] Error durante escaneo: $error');
       connectionStatusNotifier.value = 'Error al escanear, reintentando...';
-      Future.delayed(const Duration(seconds: 3), () {
-        if (_reconnectAllowed) _reconnectScan();
-      });
+      _scheduleDelayedReconnect();
+    }
+  }
+
+  void _scheduleDelayedReconnect() {
+    if (_transportDisposed || !_reconnectAllowed) return;
+    Future.delayed(const Duration(seconds: 3), () {
+      if (_transportDisposed || !_reconnectAllowed) return;
+      _reconnectScan();
     });
+  }
+
+  void _connect(String deviceId) async {
+    _audit('action_connect', data: {'deviceId': deviceId});
+    final serviceUuid = Uuid.parse(_serviceUuid);
+    _connectSub = _ble
+        .connectToAdvertisingDevice(
+      id: deviceId,
+      withServices: [serviceUuid],
+      prescanDuration: const Duration(seconds: 2),
+      connectionTimeout: const Duration(seconds: 12),
+      servicesWithCharacteristicsToDiscover: {
+        serviceUuid: [Uuid.parse(_charUuid)],
+      },
+    )
+        .listen((state) {
+      debugPrint('[BLE client] Estado ${deviceId}: ${state.connectionState}');
+      if (state.connectionState == DeviceConnectionState.connected) {
+        _clientConnected = true;
+        _consecutiveConnectionFailures = 0;
+        clientConnectedNotifier.value = false;
+        connectionStatusNotifier.value = 'Preparando canal de datos...';
+        _prepareNotificationChannel(deviceId);
+      } else if (state.connectionState ==
+          DeviceConnectionState.disconnecting) {
+        connectionStatusNotifier.value = 'Desconectando...';
+      } else if (state.connectionState ==
+          DeviceConnectionState.disconnected) {
+        _markClientDisconnected(
+          status: 'Conexi\u00f3n perdida. Vuelve a intentarlo.',
+        );
+      }
+    }, onError: (Object error) {
+      debugPrint('[BLE client] Error conectando ${deviceId}: $error');
+      _markClientDisconnected(status: 'Error de conexi\u00f3n');
+    }, onDone: () {
+      debugPrint('[BLE client] Stream conexi\u00f3n ${deviceId} termin\u00f3');
+      _markClientDisconnected(
+        status: 'La conexi\u00f3n BLE termin\u00f3 inesperadamente.',
+      );
+    });
+  }
+
+  Future<void> _scheduleReconnectAfterFailure() async {
+    if (_transportDisposed || !_reconnectAllowed || _schedulingReconnect) {
+      return;
+    }
+    _schedulingReconnect = true;
+    final previousDeviceId = _connectedDeviceId;
+    final connection = _connectSub;
+    _connectSub = null;
+    await connection?.cancel();
+    _stopKeepAlive();
+    await _notifySub?.cancel();
+    _notifySub = null;
+    _identityBootstrapTimer?.cancel();
+    _identityBootstrapTimer = null;
+    _clientConnected = false;
+    _clientCharacteristicReady = false;
+    _preparingNotificationChannel = false;
+    _notificationRetryScheduled = false;
+    _dataChannelReady = false;
+    _connectedDeviceId = null;
+    _autoConnectingDeviceIds.clear();
+    clientConnectedNotifier.value = false;
+    if (previousDeviceId != null) {
+      await _clearBleCacheForDevice(previousDeviceId);
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 500));
+    _schedulingReconnect = false;
+    if (!_transportDisposed &&
+        _reconnectAllowed &&
+        _connectedDeviceId == null &&
+        _receiveCallback != null) {
+      _reconnectScan();
+    }
+  }
+
+  Future<void> _reconnectScan() async {
+    if (_transportDisposed || !_reconnectAllowed) return;
+    final callback = _receiveCallback;
+    await _fullStop();
+    if (callback != null) {
+      _receiveCallback = callback;
+      connectionStatusNotifier.value = 'Reconectando...';
+      await _startClientScan(callback);
+    }
   }
 
   Future<void> connectToBank(BleBankDevice bank) async {
     _isBank = false;
     _reconnectAllowed = true;
+    _audit('connectToBank',
+        data: {'bankId': bank.id, 'bankName': bank.name, 'rssi': bank.rssi});
+    final savedBanks = [...discoveredBanksNotifier.value];
+    await _fullStop();
+    discoveredBanksNotifier.value = savedBanks;
     await _scanSub?.cancel();
     _scanSub = null;
     await _connectSub?.cancel();
     _connectSub = null;
     await _notifySub?.cancel();
     _notifySub = null;
+    _identityBootstrapTimer?.cancel();
+    _identityBootstrapTimer = null;
 
     _clientConnected = false;
+    _dataChannelReady = false;
+    _clientCharacteristicReady = false;
+    _preparingNotificationChannel = false;
     _nearContactSampleCount = 0;
     clientConnectedNotifier.value = false;
     connectedDeviceNameNotifier.value = bank.name;
     connectionStatusNotifier.value = 'Conectando a ${bank.name}...';
     _connectedDeviceId = bank.id;
 
-    _connectSub = _ble
-        .connectToAdvertisingDevice(
-      id: bank.id,
-      withServices: [Uuid.parse(_serviceUuid)],
-      prescanDuration: const Duration(seconds: 5),
-      connectionTimeout: const Duration(seconds: 12),
-      servicesWithCharacteristicsToDiscover: {
-        Uuid.parse(_serviceUuid): [Uuid.parse(_charUuid)],
-      },
-    )
-        .listen((state) {
-      debugPrint('[BLE client] Estado ${bank.id}: ${state.connectionState}');
-      if (state.connectionState == DeviceConnectionState.connected) {
-        _clientConnected = true;
-        _consecutiveConnectionFailures = 0;
-        clientConnectedNotifier.value = true;
-        connectionStatusNotifier.value = 'Conectado al banco';
-        _prepareNotificationChannel(bank.id);
-      } else if (state.connectionState == DeviceConnectionState.disconnecting) {
-        connectionStatusNotifier.value = 'Desconectando...';
-      } else if (state.connectionState == DeviceConnectionState.disconnected) {
-        _markClientDisconnected(
-          status: 'Conexión perdida. Pulsa el banco para volver a conectar.',
-        );
-      }
-    }, onError: (error) {
-      debugPrint('[BLE client] Error conectando ${bank.id}: $error');
-      _markClientDisconnected(
-        status: 'No se pudo conectar. Pulsa el banco para intentarlo otra vez.',
-      );
-    });
+    _connect(bank.id);
   }
 
   void _subscribeToNotifications() {
@@ -944,17 +1113,34 @@ class BleTransport extends P2PTransport {
         .listen((bytes) {
       try {
         final jsonStr = utf8.decode(bytes);
+        if (jsonStr == '{"type":"pong"}') {
+          _lastPongReceived = DateTime.now();
+          _pongMissedCount = 0;
+          return;
+        }
         final data = _decodeBleFrame(jsonStr);
         if (data == null) return;
+        _dataChannelReady = true;
+        _identityBootstrapTimer?.cancel();
+        _identityBootstrapTimer = null;
+        _startKeepAlive(deviceId);
+        clientConnectedNotifier.value = true;
         _notificationRetryScheduled = false;
         connectionStatusNotifier.value = 'Conectado al banco';
         _receiveCallback?.call(data);
       } catch (_) {}
     }, onError: (error) {
       debugPrint('[BLE client] Error en suscripción $deviceId: $error');
+      AppAuditLogger.instance.event(
+        'BLE_SUBSCRIPTION',
+        'Falló la suscripción a $deviceId',
+        error: error,
+      );
       if (!_clientConnected || _connectedDeviceId != deviceId) return;
       contactReadyNotifier.value = false;
       contactRssiNotifier.value = null;
+      _dataChannelReady = false;
+      clientConnectedNotifier.value = false;
       connectionStatusNotifier.value =
           'Conectado al banco. Restableciendo canal de datos...';
       if (_notificationRetryScheduled) return;
@@ -968,31 +1154,142 @@ class BleTransport extends P2PTransport {
     });
   }
 
+  int _notificationChannelPrepareAttempts = 0;
+
   Future<void> _prepareNotificationChannel(String deviceId) async {
+    if (_preparingNotificationChannel) return;
+    _preparingNotificationChannel = true;
     try {
-      await _ble.requestMtu(deviceId: deviceId, mtu: 247);
-      debugPrint('[BLE client] MTU preparado para $deviceId');
-    } catch (error) {
-      debugPrint('[BLE client] No se pudo negociar MTU: $error');
+      final characteristicReady = await _discoverClientCharacteristic(deviceId);
+      if (!characteristicReady) {
+        if (_clientConnected && _connectedDeviceId == deviceId) {
+          _notificationChannelPrepareAttempts += 1;
+          _audit('prepareNotificationChannel_retry', data: {'attempt': _notificationChannelPrepareAttempts});
+          if (_notificationChannelPrepareAttempts >= 2) {
+            _notificationChannelPrepareAttempts = 0;
+            _logConnection('No se pudo descubrir el canal BLE. Forzando reconexión...');
+            _audit('prepareNotificationChannel_force_reconnect');
+            _forceClientReconnect(deviceId);
+            return;
+          }
+          connectionStatusNotifier.value =
+              'Esperando que Android descubra el canal BLE...';
+          Future<void>.delayed(const Duration(seconds: 1), () {
+            if (_clientConnected && _connectedDeviceId == deviceId) {
+              _prepareNotificationChannel(deviceId);
+            }
+          });
+        }
+        return;
+      }
+      _notificationChannelPrepareAttempts = 0;
+      _audit('prepareNotificationChannel_ready');
+
+      try {
+        await _ble.requestMtu(deviceId: deviceId, mtu: 247);
+        debugPrint('[BLE client] MTU preparado para $deviceId');
+      } catch (error) {
+        debugPrint('[BLE client] No se pudo negociar MTU: $error');
+      }
+
+      if (!_clientConnected || _connectedDeviceId != deviceId) return;
+      _dataChannelReady = false;
+      clientConnectedNotifier.value = false;
+      connectionStatusNotifier.value = 'Preparando canal de datos...';
+      _subscribeToNotifications();
+      _startIdentityBootstrap(deviceId);
+      Future<void>.delayed(const Duration(milliseconds: 900), () {
+        if (_clientConnected && _connectedDeviceId == deviceId) {
+          _startProximityReporting(deviceId);
+        }
+      });
+    } finally {
+      _preparingNotificationChannel = false;
+    }
+  }
+
+  void _forceClientReconnect(String deviceId) {
+    if (_connectedDeviceId != deviceId) return;
+    _markClientDisconnected(status: 'Reconectando por fallo de descubrimiento...');
+    Future<void>.delayed(const Duration(milliseconds: 500), () {
+      if (_transportDisposed || !_reconnectAllowed || _receiveCallback == null) {
+        return;
+      }
+      _reconnectScan();
+    });
+  }
+
+  void _logConnection(String message) {
+    debugPrint('[BLE client] $message');
+    AppAuditLogger.instance.event('BLE_CONNECTION', message);
+  }
+
+  Future<bool> _discoverClientCharacteristic(String deviceId) async {
+    final serviceUuid = Uuid.parse(_serviceUuid);
+    final characteristicUuid = Uuid.parse(_charUuid);
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      if (!_clientConnected || _connectedDeviceId != deviceId) return false;
+      try {
+        await _ble
+            .discoverAllServices(deviceId)
+            .timeout(const Duration(seconds: 4));
+        final services = await _ble
+            .getDiscoveredServices(deviceId)
+            .timeout(const Duration(seconds: 4));
+        final found = services.any(
+          (service) =>
+              service.id == serviceUuid &&
+              service.characteristics.any(
+                  (characteristic) => characteristic.id == characteristicUuid),
+        );
+        if (found) {
+          _clientCharacteristicReady = true;
+          debugPrint('[BLE client] Característica GATT descubierta');
+          return true;
+        }
+        debugPrint('[BLE client] Característica no encontrada en intento $attempt');
+      } catch (error) {
+        debugPrint(
+            '[BLE client] Descubrimiento GATT intento $attempt falló: $error');
+        AppAuditLogger.instance.event(
+          'BLE_DISCOVERY',
+          'Intento $attempt de descubrimiento GATT para $deviceId',
+          error: error,
+        );
+      }
+      await Future<void>.delayed(Duration(milliseconds: 400 * attempt));
+    }
+    _clientCharacteristicReady = false;
+    return false;
+  }
+
+  void _startIdentityBootstrap(String deviceId) {
+    _identityBootstrapTimer?.cancel();
+    var attempts = 0;
+
+    Future<void> sendIdentity() async {
+      if (!_clientConnected ||
+          _connectedDeviceId != deviceId ||
+          _dataChannelReady) {
+        _identityBootstrapTimer?.cancel();
+        _identityBootstrapTimer = null;
+        return;
+      }
+      attempts += 1;
+      connectionStatusNotifier.value =
+          'Conectado al banco. Preparando canal de datos...';
+      await _sendClientIdentity();
+      if (attempts >= 8 && !_dataChannelReady) {
+        connectionStatusNotifier.value =
+            'El canal de datos no respondió. Pulsa el banco para reintentar.';
+        _identityBootstrapTimer?.cancel();
+        _identityBootstrapTimer = null;
+      }
     }
 
-    if (!_clientConnected || _connectedDeviceId != deviceId) return;
-    _subscribeToNotifications();
-    Future.delayed(const Duration(milliseconds: 400), () {
-      if (_clientConnected && _connectedDeviceId == deviceId) {
-        _sendClientIdentity();
-      }
-    });
-    Future.delayed(const Duration(milliseconds: 1400), () {
-      if (_clientConnected && _connectedDeviceId == deviceId) {
-        _sendClientIdentity();
-      }
-    });
-    Future.delayed(const Duration(milliseconds: 900), () {
-      if (_clientConnected && _connectedDeviceId == deviceId) {
-        _startProximityReporting(deviceId);
-      }
-    });
+    Future<void>.delayed(const Duration(milliseconds: 200), sendIdentity);
+    _identityBootstrapTimer =
+        Timer.periodic(const Duration(seconds: 2), (_) => sendIdentity());
   }
 
   Future<void> _sendClientIdentity() async {
@@ -1003,6 +1300,58 @@ class BleTransport extends P2PTransport {
     try {
       await _writeClientPayload(identity);
     } catch (_) {}
+  }
+
+  void _startKeepAlive(String deviceId) {
+    _keepAliveTimer?.cancel();
+    _lastPongReceived = DateTime.now();
+    _pongMissedCount = 0;
+    _keepAliveTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (!_clientConnected || _connectedDeviceId != deviceId) {
+        _keepAliveTimer?.cancel();
+        _keepAliveTimer = null;
+        return;
+      }
+      final lastPong = _lastPongReceived;
+      if (lastPong != null &&
+          DateTime.now().difference(lastPong) > const Duration(seconds: 5)) {
+        _pongMissedCount += 1;
+        _logConnection('No se recibe pong desde hace 5s (fallo $_pongMissedCount)');
+        if (_pongMissedCount >= 2) {
+          _logConnection('Conexión perdida por falta de pong. Reconectando...');
+          _keepAliveTimer?.cancel();
+          _keepAliveTimer = null;
+          _markClientDisconnected(status: 'Conexión BLE perdida');
+          Future<void>.delayed(const Duration(milliseconds: 500), () {
+            if (!_transportDisposed &&
+                _reconnectAllowed &&
+                _receiveCallback != null) {
+              _reconnectScan();
+            }
+          });
+          return;
+        }
+      }
+      try {
+        await _ble.writeCharacteristicWithResponse(
+          QualifiedCharacteristic(
+            serviceId: Uuid.parse(_serviceUuid),
+            characteristicId: Uuid.parse(_charUuid),
+            deviceId: deviceId,
+          ),
+          value: utf8.encode('{"type":"ping"}'),
+        );
+      } catch (error) {
+        _logConnection('No se pudo enviar ping: $error');
+      }
+    });
+  }
+
+  void _stopKeepAlive() {
+    _keepAliveTimer?.cancel();
+    _keepAliveTimer = null;
+    _lastPongReceived = null;
+    _pongMissedCount = 0;
   }
 
   void _startProximityReporting(String deviceId) {
@@ -1058,17 +1407,6 @@ class BleTransport extends P2PTransport {
     }
   }
 
-  Future<void> _reconnectScan() async {
-    if (!_reconnectAllowed) return;
-    final callback = _receiveCallback;
-    await stop();
-    if (callback != null) {
-      _receiveCallback = callback;
-      connectionStatusNotifier.value = 'Reconectando...';
-      await _startClientScan(callback);
-    }
-  }
-
   Future<void> _sendViaClient(Map<String, dynamic> payload) async {
     try {
       await _writeClientPayload(payload);
@@ -1083,6 +1421,11 @@ class BleTransport extends P2PTransport {
       final deviceId = _connectedDeviceId;
       if (!_clientConnected || deviceId == null) {
         throw TransportUnavailableException('No hay conexi\u00f3n al banco');
+      }
+      if (!_clientCharacteristicReady &&
+          !await _discoverClientCharacteristic(deviceId)) {
+        throw TransportUnavailableException(
+            'La característica BLE todavía no fue descubierta');
       }
 
       final characteristic = QualifiedCharacteristic(
@@ -1102,12 +1445,24 @@ class BleTransport extends P2PTransport {
       }
     });
     _clientWriteChain = operation.catchError((_) {});
-    await operation;
+    try {
+      await operation;
+    } catch (error, stack) {
+      AppAuditLogger.instance.event(
+        'BLE_WRITE',
+        'Falló el envío de payload tipo ${payload['type']}',
+        error: error,
+        stack: stack,
+      );
+      rethrow;
+    }
   }
 
   Future<void> startServer() async {
     _isBank = true;
     if (_serverActive) return;
+    await _fullStop();
+    await _checkBatteryOptimizationAndKeepScreenOn();
     await refreshAvailability();
     if (!isEnabled) {
       throw TransportUnavailableException('Bluetooth no est\u00e1 disponible');
@@ -1134,6 +1489,7 @@ class BleTransport extends P2PTransport {
   Future<void> startClientScan(
       void Function(Map<String, dynamic>) onData) async {
     _isBank = false;
+    await _fullStop();
     await _startClientScan(onData);
   }
 
@@ -1144,14 +1500,30 @@ class BleTransport extends P2PTransport {
 
   @override
   Future<void> stop() async {
+    _audit('stop');
+    _transportDisposed = true;
     _receiveCallback = null;
     _reconnectAllowed = false;
+    _schedulingReconnect = false;
     _notificationRetryScheduled = false;
     _serverStarting = false;
+    _stopKeepAlive();
     _clientConnected = false;
+    _dataChannelReady = false;
+    _clientCharacteristicReady = false;
+    _preparingNotificationChannel = false;
+    _notificationChannelPrepareAttempts = 0;
     _proximityBusy = false;
     _nearContactSampleCount = 0;
     _connectedDeviceId = null;
+
+    final pendingCompleter = _pendingScanCompleter;
+    _pendingScanCompleter = null;
+    if (pendingCompleter != null && !pendingCompleter.isCompleted) {
+      pendingCompleter.completeError(
+        StateError('Transport detenido'),
+      );
+    }
 
     clientConnectedNotifier.value = false;
     connectedDeviceNameNotifier.value = '';
@@ -1169,6 +1541,8 @@ class BleTransport extends P2PTransport {
     await _notifySub?.cancel();
     _notifySub = null;
     _proximityTimer?.cancel();
+    _identityBootstrapTimer?.cancel();
+    _identityBootstrapTimer = null;
     _proximityTimer = null;
 
     if (_isBank) {
@@ -1177,12 +1551,72 @@ class BleTransport extends P2PTransport {
       connectionStatusNotifier.value = '';
       try {
         await _channel.invokeMethod('stopBleServer');
+        await _channel.invokeMethod('keepScreenOn', {'keepOn': false});
       } catch (_) {}
+    }
+  }
+
+  Future<void> _fullStop() async {
+    _audit('action_full_stop');
+    final previousDeviceId = _connectedDeviceId;
+    await stop();
+    if (previousDeviceId != null) {
+      await _clearBleCacheForDevice(previousDeviceId);
+    }
+    // Dar tiempo al stack BLE de Android para liberar el rol anterior.
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+  }
+
+  Future<void> _clearBleCacheForDevice(String deviceId) async {
+    _audit('action_clear_ble_cache', data: {'deviceId': deviceId});
+    try {
+      await _channel.invokeMethod<bool>('bleUnbondDevice', {'deviceId': deviceId});
+    } catch (_) {}
+    try {
+      await _channel.invokeMethod<bool>('bleRefreshDeviceCache', {'deviceId': deviceId});
+    } catch (_) {}
+  }
+
+  Future<void> resetState() async {
+    _audit('resetState');
+    await stop();
+    try {
+      await _channel.invokeMethod<void>('bleResetState');
+      AppAuditLogger.instance.event('BLE_RESET', 'Estado nativo limpiado');
+    } catch (error, stack) {
+      AppAuditLogger.instance.event(
+        'BLE_RESET_ERROR',
+        'No se pudo limpiar estado nativo',
+        error: error,
+        stack: stack,
+      );
+    }
+  }
+
+  Future<bool> restartBluetooth() async {
+    _audit('restartBluetooth');
+    await stop();
+    try {
+      final ok = await _channel.invokeMethod<bool>('bleRestartBluetooth') ?? false;
+      AppAuditLogger.instance.event(
+        'BLE_BT_RESTART',
+        ok ? 'Bluetooth reiniciado' : 'Falló reinicio Bluetooth',
+      );
+      return ok;
+    } catch (error, stack) {
+      AppAuditLogger.instance.event(
+        'BLE_BT_RESTART_ERROR',
+        'Error reiniciando Bluetooth',
+        error: error,
+        stack: stack,
+      );
+      return false;
     }
   }
 
   @override
   void dispose() {
+    _stopKeepAlive();
     _scanSub?.cancel();
     _connectSub?.cancel();
     _notifySub?.cancel();

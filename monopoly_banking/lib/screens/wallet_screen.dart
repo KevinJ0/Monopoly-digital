@@ -25,6 +25,7 @@ import 'package:monopoly_banking/services/transports/ble_transport.dart';
 import 'package:monopoly_banking/services/transports/nfc_transport.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
+import 'package:monopoly_banking/widgets/animated_avatar.dart';
 import 'package:monopoly_banking/widgets/odometer_widget.dart';
 import 'package:monopoly_banking/widgets/premium_dialog.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
@@ -51,7 +52,6 @@ class _WalletScreenState extends State<WalletScreen>
       ValueNotifier<NfcAvailability>(NfcAvailability.unsupported);
   bool _showWelcome = false;
   bool _bankruptcyScreenOpen = false;
-  DateTime? _lastBackPressTime;
   bool _isExiting = false;
   StreamSubscription<Map<String, dynamic>>? _payloadSub;
   StreamSubscription<TxType>? _txSub;
@@ -65,6 +65,8 @@ class _WalletScreenState extends State<WalletScreen>
   VoidCallback? _bleClientConnectionListener;
   bool _wasBleClientConnected = false;
   bool _bankTransferHoldDialogOpen = false;
+  bool _disposed = false;
+  ValueNotifier<bool>? _bankruptNotifierRef;
   final Set<String> _seenTxIds = <String>{};
   final List<String> _seenTxIdOrder = <String>[];
   final Map<String, Completer<Map<String, dynamic>>> _bankDeliveryAcks = {};
@@ -117,7 +119,9 @@ class _WalletScreenState extends State<WalletScreen>
       if (P2PService().currentType == TransportType.ble) {
         _stopNfcLoop();
       } else {
-        if (_bleScanning) _stopBleClient();
+        final bleConnected =
+            P2PService().bleTransport.clientConnectedNotifier.value;
+        if (_bleScanning || bleConnected) _stopBleClient();
         _startNfcLoop();
       }
     };
@@ -187,14 +191,25 @@ class _WalletScreenState extends State<WalletScreen>
     _wasBleClientConnected = notifier.value;
     _bleClientConnectionListener ??= () {
       final connected = notifier.value;
+
+      if (connected && _bleScanning) {
+        _bleScanning = false;
+        if (mounted) setState(() {});
+      } else if (!connected &&
+          _wasBleClientConnected &&
+          !_userRequestedBleDisconnect) {
+        _bleScanning = true;
+        if (mounted) setState(() {});
+      }
+
       if (_wasBleClientConnected &&
           !connected &&
           !_userRequestedBleDisconnect &&
           mounted) {
         Future.microtask(() {
-          if (!mounted || _userRequestedBleDisconnect) return;
+          if (!mounted || _userRequestedBleDisconnect || _bleScanning) return;
           NotificationService().show(
-            'Se perdió la conexión con el banco. El servidor BLE fue apagado o dejó de estar disponible.',
+            'Se perdi\u00f3 la conexi\u00f3n con el banco. El servidor BLE fue apagado o dej\u00f3 de estar disponible.',
             backgroundColor: kRed,
             duration: const Duration(seconds: 5),
             dedupeKey: 'ble-bank-disconnected',
@@ -401,15 +416,28 @@ class _WalletScreenState extends State<WalletScreen>
             );
           } else {
             final sourceTransport = _transportForIncomingPayload(payload);
-            final statusPayload = <String, dynamic>{
-              'type': 'bank_session_status',
+            final result = await BankLedgerService().ensurePlayer(
+              playerId,
+              kInitialBalance,
+              deviceInstallationId: deviceInstallationId,
+            );
+            final handshake = <String, dynamic>{
+              'type': 'handshake',
               'targetPlayerId': playerId,
+              'avatarId': session.avatarId,
+              'colorId': session.colorId,
+              'gameId': 'monopoly',
+              'name': session.name,
+              'bankTxId': result.transactionId,
+              'eventType': result.eventType,
+              'amount': result.amount,
               'bankSessionId': BankLedgerService().currentBankSessionId,
+              ...result.account.toClientState(),
             };
             if (sourceTransport != TransportType.nfc) {
               P2PService().setTransport(sourceTransport);
               try {
-                await P2PService().sendPayload(statusPayload);
+                await P2PService().sendPayload(handshake);
               } on TransportUnavailableException {
                 // La identidad BLE se repite al terminar la suscripción.
               }
@@ -563,10 +591,33 @@ class _WalletScreenState extends State<WalletScreen>
     return P2PService().currentType;
   }
 
+  bool _hasBleContactForPlayer(String? bleDeviceId) {
+    final transport = P2PService().bleTransport;
+    if (transport.contactReadyNotifier.value) return true;
+    if (bleDeviceId == null || bleDeviceId.isEmpty) {
+      return transport.connectedPlayersNotifier.value
+          .any((player) => player.subscribed && player.contactReady);
+    }
+    return transport.connectedPlayersNotifier.value.any(
+      (player) =>
+          player.id == bleDeviceId && player.subscribed && player.contactReady,
+    );
+  }
+
   Future<void> _handleBankOperationRequest(Map<String, dynamic> payload) async {
     final playerId = _connectedPlayerIdForPayload(payload);
     if (playerId == null) return;
     final sourceTransport = _transportForIncomingPayload(payload);
+    if (sourceTransport == TransportType.ble &&
+        !_hasBleContactForPlayer(payload['_bleDeviceId'] as String?)) {
+      await _sendBankError(
+        playerId,
+        'Jugador fuera de contacto BLE. Acerca los dispositivos.',
+        transportType: sourceTransport,
+        requestId: payload['requestId'] as String?,
+      );
+      return;
+    }
     final requestId = payload['requestId'] as String?;
 
     try {
@@ -722,6 +773,16 @@ class _WalletScreenState extends State<WalletScreen>
     if (_pendingBankOperationCompleter != null) {
       throw const BankLedgerException(
         'Ya hay una operación bancaria en proceso.',
+      );
+    }
+
+    if (P2PService().currentType == TransportType.ble &&
+        !transport.contactReadyNotifier.value) {
+      final rssi = transport.contactRssiNotifier.value;
+      throw TransportUnavailableException(
+        rssi == null
+            ? 'No se recibió señal de proximidad. Acerca los dispositivos.'
+            : 'Jugador fuera de contacto BLE ($rssi dBm). Acerca los dispositivos.',
       );
     }
 
@@ -1169,8 +1230,6 @@ class _WalletScreenState extends State<WalletScreen>
   Future<void> _connectToBleBank(BleBankDevice bank) async {
     SoundService.playClick();
     _setBleClientIdentity();
-    _bleScanning = false;
-    if (mounted) setState(() {});
     try {
       await P2PService().bleTransport.connectToBank(bank);
     } catch (e, s) {
@@ -1190,6 +1249,7 @@ class _WalletScreenState extends State<WalletScreen>
 
   void _listenToBankruptcy() {
     final wallet = context.read<WalletController>();
+    _bankruptNotifierRef = wallet.bankruptNotifier;
     _bankruptListener ??= () {
       if (wallet.bankruptNotifier.value && mounted) {
         _openBankruptcyScreen();
@@ -1575,6 +1635,7 @@ class _WalletScreenState extends State<WalletScreen>
 
   @override
   void dispose() {
+    _disposed = true;
     for (final completer in _bankDeliveryAcks.values) {
       if (!completer.isCompleted) {
         completer.completeError(StateError('Pantalla cerrada'));
@@ -1590,10 +1651,8 @@ class _WalletScreenState extends State<WalletScreen>
     _tierSub?.cancel();
     _tierCelebrationTimer?.cancel();
     final bankruptListener = _bankruptListener;
-    if (bankruptListener != null) {
-      context.read<WalletController>().bankruptNotifier.removeListener(
-            bankruptListener,
-          );
+    if (bankruptListener != null && _bankruptNotifierRef != null) {
+      _bankruptNotifierRef!.removeListener(bankruptListener);
     }
     final bankStatsListener = _bankStatsListener;
     if (bankStatsListener != null) {
@@ -1651,18 +1710,8 @@ class _WalletScreenState extends State<WalletScreen>
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        final now = DateTime.now();
-        if (_lastBackPressTime == null ||
-            now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
-          _lastBackPressTime = now;
-          NotificationService().show(
-            'Presiona Atrás de nuevo para salir',
-            backgroundColor: Colors.black87,
-            duration: const Duration(seconds: 2),
-          );
-        } else {
-          Navigator.of(context).pop();
-        }
+        final session = context.read<SessionProvider>();
+        _confirmExit(session);
       },
       child: Scaffold(
         backgroundColor: kBgDark,
@@ -1963,7 +2012,6 @@ class _WalletScreenState extends State<WalletScreen>
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                     border: Border.all(
                         color: color.withValues(alpha: 0.5), width: 2),
@@ -1975,9 +2023,11 @@ class _WalletScreenState extends State<WalletScreen>
                       )
                     ],
                   ),
-                  child: Text(
-                    avatarId,
-                    style: const TextStyle(fontSize: 80),
+                  child: AnimatedAvatar(
+                    emoji: avatarId,
+                    size: 104,
+                    glowColor: color,
+                    showIdle: true,
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -2032,21 +2082,11 @@ class _WalletScreenState extends State<WalletScreen>
       titleSpacing: 12,
       title: Row(
         children: [
-          Container(
-            width: compactActions ? 32 : 36,
-            height: compactActions ? 32 : 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: color.withValues(alpha: 0.5)),
-            ),
-            child: Center(
-              child: Text(
-                avatarId,
-                overflow: TextOverflow.clip,
-                style: TextStyle(fontSize: compactActions ? 16 : 18),
-              ),
-            ),
+          AnimatedAvatar(
+            emoji: avatarId,
+            size: compactActions ? 32 : 36,
+            glowColor: color,
+            showIdle: false,
           ),
           SizedBox(width: compactActions ? 8 : 10),
           Expanded(
@@ -2879,6 +2919,23 @@ class _WalletScreenState extends State<WalletScreen>
     );
   }
 
+  Future<void> _reiniciarBleBanco() async {
+    final transport = P2PService().bleTransport;
+    try {
+      await transport.stopServer();
+    } catch (_) {}
+    transport.connectedPlayersNotifier.value = const [];
+    await transport.resetState();
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    final ready = await _ensureBleReady(transport);
+    if (!ready || !mounted) return;
+    await P2PService().startBleBankServer();
+    P2PService().setTransport(TransportType.ble);
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   Future<void> _showBleDistanceSettings() {
     final transport = P2PService().bleTransport;
 
@@ -3102,42 +3159,75 @@ class _WalletScreenState extends State<WalletScreen>
                         SizedBox(
                           width: double.infinity,
                           child: active
-                              ? Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: accent.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: accent.withValues(alpha: 0.35),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        connected
-                                            ? Icons.link_rounded
-                                            : Icons.sensors_rounded,
-                                        color: accent,
-                                        size: 16,
+                              ? Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color:
+                                            accent.withValues(alpha: 0.12),
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: accent.withValues(
+                                              alpha: 0.35),
+                                        ),
                                       ),
-                                      const SizedBox(width: 8),
-                                      Flexible(
-                                        child: Text(
-                                          connected
-                                              ? 'Listo para operar con el jugador'
-                                              : 'Activo automáticamente',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            connected
+                                                ? Icons.link_rounded
+                                                : Icons.sensors_rounded,
                                             color: accent,
-                                            fontWeight: FontWeight.w800,
+                                            size: 16,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                              connected
+                                                  ? 'Listo para operar con el jugador'
+                                                  : 'Activo autom\u00e1ticamente',
+                                              maxLines: 1,
+                                              overflow:
+                                                  TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                color: accent,
+                                                fontWeight:
+                                                    FontWeight.w800,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        onPressed: () {
+                                          SoundService.playClick();
+                                          _reiniciarBleBanco();
+                                        },
+                                        icon: const Icon(
+                                            Icons.restart_alt_rounded,
+                                            size: 16),
+                                        label: const Text('Reiniciar BLE'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: kGold,
+                                          side: const BorderSide(
+                                              color: kGold),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
                                           ),
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 )
                               : ElevatedButton.icon(
                                   onPressed: () async {
@@ -3187,7 +3277,8 @@ class _WalletScreenState extends State<WalletScreen>
               return ValueListenableBuilder<String>(
                 valueListenable: transport.connectedDeviceNameNotifier,
                 builder: (context, _, __) {
-                  final connecting = status.startsWith('Conectando');
+                  final connecting = status.startsWith('Conectando') ||
+                      status.startsWith('Preparando');
                   return Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -3304,9 +3395,9 @@ class _WalletScreenState extends State<WalletScreen>
                                   icon: const Icon(
                                       Icons.bluetooth_disabled_rounded,
                                       size: 16),
-                                  label: Text(_bleScanning
-                                      ? 'Cancelar conexión'
-                                      : 'Desconectar del Banco'),
+                                  label: Text(connected
+                                      ? 'Desconectar del Banco'
+                                      : 'Cancelar conexión'),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: kRed,
                                     side: const BorderSide(color: kRed),

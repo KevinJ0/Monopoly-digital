@@ -37,20 +37,47 @@ class NfcTransport extends P2PTransport {
   }
 
   Future<NfcAvailability> checkAvailability() async {
+    // En Android consultamos primero el adaptador nativo. Algunos fabricantes
+    // devuelven `unsupported` temporalmente desde nfc_manager aunque el
+    // adaptador y HCE estén disponibles.
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        final hasHardware =
+            await _channel.invokeMethod<bool>('hasNfcHardware') ?? false;
+        if (hasHardware) {
+          final isEnabled =
+              await _channel.invokeMethod<bool>('isNfcEnabled') ?? false;
+          _availability =
+              isEnabled ? NfcAvailability.enabled : NfcAvailability.disabled;
+          return _availability;
+        }
+      } catch (_) {
+        // Si el canal nativo todavía no está listo, usamos el plugin.
+      }
+    }
+
     try {
       final result = await NfcManager.instance.checkAvailability();
-      if (result != NfcAvailability.unsupported) return result;
+      if (result != NfcAvailability.unsupported) {
+        _availability = result;
+        return result;
+      }
     } catch (_) {}
 
     try {
       final hasHardware =
           await _channel.invokeMethod<bool>('hasNfcHardware') ?? false;
-      if (!hasHardware) return NfcAvailability.unsupported;
+      if (!hasHardware) {
+        _availability = NfcAvailability.unsupported;
+        return _availability;
+      }
       final isEnabled =
           await _channel.invokeMethod<bool>('isNfcEnabled') ?? false;
-      return isEnabled ? NfcAvailability.enabled : NfcAvailability.disabled;
+      _availability =
+          isEnabled ? NfcAvailability.enabled : NfcAvailability.disabled;
+      return _availability;
     } catch (_) {
-      return NfcAvailability.unsupported;
+      return _availability;
     }
   }
 

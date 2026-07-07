@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:monopoly_banking/core/constants.dart';
@@ -8,6 +9,7 @@ import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/screens/nfc_test_screen.dart';
 import 'package:monopoly_banking/screens/ble_test_screen.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
+import 'package:monopoly_banking/widgets/animated_avatar.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 
@@ -170,9 +172,60 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
     );
   }
 
+  Future<void> _confirmExitApp() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kBgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('¿Salir de la app?',
+            style: TextStyle(color: kTextPrimary)),
+        content: const Text(
+          'Se cerrará Monopoly Banking.',
+          style: TextStyle(color: kTextSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(ctx, false);
+            },
+            child:
+                const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(ctx, true);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kRed,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Salir'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      final didPop = await Navigator.of(context).maybePop();
+      if (!didPop) {
+        SystemNavigator.pop();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _confirmExitApp();
+      },
+      child: Scaffold(
       body: PlayerColorBackdrop(
         color: _colors[_selectedColor],
         child: Stack(
@@ -265,8 +318,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildAvatarPicker() {
     return Column(
@@ -279,35 +333,19 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
         ),
         const SizedBox(height: 14),
         Wrap(
-          spacing: 12,
-          runSpacing: 12,
+          spacing: 14,
+          runSpacing: 14,
           children: List.generate(_avatars.length, (i) {
             final selected = i == _selectedAvatar;
-            return GestureDetector(
+            return AnimatedAvatar(
+              emoji: _avatars[i],
+              size: 68,
+              glowColor: kGreen,
+              isSelected: selected,
               onTap: () {
                 SoundService.playClick();
                 setState(() => _selectedAvatar = i);
               },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: selected ? kGreenGlow : kBgCard,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: selected ? kGreen : kBorder,
-                    width: selected ? 2 : 1,
-                  ),
-                  boxShadow: selected
-                      ? [BoxShadow(color: kGreenGlow, blurRadius: 12)]
-                      : null,
-                ),
-                child: Center(
-                  child:
-                      Text(_avatars[i], style: const TextStyle(fontSize: 28)),
-                ),
-              ),
             );
           }),
         ),

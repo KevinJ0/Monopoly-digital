@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nfc_manager/nfc_manager.dart';
@@ -1186,7 +1187,8 @@ class _BankScreenState extends State<BankScreen>
     if (availability == NfcAvailability.disabled) {
       throw const NfcDisabledException();
     }
-    if (availability != NfcAvailability.enabled) {
+    if (availability != NfcAvailability.enabled &&
+        defaultTargetPlatform != TargetPlatform.android) {
       throw TransportUnavailableException(
         'NFC no está disponible en este dispositivo.',
       );

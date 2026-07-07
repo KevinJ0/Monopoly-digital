@@ -39,24 +39,54 @@ class BleServer(private val context: Context, private val channel: MethodChannel
     private var notifyCharacteristic: BluetoothGattCharacteristic? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    @Volatile
+    private var isStarted = false
+    @Volatile
+    private var isStarting = false
+    @Volatile
+    private var isAdvertisingActive = false
+
     private val connectedDevices = mutableSetOf<android.bluetooth.BluetoothDevice>()
     private val subscribedDevices = mutableSetOf<android.bluetooth.BluetoothDevice>()
-    private val notificationsInFlight = mutableSetOf<android.bluetooth.BluetoothDevice>()
+    private val notificationsInFlight = mutableMapOf<android.bluetooth.BluetoothDevice, Long>()
+
+    private var advertisingWatchdog: Runnable? = null
 
     private val gattServerCallback = object : BluetoothGattServerCallback() {
+        override fun onServiceAdded(status: Int, service: android.bluetooth.BluetoothGattService) {
+            Log.d(TAG, "onServiceAdded: ${service.uuid} status=$status")
+            isStarting = false
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                isStarted = true
+                mainHandler.post { startAdvertising() }
+            } else {
+                isStarted = false
+                mainHandler.post {
+                    channel.invokeMethod(
+                        "bleServerAdvertisingFailed",
+                        mapOf("errorCode" to (-1000 - status))
+                    )
+                }
+            }
+        }
+
         override fun onConnectionStateChange(device: android.bluetooth.BluetoothDevice, status: Int, newState: Int) {
             Log.d(TAG, "onConnectionStateChange: ${device.address} status=$status newState=$newState")
             if (newState == BluetoothProfile.STATE_CONNECTED) {
-                connectedDevices.add(device)
+                synchronized(connectedDevices) {
+                    connectedDevices.add(device)
+                }
                 mainHandler.post {
                     channel.invokeMethod("bleClientConnected", deviceInfo(device))
                 }
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                connectedDevices.remove(device)
-                subscribedDevices.remove(device)
+                synchronized(connectedDevices) {
+                    connectedDevices.remove(device)
+                    subscribedDevices.remove(device)
+                }
                 notificationsInFlight.remove(device)
                 mainHandler.post {
-                    channel.invokeMethod("bleClientDisconnected", deviceInfo(device))
+                    channel.invokeMethod("bleClientDisconnected", deviceInfo(device, status))
                 }
             }
         }
@@ -98,13 +128,13 @@ class BleServer(private val context: Context, private val channel: MethodChannel
                 val enabled = Arrays.equals(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE, value) ||
                     Arrays.equals(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE, value)
                 if (enabled) {
-                    subscribedDevices.add(device)
+                    synchronized(connectedDevices) { subscribedDevices.add(device) }
                     Log.d(TAG, "Cliente ${device.address} suscrito a notificaciones")
                     mainHandler.post {
                         channel.invokeMethod("bleClientSubscribed", deviceInfo(device))
                     }
                 } else {
-                    subscribedDevices.remove(device)
+                    synchronized(connectedDevices) { subscribedDevices.remove(device) }
                     mainHandler.post {
                         channel.invokeMethod("bleClientUnsubscribed", deviceInfo(device))
                     }
@@ -129,9 +159,14 @@ class BleServer(private val context: Context, private val channel: MethodChannel
 
     fun start(serviceUuidStr: String, charUuidStr: String) {
         Log.d(TAG, "start: service=$serviceUuidStr char=$charUuidStr")
+        if (isStarting || isStarted) {
+            Log.d(TAG, "start: servidor ya iniciado o iniciando, reiniciando...")
+            stop()
+        }
         serviceUuid = UUID.fromString(serviceUuidStr)
         charUuid = UUID.fromString(charUuidStr)
-        stop()
+        isStarting = true
+        isStarted = false
 
         bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         bluetoothAdapter = bluetoothManager?.adapter
@@ -169,13 +204,31 @@ class BleServer(private val context: Context, private val channel: MethodChannel
             serviceUuid,
             android.bluetooth.BluetoothGattService.SERVICE_TYPE_PRIMARY
         )
-        service.addCharacteristic(notifyCharacteristic)
-        gattServer?.addService(service)
-
         bleAdvertiser = bluetoothAdapter?.bluetoothLeAdvertiser
         if (bleAdvertiser == null) {
             Log.e(TAG, "BLE advertiser no disponible")
             channel.invokeMethod("bleServerAdvertisingFailed", mapOf("errorCode" to -3))
+            return
+        }
+
+        service.addCharacteristic(notifyCharacteristic)
+        if (gattServer?.addService(service) != true) {
+            isStarting = false
+            isStarted = false
+            Log.e(TAG, "No se pudo agregar el servicio GATT")
+            channel.invokeMethod("bleServerAdvertisingFailed", mapOf("errorCode" to -4))
+        }
+    }
+
+    private fun startAdvertising() {
+        val uuid = serviceUuid ?: return
+        val advertiser = bleAdvertiser ?: return
+        if (advertiseCallback != null) {
+            Log.w(TAG, "startAdvertising: ya hay un callback activo")
+            return
+        }
+        if (!isStarted) {
+            Log.w(TAG, "startAdvertising: servidor no está marcado como iniciado")
             return
         }
 
@@ -187,7 +240,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
             .build()
 
         val data = AdvertiseData.Builder()
-            .addServiceUuid(ParcelUuid(serviceUuid))
+            .addServiceUuid(ParcelUuid(uuid))
             .build()
 
         val scanResponse = AdvertiseData.Builder()
@@ -197,11 +250,14 @@ class BleServer(private val context: Context, private val channel: MethodChannel
         advertiseCallback = object : AdvertiseCallback() {
             override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
                 Log.d(TAG, "BLE advertising iniciado exitosamente")
+                isAdvertisingActive = true
+                startAdvertisingWatchdog()
                 channel.invokeMethod("bleServerAdvertisingStarted", null)
             }
 
             override fun onStartFailure(errorCode: Int) {
                 Log.e(TAG, "BLE advertising falló: errorCode=$errorCode")
+                isAdvertisingActive = false
                 channel.invokeMethod(
                     "bleServerAdvertisingFailed",
                     mapOf("errorCode" to errorCode)
@@ -209,14 +265,28 @@ class BleServer(private val context: Context, private val channel: MethodChannel
             }
         }
 
-        // addService() termina de forma asíncrona. Darle tiempo a Android para
-        // publicar el servicio evita que un cliente se conecte y descubra un
-        // servidor GATT todavía vacío.
-        mainHandler.postDelayed({
-            if (gattServer != null) {
-                bleAdvertiser?.startAdvertising(settings, data, scanResponse, advertiseCallback)
+        advertiser.startAdvertising(settings, data, scanResponse, advertiseCallback)
+    }
+
+    private fun startAdvertisingWatchdog() {
+        stopAdvertisingWatchdog()
+        val watchdog = object : Runnable {
+            override fun run() {
+                if (!isStarted) return
+                if (!isAdvertisingActive && advertiseCallback == null && bleAdvertiser != null) {
+                    Log.w(TAG, "Watchdog: advertising se detuvo inesperadamente, reiniciando...")
+                    mainHandler.post { startAdvertising() }
+                }
+                mainHandler.postDelayed(this, 5000)
             }
-        }, 350)
+        }
+        advertisingWatchdog = watchdog
+        mainHandler.postDelayed(watchdog, 5000)
+    }
+
+    private fun stopAdvertisingWatchdog() {
+        advertisingWatchdog?.let { mainHandler.removeCallbacks(it) }
+        advertisingWatchdog = null
     }
 
     fun sendNotification(jsonPayload: String): Boolean {
@@ -228,11 +298,28 @@ class BleServer(private val context: Context, private val channel: MethodChannel
             return false
         }
 
+        // Limpiar notificaciones atascadas (> 3s sin onNotificationSent)
+        val now = System.currentTimeMillis()
+        val staleKeys = mutableListOf<android.bluetooth.BluetoothDevice>()
+        for ((device, sendTime) in notificationsInFlight) {
+            if (now - sendTime > 3000) {
+                staleKeys.add(device)
+                Log.w(TAG, "Notificación atascada para ${device.address} (>3s), liberando canal")
+            }
+        }
+        for (d in staleKeys) notificationsInFlight.remove(d)
+
         var sent = false
-        for (device in subscribedDevices) {
+        // Copiar para evitar ConcurrentModificationException si se desconecta un dispositivo
+        val targets = subscribedDevices.toList()
+        for (device in targets) {
             if (device in notificationsInFlight) {
-                Log.w(TAG, "Notificación anterior aún pendiente para ${device.address}")
-                continue
+                if (staleKeys.contains(device)) {
+                    // Ya fue liberado, continuar
+                } else {
+                    Log.w(TAG, "Notificación anterior aún pendiente para ${device.address}")
+                    continue
+                }
             }
             try {
                 val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -245,7 +332,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
                     gattServer?.notifyCharacteristicChanged(device, char, false) == true
                 }
                 if (result) {
-                    notificationsInFlight.add(device)
+                    notificationsInFlight[device] = now
                     Log.d(TAG, "Notificación enviada a ${device.address}")
                     sent = true
                 } else {
@@ -258,15 +345,18 @@ class BleServer(private val context: Context, private val channel: MethodChannel
         return sent
     }
 
-    fun isClientConnected(): Boolean = connectedDevices.isNotEmpty()
-    fun isClientSubscribed(): Boolean = subscribedDevices.isNotEmpty()
+    fun isClientConnected(): Boolean = synchronized(connectedDevices) { connectedDevices.isNotEmpty() }
+    fun isClientSubscribed(): Boolean = synchronized(subscribedDevices) { subscribedDevices.isNotEmpty() }
 
     fun disconnectClient(deviceId: String): Boolean {
-        val device = connectedDevices.firstOrNull { it.address == deviceId }
-            ?: subscribedDevices.firstOrNull { it.address == deviceId }
-            ?: return false
-        connectedDevices.remove(device)
-        subscribedDevices.remove(device)
+        val device = synchronized(connectedDevices) {
+            connectedDevices.firstOrNull { it.address == deviceId }
+                ?: subscribedDevices.firstOrNull { it.address == deviceId }
+        } ?: return false
+        synchronized(connectedDevices) {
+            connectedDevices.remove(device)
+            subscribedDevices.remove(device)
+        }
         notificationsInFlight.remove(device)
         return try {
             gattServer?.cancelConnection(device)
@@ -277,36 +367,75 @@ class BleServer(private val context: Context, private val channel: MethodChannel
         }
     }
 
-    private fun deviceInfo(device: android.bluetooth.BluetoothDevice): Map<String, String> {
-        return mapOf(
+    fun disconnectAllClients() {
+        val devices = synchronized(connectedDevices) {
+            val all = connectedDevices.toList()
+            connectedDevices.clear()
+            subscribedDevices.clear()
+            notificationsInFlight.clear()
+            all
+        }
+        for (device in devices) {
+            try {
+                gattServer?.cancelConnection(device)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error desconectando cliente ${device.address}", e)
+            }
+        }
+    }
+
+    private fun deviceInfo(device: android.bluetooth.BluetoothDevice, disconnectStatus: Int? = null): Map<String, String> {
+        val info = mutableMapOf(
             "deviceId" to device.address,
             "deviceName" to (device.name ?: "")
         )
+        disconnectStatus?.let { info["status"] = it.toString() }
+        return info
     }
 
     fun stop() {
         Log.d(TAG, "stop")
-        try {
-            advertiseCallback?.let { bleAdvertiser?.stopAdvertising(it) }
-        } catch (_: Exception) {}
+        isStarted = false
+        isStarting = false
+        isAdvertisingActive = false
+        stopAdvertisingWatchdog()
+
+        val callback = advertiseCallback
         advertiseCallback = null
+        callback?.let {
+            try {
+                bleAdvertiser?.stopAdvertising(it)
+            } catch (_: Exception) {
+            }
+        }
         bleAdvertiser = null
 
-        for (device in connectedDevices) {
+        val devices = synchronized(connectedDevices) {
+            val all = connectedDevices.toList()
+            connectedDevices.clear()
+            subscribedDevices.clear()
+            notificationsInFlight.clear()
+            all
+        }
+        for (device in devices) {
             try {
                 gattServer?.cancelConnection(device)
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
-        connectedDevices.clear()
-        subscribedDevices.clear()
-        notificationsInFlight.clear()
 
         try {
             gattServer?.clearServices()
+        } catch (_: Exception) {
+        }
+        try {
             gattServer?.close()
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
         gattServer = null
         notifyCharacteristic = null
+        serviceUuid = null
+        charUuid = null
 
         bluetoothAdapter = null
         bluetoothManager = null

@@ -6,6 +6,7 @@ import 'package:monopoly_banking/services/network_service.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
+import 'package:monopoly_banking/widgets/animated_avatar.dart';
 import 'package:monopoly_banking/widgets/premium_dialog.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 
@@ -72,14 +73,11 @@ class PlayerDiscoveryScreen extends StatelessWidget {
                           ),
                           child: Row(
                             children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: kGold.withValues(alpha: 0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Text(player['avatar'] ?? '👤',
-                                    style: const TextStyle(fontSize: 24)),
+                              AnimatedAvatar(
+                                emoji: player['avatar'] ?? '👤',
+                                size: 44,
+                                glowColor: kGold,
+                                showIdle: false,
                               ),
                               const SizedBox(width: 16),
                               Expanded(
