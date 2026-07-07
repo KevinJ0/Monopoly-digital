@@ -43,25 +43,25 @@ const kBleContactProfiles = [
   BleContactProfile(
     label: 'Estricto',
     helper: 'Contacto muy cercano',
-    rssiThreshold: -20,
+    rssiThreshold: -15,
     requiredSamples: 1,
   ),
   BleContactProfile(
     label: 'Normal',
     helper: 'Cercanía corta para juego',
-    rssiThreshold: -35,
+    rssiThreshold: -20,
     requiredSamples: 1,
   ),
   BleContactProfile(
     label: 'Flexible',
     helper: 'Permite acercamiento cómodo',
-    rssiThreshold: -50,
+    rssiThreshold: -30,
     requiredSamples: 1,
   ),
   BleContactProfile(
     label: 'Lejos',
     helper: 'Más permisivo',
-    rssiThreshold: -65,
+    rssiThreshold: -50,
     requiredSamples: 1,
   ),
 ];
@@ -524,6 +524,21 @@ class BleTransport extends P2PTransport {
           final data = _decodeBleFrame(jsonStr);
           if (data == null) break;
           if (deviceId != null) data['_bleDeviceId'] = deviceId;
+          if (_isBank && data['type'] == 'player_keepalive') {
+            final playerId = data['playerId'] as String? ?? '';
+            final avatarId = data['avatarId'] as String? ?? '';
+            _audit('received_player_keepalive',
+                data: {'playerId': playerId, 'avatarId': avatarId});
+            debugPrint(
+                '[BLE bank] Recibe player_keepalive: playerId=$playerId, avatarId=$avatarId');
+            await _channel.invokeMethod<bool>('bleSendNotification', {
+              'payload': jsonEncode({
+                'type': 'keepalive_ack',
+                'ts': DateTime.now().millisecondsSinceEpoch,
+              }),
+            });
+            break;
+          }
           if (_isBank && data['type'] == 'ble_proximity') {
             final rawRssi = data['rssi'] as num?;
             final rssi =
@@ -895,11 +910,8 @@ class BleTransport extends P2PTransport {
       withServices: [serviceUuid],
       scanMode: ScanMode.lowLatency,
     ).listen((device) {
-      final matched = device.serviceUuids.contains(serviceUuid);
       debugPrint(
-          '[BLE client] Descubierto id=${device.id} rssi=${device.rssi} match=${matched ? "SÍ" : "NO"}');
-
-      if (matched) {
+          '[BLE client] Descubierto id=${device.id} rssi=${device.rssi}');
         final suffix =
             device.id.length > 6 ? device.id.substring(0, 6) : device.id;
         final displayName =
@@ -918,14 +930,11 @@ class BleTransport extends P2PTransport {
         }
         next.sort((a, b) => b.rssi.compareTo(a.rssi));
         discoveredBanksNotifier.value = next;
-      }
 
-      if (!matched) return;
-
-      if (!completer.isCompleted) {
-        completer.complete(device);
-      }
-    }, onError: (Object error, StackTrace stack) {
+        if (!completer.isCompleted) {
+          completer.complete(device);
+        }
+      }, onError: (Object error, StackTrace stack) {
       if (!completer.isCompleted) {
         completer.completeError(error, stack);
       }
@@ -1035,6 +1044,7 @@ class BleTransport extends P2PTransport {
         data: {'bankId': bank.id, 'bankName': bank.name, 'rssi': bank.rssi});
     final savedBanks = [...discoveredBanksNotifier.value];
     await _fullStop();
+    _transportDisposed = false;
     discoveredBanksNotifier.value = savedBanks;
     await _scanSub?.cancel();
     _scanSub = null;
@@ -1074,9 +1084,10 @@ class BleTransport extends P2PTransport {
         .listen((bytes) {
       try {
         final jsonStr = utf8.decode(bytes);
-        if (jsonStr == '{"type":"pong"}') {
+        if (jsonStr.contains('"type":"keepalive_ack"')) {
           _lastPongReceived = DateTime.now();
           _pongMissedCount = 0;
+          _logConnection('Recibido keepalive_ack del servidor');
           return;
         }
         final data = _decodeBleFrame(jsonStr);
@@ -1279,16 +1290,18 @@ class BleTransport extends P2PTransport {
         _keepAliveTimer = null;
         return;
       }
-      final lastPong = _lastPongReceived;
-      if (lastPong != null &&
-          DateTime.now().difference(lastPong) > const Duration(seconds: 5)) {
+      final lastAck = _lastPongReceived;
+      if (lastAck != null &&
+          DateTime.now().difference(lastAck) > const Duration(seconds: 5)) {
         _pongMissedCount += 1;
-        _logConnection('No se recibe pong desde hace 5s (fallo $_pongMissedCount)');
+        _logConnection(
+            'No se recibe keepalive_ack desde hace 5s (fallo $_pongMissedCount)');
         if (_pongMissedCount >= 2) {
-          _logConnection('Conexión perdida por falta de pong. Reconectando...');
+          _logConnection(
+              'Conexi\u00f3n perdida por falta de keepalive_ack. Reconectando...');
           _keepAliveTimer?.cancel();
           _keepAliveTimer = null;
-          _markClientDisconnected(status: 'Conexión BLE perdida');
+          _markClientDisconnected(status: 'Conexi\u00f3n BLE perdida');
           Future<void>.delayed(const Duration(milliseconds: 500), () {
             if (!_transportDisposed &&
                 _reconnectAllowed &&
@@ -1300,16 +1313,27 @@ class BleTransport extends P2PTransport {
         }
       }
       try {
+        final identity = _clientIdentity;
+        final payload = jsonEncode({
+          'type': 'player_keepalive',
+          'playerId': identity?['playerId'] ?? '',
+          'name': identity?['name'] ?? '',
+          'avatarId': identity?['avatarId'] ?? '',
+          'deviceInstallationId':
+              identity?['deviceInstallationId'] ?? '',
+          'ts': DateTime.now().millisecondsSinceEpoch,
+        });
+        _logConnection('Enviando player_keepalive: playerId=${identity?['playerId']}, avatarId=${identity?['avatarId']}');
         await _ble.writeCharacteristicWithResponse(
           QualifiedCharacteristic(
             serviceId: Uuid.parse(_serviceUuid),
             characteristicId: Uuid.parse(_charUuid),
             deviceId: deviceId,
           ),
-          value: utf8.encode('{"type":"ping"}'),
+          value: utf8.encode(payload),
         );
       } catch (error) {
-        _logConnection('No se pudo enviar ping: $error');
+        _logConnection('No se pudo enviar player_keepalive: $error');
       }
     });
   }
@@ -1541,6 +1565,14 @@ class BleTransport extends P2PTransport {
     try {
       await _channel.invokeMethod<bool>('bleRefreshDeviceCache', {'deviceId': deviceId});
     } catch (_) {}
+  }
+
+  Future<void> disconnectClient(String deviceId) async {
+    _audit('disconnectClient', data: {'deviceId': deviceId});
+    _removeConnectedPlayer(deviceId);
+    await _channel.invokeMethod<bool>('bleDisconnectClient',
+        {'deviceId': deviceId});
+    await _clearBleCacheForDevice(deviceId);
   }
 
   Future<void> resetState() async {

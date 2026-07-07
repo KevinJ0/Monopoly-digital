@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:monopoly_banking/core/constants.dart';
+import 'package:monopoly_banking/core/theme.dart';
 import 'package:monopoly_banking/providers/balance_tween_controller.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/providers/stats_provider.dart';
@@ -46,34 +47,7 @@ class _MonopolyAppState extends State<MonopolyApp> {
         scaffoldMessengerKey: NotificationService().scaffoldMessengerKey,
         title: 'Monopoly Banking',
         debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          useMaterial3: true,
-          brightness: Brightness.dark,
-          scaffoldBackgroundColor: kBgDark,
-          colorScheme: const ColorScheme.dark(
-            primary: kGreen,
-            secondary: kGold,
-            surface: kBgCard,
-          ),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: kBgDark,
-            elevation: 0,
-            iconTheme: IconThemeData(color: kTextSecondary),
-            titleTextStyle: TextStyle(
-              color: kTextPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          textTheme: const TextTheme(
-            bodyMedium: TextStyle(color: kTextPrimary),
-          ),
-          pageTransitionsTheme: const PageTransitionsTheme(
-            builders: {
-              TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-            },
-          ),
-        ),
+        theme: monopolyTheme(),
         home: const _RootRouter(),
       ),
     );

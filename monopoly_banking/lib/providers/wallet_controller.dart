@@ -27,6 +27,7 @@ class WalletController extends ChangeNotifier {
   final ValueNotifier<int> vaultTargetPasses = ValueNotifier(0);
   final ValueNotifier<int> vaultCurrentPasses = ValueNotifier(0);
   final ValueNotifier<bool> bankruptNotifier = ValueNotifier(false);
+  final ValueNotifier<int> balanceDecreaseShake = ValueNotifier(0);
   final StreamController<TxType> _txEvent = StreamController.broadcast();
   final StreamController<CardTier> _tierStream = StreamController.broadcast();
 
@@ -121,13 +122,20 @@ class WalletController extends ChangeNotifier {
       VozService().hablar("Felicidades por su ingreso de capital.");
     }
 
-    // Feedback
-    try {
-      _audioPlayer.play(AssetSource('sounds/cash.wav'));
-    } catch (_) {}
+    if (isPassGo) {
+      SoundService.playFanfare();
+    } else if (amount >= 2000) {
+      SoundService.playMoneyCount();
+    } else {
+      try {
+        _audioPlayer.play(AssetSource('sounds/cash.wav'));
+      } catch (_) {}
+    }
 
     if (isPassGo) {
-      HapticFeedback.vibrate(); // Impacto fuerte para GO
+      HapticFeedback.vibrate();
+    } else if (amount >= 1000) {
+      HapticFeedback.heavyImpact();
     } else {
       HapticFeedback.mediumImpact();
     }
@@ -172,11 +180,13 @@ class WalletController extends ChangeNotifier {
       _audioPlayer.play(AssetSource('sounds/click.wav'));
     } catch (_) {}
 
-    if (amount >= 2000) {
-      VozService().hablar("Transferencia procesada, señor.");
+    if (amount >= 500) {
+      balanceDecreaseShake.value++;
+      HapticFeedback.heavyImpact();
+      SoundService.playSadTrombone();
+    } else {
+      HapticFeedback.lightImpact();
     }
-
-    HapticFeedback.lightImpact();
 
     _persistTx(
       type: 'sent',
@@ -288,13 +298,26 @@ class WalletController extends ChangeNotifier {
     }
 
     if (session.balance > previousBalance) {
+      _stats.record(amount, isPassGo: eventType == 'passGo');
       _txEvent.add(eventType == 'passGo' ? TxType.passGo : TxType.received);
-      unawaited(_audioPlayer.play(AssetSource('sounds/cash.wav')));
-      HapticFeedback.mediumImpact();
+      if (eventType == 'passGo') {
+        SoundService.playFanfare();
+        HapticFeedback.vibrate();
+      } else {
+        unawaited(_audioPlayer.play(AssetSource('sounds/cash.wav')));
+        HapticFeedback.mediumImpact();
+      }
     } else if (session.balance < previousBalance) {
+      _stats.record(amount);
       _txEvent.add(TxType.sent);
       unawaited(_audioPlayer.play(AssetSource('sounds/click.wav')));
       HapticFeedback.lightImpact();
+      final loss = previousBalance - session.balance;
+      if (loss >= 500) {
+        balanceDecreaseShake.value++;
+        HapticFeedback.heavyImpact();
+        SoundService.playSadTrombone();
+      }
     }
 
     notifyListeners();
@@ -370,6 +393,7 @@ class WalletController extends ChangeNotifier {
     _tierStream.close();
     rawBalance.dispose();
     bankruptNotifier.dispose();
+    balanceDecreaseShake.dispose();
     _audioPlayer.dispose();
     super.dispose();
   }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+enum AvatarMood { neutral, happy, sad, excited }
+
 class AnimatedAvatar extends StatelessWidget {
   const AnimatedAvatar({
     super.key,
@@ -9,6 +11,7 @@ class AnimatedAvatar extends StatelessWidget {
     this.glowColor,
     this.isSelected = false,
     this.showIdle = true,
+    this.mood = AvatarMood.neutral,
     this.onTap,
   });
 
@@ -17,6 +20,7 @@ class AnimatedAvatar extends StatelessWidget {
   final Color? glowColor;
   final bool isSelected;
   final bool showIdle;
+  final AvatarMood mood;
   final VoidCallback? onTap;
 
   @override
@@ -69,17 +73,46 @@ class AnimatedAvatar extends StatelessWidget {
 
     if (!showIdle) return card;
 
+    double idleFloat = 3;
+    double idleDuration = 2000;
+    double idleScaleBegin = 0.97;
+    double idleScaleEnd = 1.0;
+    int idleScaleDuration = 3000;
+
+    switch (mood) {
+      case AvatarMood.happy:
+        idleFloat = 5;
+        idleDuration = 1200;
+        idleScaleBegin = 1.0;
+        idleScaleEnd = 1.06;
+        idleScaleDuration = 1500;
+      case AvatarMood.excited:
+        idleFloat = 7;
+        idleDuration = 800;
+        idleScaleBegin = 0.95;
+        idleScaleEnd = 1.08;
+        idleScaleDuration = 1000;
+      case AvatarMood.sad:
+        idleFloat = 1;
+        idleDuration = 3000;
+        idleScaleBegin = 0.98;
+        idleScaleEnd = 0.95;
+        idleScaleDuration = 4000;
+      case AvatarMood.neutral:
+        break;
+    }
+
     return card
         .animate(onPlay: (controller) => controller.repeat(reverse: true))
         .moveY(
-            begin: -3,
-            end: 3,
-            duration: 2000.ms,
+            begin: -idleFloat,
+            end: idleFloat,
+            duration: idleDuration.ms,
             curve: Curves.easeInOut)
         .scale(
-            begin: const Offset(0.97, 0.97),
-            end: const Offset(1.0, 1.0),
-            duration: 3000.ms,
+            begin: Offset(idleScaleBegin, idleScaleBegin),
+            end: Offset(idleScaleEnd, idleScaleEnd),
+            duration: idleScaleDuration.ms,
             curve: Curves.easeInOut);
   }
 }

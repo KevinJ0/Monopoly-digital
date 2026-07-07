@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:confetti/confetti.dart';
 import 'package:nfc_manager/nfc_manager.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import 'package:monopoly_banking/core/constants.dart';
+import 'package:monopoly_banking/core/game_transitions.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/providers/stats_provider.dart';
 import 'package:monopoly_banking/providers/wallet_controller.dart';
@@ -28,6 +31,7 @@ import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/animated_avatar.dart';
 import 'package:monopoly_banking/widgets/odometer_widget.dart';
 import 'package:monopoly_banking/widgets/premium_dialog.dart';
+import 'package:monopoly_banking/widgets/monopoly_background.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/widgets/transaction_tile.dart';
 import 'package:monopoly_banking/widgets/transport_selector.dart';
@@ -337,6 +341,7 @@ class _WalletScreenState extends State<WalletScreen>
           final bleDeviceId = payload['_bleDeviceId'] as String?;
           if (bleDeviceId != null) {
             P2PService().bleTransport.markPlayerInactive(bleDeviceId);
+            unawaited(_disconnectBannedBleClient(bleDeviceId));
           }
           return;
         }
@@ -559,6 +564,7 @@ class _WalletScreenState extends State<WalletScreen>
         }
       } else if (type == 'bank_access_denied') {
         if (!_isPayloadForPlayer(payload, session.name)) return;
+        _stopBleClient();
         await wallet.applyBankState(payload);
       }
     }, onError: (e, s) {
@@ -583,6 +589,13 @@ class _WalletScreenState extends State<WalletScreen>
     }
     final claimed = payload['playerId'] as String?;
     return claimed?.trim().isEmpty == false ? claimed : null;
+  }
+
+  Future<void> _disconnectBannedBleClient(String bleDeviceId) async {
+    try {
+      await P2PService().bleTransport
+          .disconnectClient(bleDeviceId);
+    } catch (_) {}
   }
 
   TransportType _transportForIncomingPayload(Map<String, dynamic> payload) {
@@ -735,12 +748,33 @@ class _WalletScreenState extends State<WalletScreen>
     _stopNfcLoop();
     P2PService().setTransport(TransportType.nfc);
     await P2PService().sendPayload(payload);
+    final session = context.read<SessionProvider>();
     unawaited(
         Future<void>.delayed(const Duration(milliseconds: 1400), () async {
       final nfc = P2PService().nfcTransport;
-      await nfc.stopHce();
+      if (!session.isBank) {
+        await nfc.stopHce();
+      }
       if (!mounted || P2PService().currentType != TransportType.nfc) return;
-      _startNfcLoop();
+      if (session.isBank) {
+        _startNfcLoop();
+        return;
+      }
+      if (!mounted) return;
+      _nfcLoopRunning = true;
+      try {
+        await P2PService()
+            .startReceiving(null)
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {
+        await P2PService().nfcTransport.stop();
+      }
+      if (!mounted || P2PService().currentType != TransportType.nfc) return;
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted && P2PService().currentType == TransportType.nfc) {
+          _startNfcLoop();
+        }
+      });
     }));
   }
 
@@ -1562,8 +1596,8 @@ class _WalletScreenState extends State<WalletScreen>
     unawaited(
       Navigator.of(context)
           .push<void>(
-            MaterialPageRoute(
-              builder: (_) => BankruptcyScreen(playerName: session.name),
+            GameFadeRoute(
+              page: BankruptcyScreen(playerName: session.name),
             ),
           )
           .whenComplete(() => _bankruptcyScreenOpen = false),
@@ -1701,7 +1735,11 @@ class _WalletScreenState extends State<WalletScreen>
     final displayColorId = _lastColorId ?? 0;
     final displayBalance = _lastBalance ?? 0.0;
     final isBank = displayRole == 'banco';
-    final playerReady = isBank || session.isHandshakeDone;
+    final bleConnected = isBank ||
+        P2PService().currentType != TransportType.ble ||
+        P2PService().bleTransport.clientConnectedNotifier.value;
+    final playerReady =
+        isBank || (session.isHandshakeDone && bleConnected);
     final shownBalance = playerReady ? displayBalance : 0.0;
 
     return PopScope(
@@ -1724,7 +1762,10 @@ class _WalletScreenState extends State<WalletScreen>
                       SoundService.playClick();
                       if (!mounted) return;
                       await Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const BankScreen()),
+                        GameSlideRoute(
+                          begin: const Offset(0, 0.12),
+                          page: const BankScreen(),
+                        ),
                       );
                       if (mounted) {
                         _bankStatsListener?.call();
@@ -1739,7 +1780,7 @@ class _WalletScreenState extends State<WalletScreen>
                       style: TextStyle(fontWeight: FontWeight.w800),
                     ),
                   )
-                : playerReady
+                : playerReady && !_showWelcome
                     ? FloatingActionButton.extended(
                         heroTag: 'transfer_to_bank_btn',
                         onPressed: () {
@@ -1760,11 +1801,12 @@ class _WalletScreenState extends State<WalletScreen>
           ],
         ),
         extendBodyBehindAppBar: true,
-        body: PlayerColorBackdrop(
-          color: displayColor,
-          child: Stack(
-            children: [
-              Center(
+        body: MonopolyBackground(
+          child: PlayerColorBackdrop(
+            color: displayColor,
+            child: Stack(
+              children: [
+                Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 600),
                   child: CustomScrollView(
@@ -1905,6 +1947,7 @@ class _WalletScreenState extends State<WalletScreen>
               if (_showWelcome)
                 _buildWelcomeOverlay(displayAvatar, displayColor, displayName),
             ],
+            ),
           ),
         ),
       ),
@@ -2233,13 +2276,22 @@ class _WalletScreenState extends State<WalletScreen>
 
   Widget _buildBalanceCard(double balance, Color color, String name,
       int colorId, List<double> history, bool isBank) {
-    return _PremiumCreditCard(
-      balance: balance,
-      name: name,
-      color: color,
-      colorId: colorId,
-      history: history,
-      isBank: isBank,
+    final wallet = context.read<WalletController>();
+    return ValueListenableBuilder<int>(
+      valueListenable: wallet.balanceDecreaseShake,
+      builder: (context, shakeCount, _) {
+        return _PremiumCreditCard(
+          balance: balance,
+          name: name,
+          color: color,
+          colorId: colorId,
+          history: history,
+          isBank: isBank,
+        )
+            .animate(key: ValueKey('card-$shakeCount'))
+            .shake(duration: 400.ms)
+            .fade();
+      },
     );
   }
 
@@ -2817,13 +2869,114 @@ class _WalletScreenState extends State<WalletScreen>
         : '${player.qualityLabel} - ${player.rssi} dBm';
     final detail =
         '${player.playing ? 'Jugando' : 'Esperando handshake'} - $quality';
-    return _ConnectedPlayerTile(
-      name: player.displayName,
-      deviceName: player.displayDeviceName,
-      transport: 'BLE',
-      detail: detail,
-      color: player.playing ? player.qualityColor : Colors.blue,
-      icon: Icons.bluetooth_connected_rounded,
+    return GestureDetector(
+      onTap: () => _showPlayerInfoDialog(player),
+      child: _ConnectedPlayerTile(
+        name: player.displayName,
+        deviceName: player.displayDeviceName,
+        transport: 'BLE',
+        detail: detail,
+        color: player.playing ? player.qualityColor : Colors.blue,
+        icon: Icons.bluetooth_connected_rounded,
+      ),
+    );
+  }
+
+  void _showPlayerInfoDialog(BleConnectedPlayer player) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kBgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: player.qualityColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.bluetooth_connected_rounded,
+                  color: player.qualityColor, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                player.displayName,
+                style: const TextStyle(
+                    color: kTextPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _infoRow('Nombre', player.name.isNotEmpty ? player.name : '-'),
+              _infoRow('Dispositivo', player.displayDeviceName),
+              _infoRow('ID Instalación', player.deviceInstallationId.isNotEmpty
+                  ? player.deviceInstallationId
+                  : '-'),
+              _infoRow('BLE Device ID', player.id),
+              const SizedBox(height: 8),
+              _infoRow('Handshake',
+                  player.playing ? 'Completado' : 'Pendiente'),
+              _infoRow('Suscripción GATT',
+                  player.subscribed ? 'Activa' : 'Inactiva'),
+              _infoRow('En contacto',
+                  player.contactReady ? 'Sí' : 'No'),
+              _infoRow('RSSI',
+                  player.rssi != null ? '${player.rssi} dBm' : 'Sin lectura'),
+              _infoRow('Calidad señal', player.qualityLabel),
+              _infoRow('Última actividad',
+                  '${player.lastSeen.hour.toString().padLeft(2, '0')}:'
+                      '${player.lastSeen.minute.toString().padLeft(2, '0')}:'
+                      '${player.lastSeen.second.toString().padLeft(2, '0')}'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(
+                  color: kTextSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                  color: kTextPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3664,7 +3817,7 @@ class _WalletScreenState extends State<WalletScreen>
   }
 }
 
-class _PremiumCreditCard extends StatelessWidget {
+class _PremiumCreditCard extends StatefulWidget {
   final double balance;
   final String name;
   final Color color;
@@ -3682,33 +3835,77 @@ class _PremiumCreditCard extends StatelessWidget {
   });
 
   @override
+  State<_PremiumCreditCard> createState() => _PremiumCreditCardState();
+}
+
+class _PremiumCreditCardState extends State<_PremiumCreditCard> {
+  static const double _tiltFactor = 20.0;
+  double _gyroX = 0.0;
+  double _gyroY = 0.0;
+  StreamSubscription<GyroscopeEvent>? _gyroSub;
+
+  double get balance => widget.balance;
+  String get name => widget.name;
+  Color get color => widget.color;
+  int get colorId => widget.colorId;
+  List<double> get history => widget.history;
+  bool get isBank => widget.isBank;
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _gyroSub = gyroscopeEventStream(
+        samplingPeriod: const Duration(milliseconds: 50),
+      ).listen((event) {
+        if (!mounted) return;
+        setState(() {
+          _gyroX = (event.y).clamp(-0.8, 0.8);
+          _gyroY = (-event.x).clamp(-0.8, 0.8);
+        });
+      });
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _gyroSub?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      // Ratio estándar de tarjeta de crédito: 85.6mm × 53.98mm = 1.586:1
-      // Se capa a 240 para que en pantallas grandes (OnePlus 7T) sea igual que antes
       final cardHeight =
           ((constraints.maxWidth - 32) / 1.586).clamp(0.0, 240.0);
 
-      // Special VIP Black Edition for Kevin and Meibi
-      final nameLower = name.toLowerCase().trim();
+      final nameLower = widget.name.toLowerCase().trim();
+      final Widget cardContent;
       if (nameLower == 'kevin' || nameLower == 'meibi') {
-        return _buildVipBlackCard(cardHeight: cardHeight);
+        cardContent = _buildVipBlackCard(cardHeight: cardHeight);
+      } else {
+        final wallet = context.read<WalletController>();
+        final tier = wallet.currentTier;
+        final styles = _getStyles(tier, color);
+
+        cardContent = switch (tier) {
+          CardTier.standard => _buildStandardCard(styles,
+              cardHeight: cardHeight),
+          CardTier.gold => _buildGoldCard(styles, cardHeight: cardHeight),
+          CardTier.platinum => _buildPlatinumCard(styles,
+              cardHeight: cardHeight),
+          CardTier.black => _buildBlackCard(styles, cardHeight: cardHeight),
+        };
       }
 
-      final wallet = context.read<WalletController>();
-      final tier = wallet.currentTier;
-      final styles = _getStyles(tier, color);
-
-      switch (tier) {
-        case CardTier.standard:
-          return _buildStandardCard(styles, cardHeight: cardHeight);
-        case CardTier.gold:
-          return _buildGoldCard(styles, cardHeight: cardHeight);
-        case CardTier.platinum:
-          return _buildPlatinumCard(styles, cardHeight: cardHeight);
-        case CardTier.black:
-          return _buildBlackCard(styles, cardHeight: cardHeight);
-      }
+      return Transform(
+        alignment: FractionalOffset.center,
+        transform: Matrix4.identity()
+          ..setEntry(3, 2, 0.001)
+          ..rotateX(_gyroY / _tiltFactor)
+          ..rotateY(_gyroX / _tiltFactor),
+        child: _ShimmerCard(child: cardContent),
+      );
     });
   }
 
@@ -3719,11 +3916,20 @@ class _PremiumCreditCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         gradient: styles.gradient,
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.08),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
               color: styles.accent.withValues(alpha: 0.2),
-              blurRadius: 15,
-              offset: const Offset(0, 8))
+              blurRadius: 12,
+              offset: const Offset(0, 8),
+              spreadRadius: 0),
+          BoxShadow(
+              color: styles.accent.withValues(alpha: 0.08),
+              blurRadius: 4,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Stack(
@@ -3732,6 +3938,27 @@ class _PremiumCreditCard extends StatelessWidget {
               right: -30,
               top: -30,
               child: Icon(Icons.circle, size: 200, color: Colors.white10)),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: cardHeight * 0.5,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24)),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.04),
+                    Colors.transparent,
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
@@ -3819,12 +4046,20 @@ class _PremiumCreditCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         gradient: styles.gradient,
-        border: Border.all(color: goldLight.withValues(alpha: 0.5), width: 2),
+        border: Border.all(
+          color: goldLight.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
-              color: goldDeep.withValues(alpha: 0.4),
-              blurRadius: 20,
-              spreadRadius: 2)
+              color: goldDeep.withValues(alpha: 0.25),
+              blurRadius: 14,
+              spreadRadius: 0,
+              offset: const Offset(0, 8)),
+          BoxShadow(
+              color: goldLight.withValues(alpha: 0.08),
+              blurRadius: 4,
+              offset: const Offset(0, 2)),
         ],
       ),
       child: Stack(
@@ -3834,6 +4069,27 @@ class _PremiumCreditCard extends StatelessWidget {
                   opacity: 0.1,
                   child:
                       Icon(Icons.stars_rounded, size: 200, color: goldLight))),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            height: cardHeight * 0.5,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16)),
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.04),
+                    Colors.transparent,
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
@@ -4609,4 +4865,58 @@ class _CarbonFiberPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ShimmerCard extends StatefulWidget {
+  final Widget child;
+  const _ShimmerCard({required this.child});
+
+  @override
+  State<_ShimmerCard> createState() => _ShimmerCardState();
+}
+
+class _ShimmerCardState extends State<_ShimmerCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) {
+        final shimmerPosition = _ctrl.value;
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment(-1 + shimmerPosition * 2, -1),
+              end: Alignment(shimmerPosition * 2, 0.5),
+              colors: [
+                Colors.transparent,
+                Colors.white.withValues(alpha: 0.06),
+                Colors.transparent,
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ).createShader(bounds);
+          },
+          child: widget.child,
+        );
+      },
+    );
+  }
 }

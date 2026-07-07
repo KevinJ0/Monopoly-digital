@@ -16,6 +16,7 @@ import 'package:monopoly_banking/services/transports/p2p_transport.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
+import 'package:monopoly_banking/widgets/monopoly_background.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 
@@ -1229,7 +1230,8 @@ class _BankScreenState extends State<BankScreen>
         ),
         centerTitle: true,
       ),
-      body: PlayerColorBackdrop(
+      body: MonopolyBackground(
+        child: PlayerColorBackdrop(
         color: playerColor,
         child: SlideTransition(
           position: _slide,
@@ -1284,7 +1286,7 @@ class _BankScreenState extends State<BankScreen>
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildOpSelector() {

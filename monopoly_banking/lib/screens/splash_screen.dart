@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:monopoly_banking/core/constants.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -138,6 +139,24 @@ class _SplashScreenState extends State<SplashScreen>
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
                     color: Colors.white24,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 30,
+            left: 0,
+            right: 0,
+            child: FadeTransition(
+              opacity: _opacityAnimation,
+              child: const Center(
+                child: Text(
+                  'v$kAppVersion',
+                  style: TextStyle(
+                    color: Colors.white24,
+                    fontSize: 12,
+                    letterSpacing: 1,
                   ),
                 ),
               ),

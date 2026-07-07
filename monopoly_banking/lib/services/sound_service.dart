@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 
 class SoundService {
-  static const int _poolSize = 5;
+  static const int _poolSize = 8;
   static final AudioContext effectsAudioContext = AudioContext(
     android: const AudioContextAndroid(
       contentType: AndroidContentType.sonification,
@@ -27,6 +27,7 @@ class SoundService {
       await player.setAudioContext(effectsAudioContext);
       _pool.add(player);
     }
+    _poolIndex = 0;
     _initialized = true;
   }
 
@@ -36,6 +37,34 @@ class SoundService {
 
   static void playSuccess() {
     unawaited(_play('sounds/success.wav', 0.8));
+  }
+
+  static void playDiceRoll() {
+    unawaited(_play('sounds/dice_roll.wav', 0.8));
+  }
+
+  static void playMoneyCount() {
+    unawaited(_play('sounds/money_count.wav', 0.7));
+  }
+
+  static void playFanfare() {
+    unawaited(_play('sounds/fanfare.wav', 0.9));
+  }
+
+  static void playSadTrombone() {
+    unawaited(_play('sounds/sad_trombone.wav', 0.8));
+  }
+
+  static void playCardFlip() {
+    unawaited(_play('sounds/card_flip.wav', 0.7));
+  }
+
+  static void playPropertyBuy() {
+    unawaited(_play('sounds/property_buy.wav', 0.8));
+  }
+
+  static void playPop() {
+    unawaited(_play('sounds/pop.wav', 0.6));
   }
 
   static Future<void> _play(String asset, double volume) async {

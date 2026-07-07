@@ -40,6 +40,30 @@ generate_tone('assets/sounds/click.wav', 0.1, [600, 800], decay=True, envelope_t
 # Generar sonido de caja registradora o monedas (Cash)
 generate_tone('assets/sounds/cash.wav', 0.5, [1200, 1500, 2000], decay=True, envelope_type='exp')
 
+# Dados — clicks percutivos rapidos
+generate_tone('assets/sounds/dice_roll.wav', 0.6, [400, 600, 900, 1100], decay=True, envelope_type='exp')
+
+# Billetes contandose — cash register
+generate_tone('assets/sounds/money_count.wav', 0.7, [800, 1000, 1300, 1600], decay=True, envelope_type='exp')
+
+# Fanfarria — acorde ascendente
+generate_tone('assets/sounds/fanfare.wav', 0.9, [523.25, 659.25, 783.99, 1046.5], decay=True, envelope_type='exp')
+
+# Trombon triste — descendente
+generate_tone('assets/sounds/sad_trombone.wav', 0.8, [400, 300, 240, 180], decay=True, envelope_type='linear')
+
+# Voltear carta — whoosh corto
+generate_tone('assets/sounds/card_flip.wav', 0.25, [300, 700, 1200], decay=True, envelope_type='exp')
+
+# Compra de propiedad — ding feliz
+generate_tone('assets/sounds/property_buy.wav', 0.4, [523.25, 659.25, 783.99], decay=True, envelope_type='exp')
+
+# Sonido pop generico UI
+generate_tone('assets/sounds/pop.wav', 0.15, [800, 1200], decay=True, envelope_type='exp')
+
+# Exito / Success mejorado
+generate_tone('assets/sounds/success.wav', 0.6, [523.25, 659.25, 783.99, 1046.5], decay=True, envelope_type='exp')
+
 # Generar un arpegio simple de fondo (Theme musical)
 # Haremos una melodía simple combinando tonos
 sample_rate = 44100
