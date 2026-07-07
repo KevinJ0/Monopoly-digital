@@ -65,7 +65,6 @@ class _WalletScreenState extends State<WalletScreen>
   VoidCallback? _bleClientConnectionListener;
   bool _wasBleClientConnected = false;
   bool _bankTransferHoldDialogOpen = false;
-  bool _disposed = false;
   ValueNotifier<bool>? _bankruptNotifierRef;
   final Set<String> _seenTxIds = <String>{};
   final List<String> _seenTxIdOrder = <String>[];
@@ -1635,7 +1634,6 @@ class _WalletScreenState extends State<WalletScreen>
 
   @override
   void dispose() {
-    _disposed = true;
     for (final completer in _bankDeliveryAcks.values) {
       if (!completer.isCompleted) {
         completer.completeError(StateError('Pantalla cerrada'));

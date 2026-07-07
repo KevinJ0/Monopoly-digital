@@ -51,11 +51,6 @@ class _BankScreenState extends State<BankScreen>
         icon: Icons.arrow_downward_rounded,
         color: kGreen),
     _OpOption(
-        id: 'handshake',
-        label: 'Handshake inicial',
-        icon: Icons.wifi_tethering_rounded,
-        color: kGold),
-    _OpOption(
         id: 'passGo',
         label: 'Pasar por GO',
         icon: Icons.flag_rounded,
@@ -156,21 +151,29 @@ class _BankScreenState extends State<BankScreen>
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _sending = true);
-    final bankSession = context.read<SessionProvider>();
     final dialog = _BankOperationDialogController(
       transportType: P2PService().currentType,
     );
     var dialogOpen = false;
 
-    if (_selectedOp != 'manual') {
-      dialogOpen = true;
-      _showOperationDialog(dialog).whenComplete(() {
-        dialogOpen = false;
-      });
-      await Future<void>.delayed(Duration.zero);
-    }
+    dialogOpen = true;
+    _showOperationDialog(dialog).whenComplete(() {
+      dialogOpen = false;
+    });
+    await Future<void>.delayed(Duration.zero);
 
     try {
+      if (dialog.transportType == TransportType.ble &&
+          !P2PService().bleTransport.clientConnectedNotifier.value) {
+        await _failOperationDialog(
+          dialog,
+          'Sin jugador conectado',
+          'No hay ningún jugador conectado por BLE. Abre la app del jugador, conéctalo al banco y vuelve a intentar.',
+          icon: Icons.bluetooth_disabled_rounded,
+          color: Colors.orange,
+        );
+        return;
+      }
       if (dialog.transportType == TransportType.ble &&
           !await _waitForBlePlayerReady(dialog)) {
         await _failOperationDialog(
@@ -232,72 +235,7 @@ class _BankScreenState extends State<BankScreen>
         return;
       }
 
-      if (_selectedOp == 'handshake') {
-        if (ledger.isDeviceBanned(deviceInstallationId)) {
-          await _sendToConnectedPlayer({
-            'type': 'bank_access_denied',
-            'bankSessionId': ledger.currentBankSessionId,
-            'targetPlayerId': playerId,
-            'balance': 0,
-            'isBankrupt': true,
-            'eventType': 'bankruptcy_blocked',
-            'amount': 0,
-          });
-          await _failOperationDialog(
-            dialog,
-            'Dispositivo bloqueado',
-            'Este dispositivo fue expulsado de la partida y no puede volver a ingresar hasta que el banco cierre la sesión.',
-            icon: Icons.phonelink_erase_rounded,
-            color: kRed,
-          );
-          return;
-        }
-        final existingAccount = ledger.accountFor(playerId);
-        if (existingAccount != null &&
-            existingAccount.deviceInstallationId.isNotEmpty &&
-            existingAccount.deviceInstallationId != deviceInstallationId) {
-          await _failOperationDialog(
-            dialog,
-            'Nombre no disponible',
-            'El nombre "$playerId" ya pertenece a otro jugador de esta partida. Debe elegir un nombre diferente.',
-            icon: Icons.badge_outlined,
-            color: Colors.orange,
-          );
-          return;
-        }
-        if (playerIsActive) {
-          await _failOperationDialog(
-            dialog,
-            'Jugador activo',
-            'El jugador $playerId ya completó la vinculación inicial y se encuentra activo en la partida.',
-            icon: Icons.verified_user_rounded,
-            color: kGreen,
-          );
-          return;
-        }
-        final amountText = _amountCtrl.text.isEmpty
-            ? '2000'
-            : _amountCtrl.text.replaceAll(',', '');
-        final amount = double.parse(amountText);
-        final result = await ledger.ensurePlayer(
-          playerId,
-          amount,
-          deviceInstallationId: deviceInstallationId,
-        );
-        await _sendToConnectedPlayer({
-          'type': 'handshake',
-          'bankSessionId': ledger.currentBankSessionId,
-          'targetPlayerId': playerId,
-          'avatarId': bankSession.avatarId,
-          'colorId': bankSession.colorId,
-          'gameId': 'monopoly',
-          'name': bankSession.name,
-          'bankTxId': result.transactionId,
-          'eventType': result.eventType,
-          'amount': result.amount,
-          ...result.account.toClientState(),
-        });
-      } else if (_selectedOp == 'passGo') {
+      if (_selectedOp == 'passGo') {
         if (!playerIsActive) {
           await _failOperationDialog(
             dialog,
@@ -1079,7 +1017,6 @@ class _BankScreenState extends State<BankScreen>
 
   String _operationWaitTitle() {
     return switch (_selectedOp) {
-      'handshake' => 'Esperando handshake inicial',
       'passGo' => 'Esperando Pass GO',
       'receive' => 'Esperando pago al jugador',
       'payment' => 'Esperando cobro al jugador',
@@ -1089,7 +1026,6 @@ class _BankScreenState extends State<BankScreen>
 
   String _operationWaitMessage() {
     return switch (_selectedOp) {
-      'handshake' => 'Enviando datos iniciales al jugador...',
       'passGo' => 'Enviando recompensa por pasar GO...',
       'receive' => 'Enviando dinero al jugador...',
       'payment' => 'Solicitando cobro al jugador...',
@@ -1462,9 +1398,6 @@ class _BankScreenState extends State<BankScreen>
             ),
           ),
           validator: (v) {
-            if (_selectedOp == 'handshake' && (v == null || v.isEmpty)) {
-              return null;
-            }
             if (v == null || v.isEmpty) return 'Ingresa un monto';
             final n = double.tryParse(v.replaceAll(',', ''));
             if (n == null || n <= 0) return 'Monto inválido';
@@ -1476,7 +1409,7 @@ class _BankScreenState extends State<BankScreen>
   }
 
   Widget _buildQuickAmounts() {
-    if (_selectedOp == 'handshake' || _selectedOp == 'passGo') {
+    if (_selectedOp == 'passGo') {
       return const SizedBox();
     }
     const presets = [50, 100, 200, 500, 1000, 2000];

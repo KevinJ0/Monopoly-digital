@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:monopoly_banking/app.dart';
 import 'package:monopoly_banking/services/ble_diagnostic_logger.dart';
@@ -7,8 +8,10 @@ import 'package:monopoly_banking/services/error_translator_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await BleDiagnosticLogger.instance.clear();
-  BleDiagnosticLogger.instance.logEvent('APP', 'start');
+  if (kDebugMode) {
+    await BleDiagnosticLogger.instance.clear();
+    BleDiagnosticLogger.instance.logEvent('APP', 'start');
+  }
   await HiveService.init();
   await SoundService.init();
   await ErrorTranslatorService().init();

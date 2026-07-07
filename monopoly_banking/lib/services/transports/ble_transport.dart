@@ -36,32 +36,32 @@ class BleContactProfile {
 const kBleContactProfiles = [
   BleContactProfile(
     label: 'Muy estricto',
-    helper: 'Solo cuando están casi pegados',
-    rssiThreshold: -20,
+    helper: 'Dispositivos pegados',
+    rssiThreshold: -10,
     requiredSamples: 1,
   ),
   BleContactProfile(
     label: 'Estricto',
     helper: 'Contacto muy cercano',
-    rssiThreshold: -30,
+    rssiThreshold: -20,
     requiredSamples: 1,
   ),
   BleContactProfile(
     label: 'Normal',
     helper: 'Cercanía corta para juego',
-    rssiThreshold: -45,
+    rssiThreshold: -35,
     requiredSamples: 1,
   ),
   BleContactProfile(
     label: 'Flexible',
     helper: 'Permite acercamiento cómodo',
-    rssiThreshold: -60,
+    rssiThreshold: -50,
     requiredSamples: 1,
   ),
   BleContactProfile(
     label: 'Lejos',
     helper: 'Más permisivo',
-    rssiThreshold: -75,
+    rssiThreshold: -65,
     requiredSamples: 1,
   ),
 ];
@@ -237,7 +237,6 @@ class BleTransport extends P2PTransport {
   bool _preparingNotificationChannel = false;
   bool _reconnectAllowed = false;
   bool _notificationRetryScheduled = false;
-  bool _schedulingReconnect = false;
   bool _transportDisposed = false;
   Completer<DiscoveredDevice>? _pendingScanCompleter;
   int _consecutiveConnectionFailures = 0;
@@ -681,7 +680,6 @@ class BleTransport extends P2PTransport {
     _proximityBusy = false;
     _nearContactSampleCount = 0;
     _connectedDeviceId = null;
-    _autoConnectingDeviceIds.clear();
     _proximityTimer?.cancel();
     _proximityTimer = null;
     _bankConnectionWatchdog?.cancel();
@@ -877,8 +875,6 @@ class BleTransport extends P2PTransport {
 
   // ── Modo CLIENTE: escanear y conectar ────────────────────────────
 
-  final Set<String> _autoConnectingDeviceIds = {};
-
   Future<void> _startClientScan(
       void Function(Map<String, dynamic>) onData) async {
     _receiveCallback = onData;
@@ -896,7 +892,7 @@ class BleTransport extends P2PTransport {
     final completer = Completer<DiscoveredDevice>();
     _pendingScanCompleter = completer;
     _scanSub = _ble.scanForDevices(
-      withServices: const [],
+      withServices: [serviceUuid],
       scanMode: ScanMode.lowLatency,
     ).listen((device) {
       final matched = device.serviceUuids.contains(serviceUuid);
@@ -1021,41 +1017,6 @@ class BleTransport extends P2PTransport {
     });
   }
 
-  Future<void> _scheduleReconnectAfterFailure() async {
-    if (_transportDisposed || !_reconnectAllowed || _schedulingReconnect) {
-      return;
-    }
-    _schedulingReconnect = true;
-    final previousDeviceId = _connectedDeviceId;
-    final connection = _connectSub;
-    _connectSub = null;
-    await connection?.cancel();
-    _stopKeepAlive();
-    await _notifySub?.cancel();
-    _notifySub = null;
-    _identityBootstrapTimer?.cancel();
-    _identityBootstrapTimer = null;
-    _clientConnected = false;
-    _clientCharacteristicReady = false;
-    _preparingNotificationChannel = false;
-    _notificationRetryScheduled = false;
-    _dataChannelReady = false;
-    _connectedDeviceId = null;
-    _autoConnectingDeviceIds.clear();
-    clientConnectedNotifier.value = false;
-    if (previousDeviceId != null) {
-      await _clearBleCacheForDevice(previousDeviceId);
-    }
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    _schedulingReconnect = false;
-    if (!_transportDisposed &&
-        _reconnectAllowed &&
-        _connectedDeviceId == null &&
-        _receiveCallback != null) {
-      _reconnectScan();
-    }
-  }
-
   Future<void> _reconnectScan() async {
     if (_transportDisposed || !_reconnectAllowed) return;
     final callback = _receiveCallback;
@@ -1147,7 +1108,9 @@ class BleTransport extends P2PTransport {
       _notificationRetryScheduled = true;
       Future.delayed(const Duration(seconds: 2), () {
         _notificationRetryScheduled = false;
-        if (_clientConnected && _connectedDeviceId == deviceId) {
+        if (!_transportDisposed &&
+            _clientConnected &&
+            _connectedDeviceId == deviceId) {
           _subscribeToNotifications();
         }
       });
@@ -1175,7 +1138,9 @@ class BleTransport extends P2PTransport {
           connectionStatusNotifier.value =
               'Esperando que Android descubra el canal BLE...';
           Future<void>.delayed(const Duration(seconds: 1), () {
-            if (_clientConnected && _connectedDeviceId == deviceId) {
+            if (!_transportDisposed &&
+                _clientConnected &&
+                _connectedDeviceId == deviceId) {
               _prepareNotificationChannel(deviceId);
             }
           });
@@ -1199,7 +1164,9 @@ class BleTransport extends P2PTransport {
       _subscribeToNotifications();
       _startIdentityBootstrap(deviceId);
       Future<void>.delayed(const Duration(milliseconds: 900), () {
-        if (_clientConnected && _connectedDeviceId == deviceId) {
+        if (!_transportDisposed &&
+            _clientConnected &&
+            _connectedDeviceId == deviceId) {
           _startProximityReporting(deviceId);
         }
       });
@@ -1504,7 +1471,6 @@ class BleTransport extends P2PTransport {
     _transportDisposed = true;
     _receiveCallback = null;
     _reconnectAllowed = false;
-    _schedulingReconnect = false;
     _notificationRetryScheduled = false;
     _serverStarting = false;
     _stopKeepAlive();
