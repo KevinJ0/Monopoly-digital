@@ -110,6 +110,19 @@ class AppAuditLogger {
     endOp(id, result: result, error: error, stack: stack);
   }
 
+  /// Registra un error/exception de forma estructurada.
+  /// Útil para capturar errores globales o errores traducidos al usuario.
+  void error(String module, Object error,
+      {StackTrace? stack, Map<String, dynamic>? data}) {
+    event(
+      module,
+      'ERROR',
+      data: data,
+      error: error,
+      stack: stack,
+    );
+  }
+
   Future<String> read() async {
     await _writeChain.catchError((_) {});
     final file = await _file();

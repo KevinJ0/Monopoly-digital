@@ -5,6 +5,7 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'package:monopoly_banking/core/constants.dart';
+import 'package:monopoly_banking/services/app_audit_logger.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
 
 // ─── Modelo ────────────────────────────────────────────────────────────
@@ -70,9 +71,18 @@ class ErrorTranslatorService {
 
   /// Traduce un error técnico a lenguaje humano.
   /// Primero busca en caché SQLite; si no existe, llama a Gemini y lo guarda.
+  /// También vuelca el error original al log de auditoría.
   Future<FriendlyError> translate(dynamic error, [StackTrace? stack]) async {
     final raw = error.toString();
     final key = _normalizeAndHash(raw);
+
+    // 0. Guardar en log de auditoría global (sin bloquear)
+    AppAuditLogger.instance.error(
+      'ERROR_TRANSLATOR',
+      error,
+      stack: stack,
+      data: {'cache_key': key},
+    );
 
     // 1. Buscar en caché
     final cached = await _lookup(key);

@@ -9,6 +9,7 @@ import 'package:monopoly_banking/providers/stats_provider.dart';
 import 'package:monopoly_banking/services/hive_service.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
+import 'package:monopoly_banking/services/notification_service.dart';
 import 'package:monopoly_banking/services/voz_service.dart';
 import 'package:monopoly_banking/services/biometria_service.dart';
 import 'package:uuid/uuid.dart';
@@ -303,9 +304,13 @@ class WalletController extends ChangeNotifier {
       if (eventType == 'passGo') {
         SoundService.playFanfare();
         HapticFeedback.vibrate();
+        NotificationService().show('Pase por GO: +${formatMoney(amount)}',
+            backgroundColor: kGold);
       } else {
         unawaited(_audioPlayer.play(AssetSource('sounds/cash.wav')));
         HapticFeedback.mediumImpact();
+        NotificationService().show('Recibiste ${formatMoney(amount)}',
+            backgroundColor: kGreen);
       }
     } else if (session.balance < previousBalance) {
       _stats.record(amount);
@@ -318,6 +323,14 @@ class WalletController extends ChangeNotifier {
         HapticFeedback.heavyImpact();
         SoundService.playSadTrombone();
       }
+      NotificationService().show('Pagaste ${formatMoney(amount)}',
+          backgroundColor: kRed);
+    }
+
+    if (session.isBankrupt) {
+      NotificationService().show(
+          'Has quedado en bancarrota. Fuera de la partida.',
+          backgroundColor: kRed);
     }
 
     notifyListeners();

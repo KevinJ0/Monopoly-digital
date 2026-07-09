@@ -246,7 +246,11 @@ class _BankScreenState extends State<BankScreen>
           return;
         }
         final result = await ledger.passGo(playerId);
-        await _sendToConnectedPlayer(result.toClientPayload());
+          await _sendToConnectedPlayer(result.toClientPayload());
+          SoundService.playFanfare();
+          HapticFeedback.vibrate();
+          NotificationService().show('$playerId pasó por GO: +${formatMoney(200)}',
+              backgroundColor: kGold);
       } else {
         if (!playerIsActive) {
           await _failOperationDialog(
@@ -265,6 +269,11 @@ class _BankScreenState extends State<BankScreen>
             counterpartyId: 'Banco',
           );
           await _sendToConnectedPlayer(result.toClientPayload());
+          SoundService.playSuccess();
+          HapticFeedback.mediumImpact();
+          NotificationService().show(
+              'Pagado ${formatMoney(amount)} a $playerId',
+              backgroundColor: Colors.green.shade700);
         } else {
           final account = ledger.accountFor(playerId);
           if (account == null) {
@@ -295,6 +304,11 @@ class _BankScreenState extends State<BankScreen>
               deviceInstallationId: deviceInstallationId,
             );
             await _sendToConnectedPlayer(result.toClientPayload());
+            SoundService.playSadTrombone();
+            HapticFeedback.heavyImpact();
+            NotificationService().show(
+                '$playerId en bancarrota. Expulsado de la partida.',
+                backgroundColor: kRed);
             if (targetPlayer != null) {
               P2PService().bleTransport.markPlayerInactive(targetPlayer.id);
             }
@@ -310,6 +324,11 @@ class _BankScreenState extends State<BankScreen>
             counterpartyId: 'Banco',
           );
           await _sendToConnectedPlayer(result.toClientPayload());
+          SoundService.playSadTrombone();
+          HapticFeedback.heavyImpact();
+          NotificationService().show(
+              'Cobrado ${formatMoney(amount)} a $playerId',
+              backgroundColor: Colors.orange.shade800);
         }
       }
       dialog
@@ -1257,6 +1276,16 @@ class _BankScreenState extends State<BankScreen>
                           child: _BankHeader(),
                         ),
                         const SizedBox(height: 24),
+                        const AnimatedEntry(
+                          delay: Duration(milliseconds: 150),
+                          child: _BleServerPanel(),
+                        ),
+                        const SizedBox(height: 16),
+                        AnimatedEntry(
+                          delay: const Duration(milliseconds: 180),
+                          child: _buildConnectedPlayersList(),
+                        ),
+                        const SizedBox(height: 24),
                         AnimatedEntry(
                           delay: const Duration(milliseconds: 200),
                           child: _buildOpSelector(),
@@ -1476,6 +1505,447 @@ class _BankScreenState extends State<BankScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildConnectedPlayersList() {
+    final transport = P2PService().bleTransport;
+    return ValueListenableBuilder<bool>(
+      valueListenable: transport.serverActiveNotifier,
+      builder: (context, active, _) {
+        if (!active) return const SizedBox.shrink();
+        return ValueListenableBuilder<List<BleConnectedPlayer>>(
+          valueListenable: transport.connectedPlayersNotifier,
+          builder: (context, players, _) {
+            if (players.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: kBgCard.withValues(alpha: 0.82),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: kBorder),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.groups_rounded,
+                        color: kTextSecondary, size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Jugadores conectados',
+                        style: TextStyle(
+                          color: kTextPrimary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '0',
+                      style: TextStyle(
+                        color: kTextSecondary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: kBgCard.withValues(alpha: 0.82),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: kBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.groups_rounded,
+                          color: kGreen, size: 18),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Jugadores conectados',
+                          style: TextStyle(
+                            color: kTextPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${players.length}',
+                        style: const TextStyle(
+                          color: kTextSecondary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ...players.map((player) => _buildPlayerTile(player)),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPlayerTile(BleConnectedPlayer player) {
+    final ledger = BankLedgerService();
+    final account = ledger.accountFor(player.displayName);
+    final quality = player.rssi == null
+        ? player.qualityLabel
+        : '${player.qualityLabel} - ${player.rssi} dBm';
+    final detail =
+        '${player.playing ? 'Jugando' : 'Handshake pendiente'} - $quality';
+    return GestureDetector(
+      onTap: () => _showPlayerDetailDialog(player, account),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: player.qualityColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(Icons.bluetooth_connected_rounded,
+                  color: player.qualityColor, size: 16),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    player.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: kTextPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (player.displayDeviceName.isNotEmpty)
+                    Text(
+                      player.displayDeviceName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: kTextSecondary.withValues(alpha: 0.62),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  Text(
+                    'BLE - $detail',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: kTextSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (account != null)
+              Text(
+                formatMoney(account.balance),
+                style: TextStyle(
+                  color: account.bankrupt ? kRed : kGreen,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+              ),
+            const SizedBox(width: 8),
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: player.qualityColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPlayerDetailDialog(
+    BleConnectedPlayer player,
+    BankPlayerAccount? account,
+  ) {
+    final ledger = BankLedgerService();
+    final transactions = ledger.transactionHistory
+        .where((tx) => tx['playerId'] == player.displayName)
+        .toList();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kBgCard,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: player.qualityColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.bluetooth_connected_rounded,
+                  color: player.qualityColor, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                player.displayName,
+                style: const TextStyle(
+                  color: kTextPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionHeader('Conexion BLE'),
+                _detailRow('Nombre', player.name.isNotEmpty ? player.name : '-'),
+                _detailRow('Dispositivo', player.displayDeviceName),
+                _detailRow('BLE Device ID', player.id),
+                _detailRow(
+                    'ID Instalaci\u00f3n',
+                    player.deviceInstallationId.isNotEmpty
+                        ? player.deviceInstallationId
+                        : '-'),
+                _detailRow(
+                    'Handshake',
+                    player.playing ? 'Completado' : 'Pendiente'),
+                _detailRow('Suscripci\u00f3n GATT',
+                    player.subscribed ? 'Activa' : 'Inactiva'),
+                _detailRow('En contacto',
+                    player.contactReady ? 'S\u00ed' : 'No'),
+                _detailRow(
+                    'RSSI',
+                    player.rssi != null
+                        ? '${player.rssi} dBm'
+                        : 'Sin lectura'),
+                _detailRow('Calidad se\u00f1al', player.qualityLabel),
+                _detailRow(
+                    '\u00daltima actividad',
+                    '${player.lastSeen.hour.toString().padLeft(2, '0')}:'
+                        '${player.lastSeen.minute.toString().padLeft(2, '0')}:'
+                        '${player.lastSeen.second.toString().padLeft(2, '0')}'),
+                if (account != null) ...[
+                  const Divider(color: kBorder, height: 24),
+                  _buildSectionHeader('Cuenta Bancaria'),
+                  _detailRow('Saldo', formatMoney(account.balance)),
+                  _detailRow(
+                    'Estado',
+                    account.bankrupt
+                        ? 'En Bancarrota'
+                        : 'Activo',
+                  ),
+                  _detailRow('ID Instalaci\u00f3n',
+                      account.deviceInstallationId.isNotEmpty
+                          ? account.deviceInstallationId
+                          : '-'),
+                  if (account.investedAmount > 0) ...[
+                    const SizedBox(height: 8),
+                    _buildSectionHeader('Inversi\u00f3n Activa'),
+                    _detailRow(
+                        'Invertido', formatMoney(account.investedAmount)),
+                    _detailRow(
+                        'Generado', formatMoney(account.generatedAmount)),
+                    _detailRow('Pases requeridos',
+                        '${account.targetPasses}'),
+                    _detailRow('Pases actuales',
+                        '${account.currentPasses}'),
+                  ],
+                ],
+                if (transactions.isNotEmpty) ...[
+                  const Divider(color: kBorder, height: 24),
+                  _buildSectionHeader(
+                      '\u00daltimas Transacciones (${transactions.length})'),
+                  const SizedBox(height: 6),
+                  ...transactions.take(10).map((tx) {
+                    final type = tx['type'] as String? ?? '';
+                    final amount =
+                        (tx['amount'] as num?)?.toDouble() ?? 0;
+                    final balanceAfter =
+                        (tx['balanceAfter'] as num?)?.toDouble();
+                    final timestamp = tx['timestamp'] as String? ?? '';
+                    final time = timestamp.length >= 16
+                        ? timestamp.substring(11, 16)
+                        : '';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _txIcon(type),
+                            size: 14,
+                            color: _txColor(type),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _txLabel(type),
+                              style: const TextStyle(
+                                color: kTextSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '\$${amount.toStringAsFixed(0)}',
+                            style: TextStyle(
+                              color: _txColor(type),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                          if (balanceAfter != null) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              '(${formatMoney(balanceAfter)})',
+                              style: const TextStyle(
+                                color: kTextSecondary,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(width: 6),
+                          Text(
+                            time,
+                            style: const TextStyle(
+                              color: kTextSecondary,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cerrar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: kGold,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+          letterSpacing: 1.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: kTextSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: kTextPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _txLabel(String type) {
+    return switch (type) {
+      'payment' => 'Pago del banco',
+      'charge' => 'Cobro del banco',
+      'passGo' => 'Pas\u00f3 por GO',
+      'handshake_initial' => 'Handshake inicial',
+      'handshake_reconnect' => 'Reconexi\u00f3n',
+      'bankruptcy' => 'Bancarrota',
+      'investment_opened' => 'Inversi\u00f3n abierta',
+      'investment_completed' => 'Inversi\u00f3n completada',
+      'investment_early_withdrawal' => 'Retiro anticipado',
+      _ => type,
+    };
+  }
+
+  IconData _txIcon(String type) {
+    return switch (type) {
+      'payment' => Icons.arrow_downward_rounded,
+      'charge' => Icons.arrow_upward_rounded,
+      'passGo' => Icons.flag_rounded,
+      'handshake_initial' => Icons.handshake_rounded,
+      'handshake_reconnect' => Icons.handshake_rounded,
+      'bankruptcy' => Icons.gavel_rounded,
+      'investment_opened' => Icons.trending_up_rounded,
+      'investment_completed' => Icons.trending_up_rounded,
+      'investment_early_withdrawal' => Icons.trending_up_rounded,
+      _ => Icons.swap_horiz_rounded,
+    };
+  }
+
+  Color _txColor(String type) {
+    return switch (type) {
+      'payment' || 'passGo' => kGreen,
+      'charge' || 'bankruptcy' => kRed,
+      _ => kGold,
+    };
   }
 }
 
