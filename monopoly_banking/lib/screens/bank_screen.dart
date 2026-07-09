@@ -15,6 +15,7 @@ import 'package:monopoly_banking/services/transports/nfc_transport.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
+import 'package:monopoly_banking/services/app_audit_logger.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/monopoly_background.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
@@ -150,6 +151,8 @@ class _BankScreenState extends State<BankScreen>
   Future<void> _send() async {
     SoundService.playClick();
     if (!_formKey.currentState!.validate()) return;
+    AppAuditLogger.instance.event('BANK_OP', '_send start',
+        data: {'op': _selectedOp, 'amount': _amountCtrl.text});
 
     setState(() => _sending = true);
     final dialog = _BankOperationDialogController(
@@ -334,6 +337,10 @@ class _BankScreenState extends State<BankScreen>
       dialog
           .complete('Proceso completado con el jugador ${_playerNameLabel()}');
     } catch (e, s) {
+      AppAuditLogger.instance.event('BANK_OP', '_send_error',
+          data: {'op': _selectedOp, 'error': e.toString()},
+          error: e,
+          stack: s);
       if (dialogOpen && mounted) {
         Navigator.of(context, rootNavigator: true).pop();
       }
@@ -492,89 +499,17 @@ class _BankScreenState extends State<BankScreen>
   Future<bool> _waitForBleContactIfNeeded(
       _BankOperationDialogController dialog) async {
     if (dialog.transportType != TransportType.ble) return true;
-    final transport = P2PService().bleTransport;
-    if (!transport.serverActiveNotifier.value ||
-        !transport.clientConnectedNotifier.value) {
-      return true;
-    }
-
-    transport.contactReadyNotifier.value = false;
-    transport.contactRssiNotifier.value = null;
-
-    final completer = Completer<bool>();
-    dialog.update(
-      title: 'Acerca el jugador al banco',
-      message: 'Acerca los dispositivos para ejecutar esta operación.',
-    );
-
-    void finish(bool value) {
-      if (completer.isCompleted) return;
-      completer.complete(value);
-    }
-
-    void contactListener() {
-      if (_hasBleContact(transport)) {
-        finish(true);
-      }
-    }
-
-    transport.contactReadyNotifier.addListener(contactListener);
-    transport.connectedPlayersNotifier.addListener(contactListener);
-    void cancelListener() {
-      if (dialog.cancelled.value) finish(false);
-    }
-
-    dialog.cancelled.addListener(cancelListener);
-
-    void rssiListener() {
-      final rssi =
-          _closestBleRssi(transport) ?? transport.contactRssiNotifier.value;
-      if (rssi == null) return;
-      dialog.update(
-        title: 'Acerca el jugador al banco',
-        message: 'Señal actual: $rssi dBm. Acerca más los dispositivos.',
-      );
-    }
-
-    transport.contactRssiNotifier.addListener(rssiListener);
-    transport.connectedPlayersNotifier.addListener(rssiListener);
-    contactListener();
-    rssiListener();
-
-    final result = await completer.future;
-    transport.contactReadyNotifier.removeListener(contactListener);
-    transport.connectedPlayersNotifier.removeListener(contactListener);
-    transport.contactRssiNotifier.removeListener(rssiListener);
-    transport.connectedPlayersNotifier.removeListener(rssiListener);
-    dialog.cancelled.removeListener(cancelListener);
-    return result;
-  }
-
-  bool _hasBleContact(BleTransport transport) {
-    if (transport.contactReadyNotifier.value) return true;
-    return transport.connectedPlayersNotifier.value.any(
-      (player) => player.subscribed && player.contactReady,
-    );
+    return true;
   }
 
   BleConnectedPlayer? _contactPlayer() {
     final players = P2PService().bleTransport.connectedPlayersNotifier.value;
-    final inContact = players
-        .where((player) => player.subscribed && player.contactReady)
+    final active = players
+        .where((player) => player.subscribed && player.playing)
         .toList();
-    if (inContact.isEmpty) return null;
-    inContact.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
-    return inContact.first;
-  }
-
-  int? _closestBleRssi(BleTransport transport) {
-    final values = transport.connectedPlayersNotifier.value
-        .where((player) => player.subscribed && player.rssi != null)
-        .map((player) => player.rssi!)
-        .toList();
-    if (values.isEmpty) return null;
-    values.sort((a, b) => b.compareTo(a));
-    return values.first;
+    if (active.isEmpty) return null;
+    active.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
+    return active.first;
   }
 
   Future<void> _handleTransferHoldRequest(Map<String, dynamic> payload) async {
@@ -782,7 +717,6 @@ class _BankScreenState extends State<BankScreen>
       if (completer.isCompleted) return;
       timeout?.cancel();
       transport.connectedPlayersNotifier.removeListener(listener);
-      transport.contactReadyNotifier.removeListener(listener);
       completer.complete(player);
     }
 
@@ -792,19 +726,18 @@ class _BankScreenState extends State<BankScreen>
     };
 
     transport.connectedPlayersNotifier.addListener(listener);
-    transport.contactReadyNotifier.addListener(listener);
     timeout = Timer(const Duration(seconds: 15), () => finish(null));
     return completer.future;
   }
 
   BleConnectedPlayer? _currentTransferReceiver(BleTransport transport) {
     for (final player in transport.connectedPlayersNotifier.value) {
-      if (player.subscribed && player.contactReady && player.playing) {
+      if (player.subscribed && player.playing) {
         return player;
       }
     }
     for (final player in transport.connectedPlayersNotifier.value) {
-      if (player.subscribed && player.contactReady) return player;
+      if (player.subscribed) return player;
     }
     return null;
   }
@@ -1061,6 +994,10 @@ class _BankScreenState extends State<BankScreen>
   }
 
   Future<void> _sendToConnectedPlayer(Map<String, dynamic> payload) async {
+    final payloadType = payload['type'];
+    final playerId = payload['targetPlayerId'];
+    AppAuditLogger.instance.event('BANK_OP', 'send_to_player',
+        data: {'type': payloadType, 'playerId': playerId});
     if (P2PService().currentType == TransportType.nfc) {
       await _sendToNfcPlayer(payload);
       return;
@@ -1077,16 +1014,6 @@ class _BankScreenState extends State<BankScreen>
     if (!transport.clientConnectedNotifier.value) {
       throw TransportUnavailableException(
         'No hay jugador conectado por BLE. Abre la app del jugador y conéctalo al banco.',
-      );
-    }
-
-    if (!_hasBleContact(transport)) {
-      final rssi =
-          _closestBleRssi(transport) ?? transport.contactRssiNotifier.value;
-      throw TransportUnavailableException(
-        rssi == null
-            ? 'No se recibió señal de proximidad BLE. Acerca los dispositivos y mantenlos juntos.'
-            : 'Jugador fuera de contacto BLE ($rssi dBm). Acerca los dispositivos.',
       );
     }
 
@@ -1118,10 +1045,14 @@ class _BankScreenState extends State<BankScreen>
               (confirmedBalance != null &&
                   (confirmedBalance - expectedBalance).abs() < 0.001);
           if (!playerMatches || !balanceMatches) {
+            AppAuditLogger.instance.event('BANK_OP', 'confirmation_mismatch',
+                data: {'expectedPlayer': expectedPlayer, 'confirmedPlayer': confirmedPlayer});
             throw TransportUnavailableException(
               'El jugador respondió, pero no confirmó el saldo esperado. La operación no se marcará como completada.',
             );
           }
+          AppAuditLogger.instance.event('BANK_OP', 'send_confirmed',
+              data: {'playerId': confirmedPlayer, 'balance': confirmedBalance});
           return;
         } on TimeoutException {
           if (attempt == 1) rethrow;
@@ -1691,176 +1622,393 @@ class _BankScreenState extends State<BankScreen>
     final transactions = ledger.transactionHistory
         .where((tx) => tx['playerId'] == player.displayName)
         .toList();
+    final volume = transactions.fold<double>(
+      0,
+      (sum, tx) => sum + (((tx['amount'] as num?)?.toDouble() ?? 0).abs()),
+    );
+    final passGoCount =
+        transactions.where((tx) => tx['type'] == 'passGo').length;
+    final txCount = transactions.length;
+    final balance = account?.balance ?? 0;
+                final playerColor = _playerColor(player.colorId);
+                final avatar = player.avatarId.isNotEmpty
+                    ? player.avatarId
+                    : '👤';
+                final tier = _playerTier(balance);
+                final tierLabel = _tierLabel(tier);
+                final tierColor = _tierColor(tier);
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => Dialog(
         backgroundColor: kBgCard,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: player.qualityColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(Icons.bluetooth_connected_rounded,
-                  color: player.qualityColor, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                player.displayName,
-                style: const TextStyle(
-                  color: kTextPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildSectionHeader('Conexion BLE'),
-                _detailRow('Nombre', player.name.isNotEmpty ? player.name : '-'),
-                _detailRow('Dispositivo', player.displayDeviceName),
-                _detailRow('BLE Device ID', player.id),
-                _detailRow(
-                    'ID Instalaci\u00f3n',
-                    player.deviceInstallationId.isNotEmpty
-                        ? player.deviceInstallationId
-                        : '-'),
-                _detailRow(
-                    'Handshake',
-                    player.playing ? 'Completado' : 'Pendiente'),
-                _detailRow('Suscripci\u00f3n GATT',
-                    player.subscribed ? 'Activa' : 'Inactiva'),
-                _detailRow('En contacto',
-                    player.contactReady ? 'S\u00ed' : 'No'),
-                _detailRow(
-                    'RSSI',
-                    player.rssi != null
-                        ? '${player.rssi} dBm'
-                        : 'Sin lectura'),
-                _detailRow('Calidad se\u00f1al', player.qualityLabel),
-                _detailRow(
-                    '\u00daltima actividad',
-                    '${player.lastSeen.hour.toString().padLeft(2, '0')}:'
-                        '${player.lastSeen.minute.toString().padLeft(2, '0')}:'
-                        '${player.lastSeen.second.toString().padLeft(2, '0')}'),
-                if (account != null) ...[
-                  const Divider(color: kBorder, height: 24),
-                  _buildSectionHeader('Cuenta Bancaria'),
-                  _detailRow('Saldo', formatMoney(account.balance)),
-                  _detailRow(
-                    'Estado',
-                    account.bankrupt
-                        ? 'En Bancarrota'
-                        : 'Activo',
-                  ),
-                  _detailRow('ID Instalaci\u00f3n',
-                      account.deviceInstallationId.isNotEmpty
-                          ? account.deviceInstallationId
-                          : '-'),
-                  if (account.investedAmount > 0) ...[
-                    const SizedBox(height: 8),
-                    _buildSectionHeader('Inversi\u00f3n Activa'),
-                    _detailRow(
-                        'Invertido', formatMoney(account.investedAmount)),
-                    _detailRow(
-                        'Generado', formatMoney(account.generatedAmount)),
-                    _detailRow('Pases requeridos',
-                        '${account.targetPasses}'),
-                    _detailRow('Pases actuales',
-                        '${account.currentPasses}'),
-                  ],
-                ],
-                if (transactions.isNotEmpty) ...[
-                  const Divider(color: kBorder, height: 24),
-                  _buildSectionHeader(
-                      '\u00daltimas Transacciones (${transactions.length})'),
-                  const SizedBox(height: 6),
-                  ...transactions.take(10).map((tx) {
-                    final type = tx['type'] as String? ?? '';
-                    final amount =
-                        (tx['amount'] as num?)?.toDouble() ?? 0;
-                    final balanceAfter =
-                        (tx['balanceAfter'] as num?)?.toDouble();
-                    final timestamp = tx['timestamp'] as String? ?? '';
-                    final time = timestamp.length >= 16
-                        ? timestamp.substring(11, 16)
-                        : '';
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _txIcon(type),
-                            size: 14,
-                            color: _txColor(type),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _txLabel(type),
-                              style: const TextStyle(
-                                color: kTextSecondary,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            '\$${amount.toStringAsFixed(0)}',
+        child: DefaultTabController(
+          length: 2,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 560),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: playerColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Center(
+                          child: Text(
+                            avatar,
                             style: TextStyle(
-                              color: _txColor(type),
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
+                              fontSize: 20,
+                              color: playerColor,
                             ),
                           ),
-                          if (balanceAfter != null) ...[
-                            const SizedBox(width: 6),
-                            Text(
-                              '(${formatMoney(balanceAfter)})',
-                              style: const TextStyle(
-                                color: kTextSecondary,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(width: 6),
-                          Text(
-                            time,
-                            style: const TextStyle(
-                              color: kTextSecondary,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    );
-                  }),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          player.displayName,
+                          style: const TextStyle(
+                            color: kTextPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TabBar(
+                    labelColor: kGold,
+                    unselectedLabelColor: kTextSecondary,
+                    indicatorColor: kGold,
+                    indicatorSize: TabBarIndicatorSize.label,
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                    tabs: const [
+                      Tab(text: 'Datos Jugador'),
+                      Tab(text: 'Datos Conexion'),
+                    ],
+                  ),
+                  Flexible(
+                    child: TabBarView(
+                      children: [
+                        _buildPlayerInfoTab(
+                          player: player,
+                          balance: balance,
+                          volume: volume,
+                          passGoCount: passGoCount,
+                          txCount: txCount,
+                          tier: tier,
+                          tierLabel: tierLabel,
+                          tierColor: tierColor,
+                          account: account,
+                          transactions: transactions,
+                        ),
+                        _buildConnectionInfoTab(player),
+                      ],
+                    ),
+                  ),
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayerInfoTab({
+    required BleConnectedPlayer player,
+    required double balance,
+    required double volume,
+    required int passGoCount,
+    required int txCount,
+    required String tier,
+    required String tierLabel,
+    required Color tierColor,
+    BankPlayerAccount? account,
+    List<Map<String, dynamic>> transactions = const [],
+  }) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('Tarjeta del Jugador'),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  tierColor.withValues(alpha: 0.18),
+                  tierColor.withValues(alpha: 0.05),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: tierColor.withValues(alpha: 0.45),
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: _playerColor(player.colorId)
+                        .withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _playerColor(player.colorId)
+                          .withValues(alpha: 0.5),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      player.avatarId.isNotEmpty
+                          ? player.avatarId
+                          : '👤',
+                      style: const TextStyle(fontSize: 24),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tierLabel,
+                        style: TextStyle(
+                          color: tierColor,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        'Nivel ${_tierLevel(tier)}',
+                        style: TextStyle(
+                          color: tierColor.withValues(alpha: 0.7),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cerrar'),
-          ),
+          const SizedBox(height: 18),
+          _buildSectionHeader('Resumen'),
+          _detailRow('Nombre', player.displayName),
+          _detailRow('Dispositivo', player.displayDeviceName),
+          _detailRow('Conexi\u00f3n', 'Bluetooth (BLE)'),
+          const SizedBox(height: 12),
+          _buildSectionHeader('Finanzas'),
+          _detailRow('Saldo', formatMoney(balance)),
+          _detailRow('Volumen total',
+              formatMoney(volume)),
+          _detailRow(
+              'Pases por GO', '$passGoCount'),
+          _detailRow('Transacciones',
+              '$txCount realizadas'),
+          if (account != null && account.investedAmount > 0) ...[
+            const SizedBox(height: 12),
+            _buildSectionHeader('Inversi\u00f3n Activa'),
+            _detailRow('Invertido',
+                formatMoney(account.investedAmount)),
+            _detailRow('Generado',
+                formatMoney(account.generatedAmount)),
+            _detailRow('Progreso',
+                '${account.currentPasses} / ${account.targetPasses} pases'),
+          ],
+          if (account != null && account.bankrupt) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: kRed.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: kRed.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.gavel_rounded, color: kRed, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Jugador en Bancarrota',
+                      style: TextStyle(
+                        color: kRed,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (transactions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildSectionHeader(
+                '\u00daltimas Transacciones (${transactions.length})'),
+            ...transactions.take(5).map((tx) {
+              final type = tx['type'] as String? ?? '';
+              final amount =
+                  (tx['amount'] as num?)?.toDouble() ?? 0;
+              final timestamp = tx['timestamp'] as String? ?? '';
+              final time = timestamp.length >= 16
+                  ? timestamp.substring(11, 16)
+                  : '';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(_txIcon(type), size: 14,
+                        color: _txColor(type)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _txLabel(type),
+                        style: const TextStyle(
+                          color: kTextSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '\$${amount.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        color: _txColor(type),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      time,
+                      style: const TextStyle(
+                        color: kTextSecondary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
         ],
       ),
     );
+  }
+
+  Widget _buildConnectionInfoTab(BleConnectedPlayer player) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('Dispositivo'),
+          _detailRow('Nombre',
+              player.name.isNotEmpty ? player.name : '-'),
+          _detailRow(
+              'Dispositivo', player.displayDeviceName),
+          _detailRow('ID BLE', player.id),
+          _detailRow(
+              'ID Instalaci\u00f3n',
+              player.deviceInstallationId.isNotEmpty
+                  ? player.deviceInstallationId
+                  : '-'),
+          const SizedBox(height: 12),
+          _buildSectionHeader('Estado Conexi\u00f3n'),
+          _detailRow('Handshake',
+              player.playing ? 'Completado' : 'Pendiente'),
+          _detailRow('Suscripci\u00f3n GATT',
+              player.subscribed ? 'Activa' : 'Inactiva'),
+          const SizedBox(height: 12),
+          _detailRow(
+              '\u00daltima actividad',
+              '${player.lastSeen.hour.toString().padLeft(2, '0')}:'
+                  '${player.lastSeen.minute.toString().padLeft(2, '0')}:'
+                  '${player.lastSeen.second.toString().padLeft(2, '0')}'),
+        ],
+      ),
+    );
+  }
+
+  String _playerTier(double balance) {
+    if (balance >= 15000) return 'black';
+    if (balance >= 8000) return 'platinum';
+    if (balance >= 4000) return 'gold';
+    return 'standard';
+  }
+
+  String _tierLabel(String tier) {
+    return switch (tier) {
+      'black' => 'ULTIMATE BLACK',
+      'platinum' => 'PLATINUM PRESTIGE',
+      'gold' => 'GOLD MEMBERSHIP',
+      _ => 'CLASSIC EDITION',
+    };
+  }
+
+  int _tierLevel(String tier) {
+    return switch (tier) {
+      'standard' => 1,
+      'gold' => 2,
+      'platinum' => 3,
+      'black' => 4,
+      _ => 1,
+    };
+  }
+
+  Color _tierColor(String tier) {
+    return switch (tier) {
+      'standard' => const Color(0xFF90A4AE),
+      'gold' => const Color(0xFFFFD700),
+      'platinum' => const Color(0xFF1E88E5),
+      'black' => const Color(0xFF424242),
+      _ => const Color(0xFF90A4AE),
+    };
+  }
+
+  Color _playerColor(String colorId) {
+    const colors = [
+      Color(0xFFE53935),
+      Color(0xFF8E24AA),
+      Color(0xFF1E88E5),
+      Color(0xFF43A047),
+      Color(0xFFFDD835),
+      Color(0xFFFF7043),
+      Color(0xFF00ACC1),
+      Color(0xFFECEFF1),
+    ];
+    final index = int.tryParse(colorId) ?? 0;
+    if (index >= 0 && index < colors.length) return colors[index];
+    return colors[0];
   }
 
   Widget _buildSectionHeader(String title) {
@@ -2364,7 +2512,7 @@ class _BleServerPanel extends StatelessWidget {
                     : active
                         ? 'SERVIDOR BLE ACTIVO'
                         : 'SERVIDOR BLE';
-                final subtitle = status.isNotEmpty
+                final subtitle = (active && status.isNotEmpty)
                     ? status
                     : active
                         ? 'Esperando que un jugador se conecte...'

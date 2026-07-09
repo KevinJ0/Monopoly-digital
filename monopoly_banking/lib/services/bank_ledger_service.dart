@@ -321,10 +321,13 @@ class BankLedgerService {
       throw const BankLedgerException('No existe una inversión activa.');
     }
 
-    final completed = current.currentPasses >= current.targetPasses;
-    final returnedAmount = completed
-        ? current.investedAmount + current.generatedAmount
-        : current.investedAmount * 0.80;
+    if (current.currentPasses < current.targetPasses) {
+      throw const BankLedgerException(
+        'La inversión aún no ha cumplido el plazo. Debes completar los pases por GO antes de retirar.',
+      );
+    }
+
+    final returnedAmount = current.investedAmount + current.generatedAmount;
     final account = current.copyWith(
       balance: current.balance + returnedAmount,
       investedAmount: 0,
@@ -335,9 +338,8 @@ class BankLedgerService {
     await _saveAccount(account);
     return _record(
       account: account,
-      type: completed ? 'investment_completed' : 'investment_early_withdrawal',
+      type: 'investment_completed',
       amount: returnedAmount,
-      metadata: {'early': !completed},
     );
   }
 

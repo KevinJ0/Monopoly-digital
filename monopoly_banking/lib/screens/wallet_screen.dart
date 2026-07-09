@@ -66,6 +66,7 @@ class _WalletScreenState extends State<WalletScreen>
   bool _nfcLoopRunning = false;
   bool _bleScanning = false;
   bool _userRequestedBleDisconnect = false;
+  bool _dialogActive = false;
   VoidCallback? _bleClientConnectionListener;
   bool _wasBleClientConnected = false;
   bool _bankTransferHoldDialogOpen = false;
@@ -90,6 +91,7 @@ class _WalletScreenState extends State<WalletScreen>
 
   late final VoidCallback _typeListener;
   VoidCallback? _bleConnectionsListener;
+  VoidCallback? _bankServerListener;
   final Set<String> _announcedBleConnections = {};
   Completer<String>? _nfcTransferClaimCompleter;
   String? _pendingNfcTransferId;
@@ -142,6 +144,7 @@ class _WalletScreenState extends State<WalletScreen>
       await _refreshNfcAvailability();
       if (session.isBank) {
         _listenForBankPlayerConnections();
+        _listenForBankServerState();
         if (P2PService().currentType == TransportType.nfc) {
           _startNfcLoop();
         }
@@ -155,6 +158,18 @@ class _WalletScreenState extends State<WalletScreen>
   void _connectToHost(SessionProvider session) {
     // WiFi no participa como medio de juego. Los jugadores se conectan por
     // BLE/NFC para evitar operaciones fuera de contacto.
+  }
+
+  void _listenForBankServerState() {
+    _bankServerListener ??= () {
+      if (mounted && !_dialogActive) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() {});
+        });
+      }
+    };
+    P2PService().bleTransport.serverActiveNotifier
+        .addListener(_bankServerListener!);
   }
 
   void _listenForBankPlayerConnections() {
@@ -197,12 +212,20 @@ class _WalletScreenState extends State<WalletScreen>
 
       if (connected && _bleScanning) {
         _bleScanning = false;
-        if (mounted) setState(() {});
+        if (mounted && !_dialogActive) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() {});
+          });
+        }
       } else if (!connected &&
           _wasBleClientConnected &&
           !_userRequestedBleDisconnect) {
         _bleScanning = true;
-        if (mounted) setState(() {});
+        if (mounted && !_dialogActive) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() {});
+          });
+        }
       }
 
       if (_wasBleClientConnected &&
@@ -244,6 +267,15 @@ class _WalletScreenState extends State<WalletScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       final session = context.read<SessionProvider>();
+      if (session.isBank) {
+        P2PService().bleTransport.refreshAvailability().then((_) {
+          if (mounted && !_dialogActive) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() {});
+            });
+          }
+        });
+      }
       if (!session.isBank) {
         _refreshNfcAvailability();
         _startNfcLoop();
@@ -280,7 +312,7 @@ class _WalletScreenState extends State<WalletScreen>
           _userRequestedBleDisconnect = false;
         }
         if (mounted) {
-          setState(() {});
+          _safeSetState(() {});
           NotificationService().show(
             'El banco apagó el servidor BLE. Has sido desconectado.',
             backgroundColor: kRed,
@@ -438,7 +470,9 @@ class _WalletScreenState extends State<WalletScreen>
               'bankSessionId': BankLedgerService().currentBankSessionId,
               ...result.account.toClientState(),
             };
-            if (sourceTransport != TransportType.nfc) {
+            if (sourceTransport == TransportType.nfc) {
+              await _sendNfcPayloadAndResume(handshake);
+            } else if (sourceTransport != TransportType.nfc) {
               P2PService().setTransport(sourceTransport);
               try {
                 await P2PService().sendPayload(handshake);
@@ -568,7 +602,7 @@ class _WalletScreenState extends State<WalletScreen>
         await wallet.applyBankState(payload);
       }
     }, onError: (e, s) {
-      if (mounted) context.showFriendlyError(e, s);
+      if (mounted) _safeShowFriendlyError(e, s);
     });
   }
 
@@ -603,33 +637,10 @@ class _WalletScreenState extends State<WalletScreen>
     return P2PService().currentType;
   }
 
-  bool _hasBleContactForPlayer(String? bleDeviceId) {
-    final transport = P2PService().bleTransport;
-    if (transport.contactReadyNotifier.value) return true;
-    if (bleDeviceId == null || bleDeviceId.isEmpty) {
-      return transport.connectedPlayersNotifier.value
-          .any((player) => player.subscribed && player.contactReady);
-    }
-    return transport.connectedPlayersNotifier.value.any(
-      (player) =>
-          player.id == bleDeviceId && player.subscribed && player.contactReady,
-    );
-  }
-
   Future<void> _handleBankOperationRequest(Map<String, dynamic> payload) async {
     final playerId = _connectedPlayerIdForPayload(payload);
     if (playerId == null) return;
     final sourceTransport = _transportForIncomingPayload(payload);
-    if (sourceTransport == TransportType.ble &&
-        !_hasBleContactForPlayer(payload['_bleDeviceId'] as String?)) {
-      await _sendBankError(
-        playerId,
-        'Jugador fuera de contacto BLE. Acerca los dispositivos.',
-        transportType: sourceTransport,
-        requestId: payload['requestId'] as String?,
-      );
-      return;
-    }
     final requestId = payload['requestId'] as String?;
 
     try {
@@ -640,8 +651,20 @@ class _WalletScreenState extends State<WalletScreen>
         final amount = (payload['amount'] as num?)?.toDouble() ?? 0;
         final passes = (payload['passes'] as num?)?.toInt() ?? 0;
         result = await ledger.invest(playerId, amount, passes);
+        NotificationService().show(
+          '$playerId invirtió ${formatMoney(amount)} a $passes pases por GO',
+          backgroundColor: kGold,
+          duration: const Duration(seconds: 4),
+          dedupeKey: 'invest-$playerId',
+        );
       } else if (operation == 'withdraw_investment') {
         result = await ledger.withdrawInvestment(playerId);
+        NotificationService().show(
+          '$playerId retiró su inversión',
+          backgroundColor: kGreen,
+          duration: const Duration(seconds: 4),
+          dedupeKey: 'withdraw-$playerId',
+        );
       } else {
         throw const BankLedgerException('Operación bancaria desconocida.');
       }
@@ -747,8 +770,8 @@ class _WalletScreenState extends State<WalletScreen>
   Future<void> _sendNfcPayloadAndResume(Map<String, dynamic> payload) async {
     _stopNfcLoop();
     P2PService().setTransport(TransportType.nfc);
-    await P2PService().sendPayload(payload);
     final session = context.read<SessionProvider>();
+    await P2PService().sendPayload(payload);
     unawaited(
         Future<void>.delayed(const Duration(milliseconds: 1400), () async {
       final nfc = P2PService().nfcTransport;
@@ -806,16 +829,6 @@ class _WalletScreenState extends State<WalletScreen>
     if (_pendingBankOperationCompleter != null) {
       throw const BankLedgerException(
         'Ya hay una operación bancaria en proceso.',
-      );
-    }
-
-    if (P2PService().currentType == TransportType.ble &&
-        !transport.contactReadyNotifier.value) {
-      final rssi = transport.contactRssiNotifier.value;
-      throw TransportUnavailableException(
-        rssi == null
-            ? 'No se recibió señal de proximidad. Acerca los dispositivos.'
-            : 'Jugador fuera de contacto BLE ($rssi dBm). Acerca los dispositivos.',
       );
     }
 
@@ -906,6 +919,7 @@ class _WalletScreenState extends State<WalletScreen>
     }
     if (!mounted) return;
     _bankTransferHoldDialogOpen = true;
+    _dialogActive = true;
 
     await showDialog<void>(
       context: context,
@@ -977,7 +991,7 @@ class _WalletScreenState extends State<WalletScreen>
                 });
               } catch (e, s) {
                 if (!mounted || !ctx.mounted) return;
-                context.showFriendlyError(e, s);
+                _safeShowFriendlyError(e, s);
                 setDialogState(() {
                   sending = false;
                   message = 'No se pudo entregar el dinero. Intenta de nuevo.';
@@ -1117,6 +1131,7 @@ class _WalletScreenState extends State<WalletScreen>
         );
       },
     ).whenComplete(() {
+      _dialogActive = false;
       _bankTransferHoldDialogOpen = false;
     });
   }
@@ -1163,7 +1178,7 @@ class _WalletScreenState extends State<WalletScreen>
   BleConnectedPlayer? _currentTransferReceiver() {
     final players = P2PService().bleTransport.connectedPlayersNotifier.value;
     for (final player in players) {
-      if (player.subscribed && player.contactReady && player.playing) {
+      if (player.subscribed && player.playing) {
         return player;
       }
     }
@@ -1191,18 +1206,6 @@ class _WalletScreenState extends State<WalletScreen>
       final session = context.read<SessionProvider>();
       if (!session.isBank) {
         P2PService().setTransport(TransportType.nfc);
-        await P2PService().sendPayload({
-          'type': 'nfc_identity',
-          'playerId': session.name,
-          'name': session.name,
-          'avatarId': session.avatarId,
-          'colorId': session.colorId,
-          'isHandshakeDone': session.isHandshakeDone,
-          'deviceInstallationId': DeviceIdentityService.installationId,
-        });
-        await Future<void>.delayed(const Duration(milliseconds: 1200));
-        await P2PService().nfcTransport.stopHce();
-        if (!_nfcLoopRunning || !mounted) return;
         try {
           await P2PService()
               .startReceiving(null)
@@ -1218,7 +1221,7 @@ class _WalletScreenState extends State<WalletScreen>
         _nfcLoopRunning = false;
         return;
       }
-      if (mounted) context.showFriendlyError(e, s);
+      if (mounted) _safeShowFriendlyError(e, s);
     }
     if (_nfcLoopRunning && mounted) {
       await Future.delayed(const Duration(milliseconds: 800));
@@ -1244,8 +1247,8 @@ class _WalletScreenState extends State<WalletScreen>
       await P2PService().startReceiving(null);
     } catch (e, s) {
       _bleScanning = false;
-      if (mounted) setState(() {});
-      if (mounted) context.showFriendlyError(e, s);
+      if (mounted) _safeSetState(() {});
+      if (mounted) _safeShowFriendlyError(e, s);
     }
   }
 
@@ -1254,7 +1257,7 @@ class _WalletScreenState extends State<WalletScreen>
     _bleScanning = false;
     try {
       await P2PService().bleTransport.stopClientScan();
-      if (mounted) setState(() {});
+      if (mounted) _safeSetState(() {});
     } finally {
       _userRequestedBleDisconnect = false;
     }
@@ -1266,7 +1269,7 @@ class _WalletScreenState extends State<WalletScreen>
     try {
       await P2PService().bleTransport.connectToBank(bank);
     } catch (e, s) {
-      if (mounted) context.showFriendlyError(e, s);
+      if (mounted) _safeShowFriendlyError(e, s);
     }
   }
 
@@ -1335,6 +1338,36 @@ class _WalletScreenState extends State<WalletScreen>
     NotificationService().show(msg, backgroundColor: color);
   }
 
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    if (_dialogActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(fn);
+      });
+    } else {
+      setState(fn);
+    }
+  }
+
+  Future<void> _safeShowFriendlyError(dynamic error, [StackTrace? stack]) async {
+    final friendly = await ErrorTranslatorService().translate(error, stack);
+    if (!mounted) return;
+    if (friendly.severity == ErrorSeverity.error ||
+        friendly.severity == ErrorSeverity.critical) {
+      NotificationService().show(
+        friendly.message,
+        backgroundColor: kRed,
+        duration: const Duration(seconds: 5),
+      );
+    } else {
+      NotificationService().show(
+        friendly.message,
+        backgroundColor: Colors.orange,
+        duration: const Duration(seconds: 4),
+      );
+    }
+  }
+
   Future<void> _showPlayerTransferDialog(
     WalletController wallet,
     Color brandColor,
@@ -1342,6 +1375,8 @@ class _WalletScreenState extends State<WalletScreen>
     final amountCtrl = TextEditingController();
     final session = context.read<SessionProvider>();
 
+    _dialogActive = true;
+    try {
     await showPremiumDialog<void>(
       context: context,
       child: Builder(
@@ -1425,7 +1460,7 @@ class _WalletScreenState extends State<WalletScreen>
                   if (!mounted || !dialogContext.mounted) return;
                   Navigator.pop(dialogContext);
                 } catch (e, s) {
-                  if (mounted) context.showFriendlyError(e, s);
+                  if (mounted) _safeShowFriendlyError(e, s);
                 }
               },
               child: const Text('Retener en banco'),
@@ -1436,6 +1471,9 @@ class _WalletScreenState extends State<WalletScreen>
     );
 
     amountCtrl.dispose();
+    } finally {
+      _dialogActive = false;
+    }
   }
 
   void _listenToTierEvolution() {
@@ -1637,7 +1675,7 @@ class _WalletScreenState extends State<WalletScreen>
     _nfcAvailability.value = availability;
 
     if (availability != NfcAvailability.enabled && _nfcListening && mounted) {
-      setState(() {
+      _safeSetState(() {
         _nfcListening = false;
         _pulseCtrl.stop();
         _pulseCtrl.reset();
@@ -1648,7 +1686,7 @@ class _WalletScreenState extends State<WalletScreen>
   }
 
   Future<void> _triggerWelcomeAnimation(String? name) async {
-    setState(() {
+    _safeSetState(() {
       _showWelcome = true;
     });
     await _welcomeCtrl.forward();
@@ -1662,7 +1700,7 @@ class _WalletScreenState extends State<WalletScreen>
   Future<void> _hideWelcome() async {
     if (_showWelcome) {
       await _welcomeCtrl.reverse();
-      setState(() => _showWelcome = false);
+      _safeSetState(() => _showWelcome = false);
     }
   }
 
@@ -1703,6 +1741,11 @@ class _WalletScreenState extends State<WalletScreen>
             bleClientConnectionListener,
           );
     }
+    final bankServerListener = _bankServerListener;
+    if (bankServerListener != null) {
+      P2PService().bleTransport.serverActiveNotifier
+          .removeListener(bankServerListener);
+    }
     _announcedBleConnections.clear();
     _pulseCtrl.dispose();
     _welcomeCtrl.dispose();
@@ -1741,6 +1784,9 @@ class _WalletScreenState extends State<WalletScreen>
     final playerReady =
         isBank || (session.isHandshakeDone && bleConnected);
     final shownBalance = playerReady ? displayBalance : 0.0;
+    // Si el banco no tiene Bluetooth, mostrar pantalla limpia como al inicio
+    final bankBleOk = !isBank || P2PService().bleTransport.isEnabled;
+    final shownTier = playerReady ? wallet.currentTier : CardTier.standard;
 
     return PopScope(
       canPop: false,
@@ -1755,7 +1801,7 @@ class _WalletScreenState extends State<WalletScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            isBank
+            isBank && bankBleOk
                 ? FloatingActionButton.extended(
                     heroTag: 'bank_panel_btn',
                     onPressed: () async {
@@ -1823,7 +1869,9 @@ class _WalletScreenState extends State<WalletScreen>
                                 displayName,
                                 displayColorId,
                                 _lastHistory,
-                                isBank),
+                                isBank,
+                                tier: shownTier,
+                              ),
                           ),
                         ),
                       if (!isBank && playerReady)
@@ -1852,7 +1900,7 @@ class _WalletScreenState extends State<WalletScreen>
                           ),
                         ),
                       ),
-                      if (isBank)
+                      if (isBank && bankBleOk)
                         SliverToBoxAdapter(
                           child: AnimatedEntry(
                             delay: const Duration(milliseconds: 450),
@@ -1865,15 +1913,16 @@ class _WalletScreenState extends State<WalletScreen>
                           child: TransportSelector(),
                         ),
                       ),
-                      SliverToBoxAdapter(
-                        child: AnimatedEntry(
-                          delay: const Duration(milliseconds: 500),
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                            child: Row(
-                              children: [
-                                const Text(
-                                  'HISTORIAL',
+                      if (playerReady)
+                        SliverToBoxAdapter(
+                          child: AnimatedEntry(
+                            delay: const Duration(milliseconds: 500),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                              child: Row(
+                                children: [
+                                  const Text(
+                                    'HISTORIAL',
                                   style: TextStyle(
                                     color: kTextSecondary,
                                     fontSize: 12,
@@ -2022,7 +2071,7 @@ class _WalletScreenState extends State<WalletScreen>
                   try {
                     JugadorClient().confirmAction(userName);
                   } catch (e, s) {
-                    if (context.mounted) context.showFriendlyError(e, s);
+                    if (context.mounted) _safeShowFriendlyError(e, s);
                   }
                 },
                 style: ElevatedButton.styleFrom(
@@ -2274,8 +2323,15 @@ class _WalletScreenState extends State<WalletScreen>
     );
   }
 
-  Widget _buildBalanceCard(double balance, Color color, String name,
-      int colorId, List<double> history, bool isBank) {
+  Widget _buildBalanceCard(
+    double balance,
+    Color color,
+    String name,
+    int colorId,
+    List<double> history,
+    bool isBank, {
+    CardTier? tier,
+  }) {
     final wallet = context.read<WalletController>();
     return ValueListenableBuilder<int>(
       valueListenable: wallet.balanceDecreaseShake,
@@ -2287,6 +2343,7 @@ class _WalletScreenState extends State<WalletScreen>
           colorId: colorId,
           history: history,
           isBank: isBank,
+          tier: tier,
         )
             .animate(key: ValueKey('card-$shakeCount'))
             .shake(duration: 400.ms)
@@ -2471,58 +2528,60 @@ class _WalletScreenState extends State<WalletScreen>
                                       ],
                                     ),
                                     const SizedBox(height: 20),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      child: OutlinedButton(
-                                        onPressed: () {
-                                          SoundService.playClick();
-                                          _showWithdrawDialog(wallet);
-                                        },
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor:
-                                              currentPasses >= targetPasses
-                                                  ? kGreenGlow
-                                                  : kRed,
-                                          side: BorderSide(
-                                              color:
-                                                  currentPasses >= targetPasses
-                                                      ? kGreenGlow
-                                                      : kRed),
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 18, vertical: 14),
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12)),
+                                    if (currentPasses >= targetPasses)
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: ElevatedButton.icon(
+                                          onPressed: () {
+                                            SoundService.playClick();
+                                            _showWithdrawDialog(wallet, color);
+                                          },
+                                          icon: const Icon(
+                                              Icons.account_balance_wallet_rounded,
+                                              size: 18),
+                                          label: const Text('Retirar Ganancias'),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: color,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 18, vertical: 14),
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12)),
+                                          ),
                                         ),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
+                                      )
+                                    else
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12, horizontal: 14),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                              color: Colors.orange.withValues(alpha: 0.3)),
+                                        ),
+                                        child: const Row(
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            const Icon(
-                                              Icons
-                                                  .account_balance_wallet_rounded,
-                                              size: 18,
-                                            ),
-                                            const SizedBox(width: 10),
+                                            Icon(Icons.lock_rounded,
+                                                color: Colors.orange, size: 16),
+                                            SizedBox(width: 8),
                                             Flexible(
                                               child: Text(
-                                                currentPasses >= targetPasses
-                                                    ? 'Retirar Ganancias'
-                                                    : 'Retirar Anticipadamente (Penalidad 20%)',
-                                                textAlign: TextAlign.center,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w800,
-                                                  height: 1.15,
+                                                'Inversión bloqueada. Completa los pases por GO para retirar.',
+                                                style: TextStyle(
+                                                  color: Colors.orange,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  height: 1.3,
                                                 ),
                                               ),
                                             ),
                                           ],
                                         ),
                                       ),
-                                    )
                                   ],
                                 ],
                               ),
@@ -2561,6 +2620,7 @@ class _WalletScreenState extends State<WalletScreen>
 
         final rate = getRate(selectedPasses);
         final expectedTotal = val > 0 ? val * rate * selectedPasses : 0;
+        final wouldEmptyBalance = val > 0 && (wallet.balance - val) <= 0;
 
         return AlertDialog(
           backgroundColor: kBgCard,
@@ -2573,6 +2633,9 @@ class _WalletScreenState extends State<WalletScreen>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Text('Acerca tu dispositivo al banco para enviar la solicitud de inversión.',
+                    style: TextStyle(color: kGold, fontSize: 12, height: 1.35)),
+                const SizedBox(height: 16),
                 const Text('Monto a Invertir',
                     style: TextStyle(color: Colors.white70)),
                 const SizedBox(height: 8),
@@ -2589,6 +2652,13 @@ class _WalletScreenState extends State<WalletScreen>
                         borderSide: BorderSide.none),
                   ),
                 ),
+                if (wouldEmptyBalance) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'No puedes invertir todo tu saldo. Debe quedar al menos \$1 en tu cuenta.',
+                    style: TextStyle(color: kRed, fontSize: 11, height: 1.3),
+                  ),
+                ],
                 const SizedBox(height: 20),
                 const Text('Plazo (Pases por GO)',
                     style: TextStyle(color: Colors.white70)),
@@ -2668,7 +2738,7 @@ class _WalletScreenState extends State<WalletScreen>
                     ? Colors.black
                     : Colors.white,
               ),
-              onPressed: submitting
+              onPressed: (submitting || wouldEmptyBalance)
                   ? null
                   : () async {
                       SoundService.playClick();
@@ -2685,7 +2755,7 @@ class _WalletScreenState extends State<WalletScreen>
                           });
                           if (context.mounted) Navigator.pop(context);
                         } catch (e, s) {
-                          if (context.mounted) context.showFriendlyError(e, s);
+                          if (context.mounted) _safeShowFriendlyError(e, s);
                         } finally {
                           if (context.mounted) {
                             setStateSB(() => submitting = false);
@@ -2710,19 +2780,16 @@ class _WalletScreenState extends State<WalletScreen>
     );
   }
 
-  void _showWithdrawDialog(WalletController wallet) {
-    final isEarly = wallet.currentPassesVault < wallet.targetPassesVault;
+  void _showWithdrawDialog(WalletController wallet, Color brandColor) {
     showPremiumDialog(
         context: context,
         child: AlertDialog(
           backgroundColor: kBgCard,
-          title: Text(isEarly ? 'Retiro Anticipado' : 'Retiro de Inversión',
-              style: TextStyle(color: isEarly ? kRed : kGreenGlow)),
-          content: Text(
-            isEarly
-                ? 'Aún no has cumplido los pases por GO (${wallet.currentPassesVault}/${wallet.targetPassesVault}). Si retiras ahora, perderás los intereses generados y se aplicará una penalización del 20% sobre tu capital invertido.\n\n¿Estás seguro que deseas retirar?'
-                : '¡Enhorabuena! Has cumplido el plazo de tu inversión. Se acreditará tu capital más los intereses generados a tu cuenta principal.',
-            style: const TextStyle(color: Colors.white70),
+          title: Text('Retiro de Inversión',
+              style: TextStyle(color: brandColor, fontWeight: FontWeight.bold)),
+          content: const Text(
+            '¡Enhorabuena! Has cumplido el plazo de tu inversión. Se acreditará tu capital más los intereses generados a tu cuenta principal.',
+            style: TextStyle(color: Colors.white70),
           ),
           actions: [
             TextButton(
@@ -2734,7 +2801,7 @@ class _WalletScreenState extends State<WalletScreen>
                     style: TextStyle(color: Colors.white54))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: isEarly ? kRed : kGreenGlow,
+                  backgroundColor: brandColor,
                   foregroundColor: Colors.white),
               onPressed: () async {
                 SoundService.playClick();
@@ -2744,12 +2811,10 @@ class _WalletScreenState extends State<WalletScreen>
                   });
                   if (mounted) Navigator.pop(context);
                 } catch (e, s) {
-                  if (mounted) context.showFriendlyError(e, s);
+                  if (mounted) _safeShowFriendlyError(e, s);
                 }
               },
-              child: Text(isEarly
-                  ? 'Sí, Retirar con Penalización'
-                  : 'Liquidar Inversión'),
+              child: const Text('Liquidar Inversión'),
             ),
           ],
         ));
@@ -2928,11 +2993,6 @@ class _WalletScreenState extends State<WalletScreen>
                   player.playing ? 'Completado' : 'Pendiente'),
               _infoRow('Suscripción GATT',
                   player.subscribed ? 'Activa' : 'Inactiva'),
-              _infoRow('En contacto',
-                  player.contactReady ? 'Sí' : 'No'),
-              _infoRow('RSSI',
-                  player.rssi != null ? '${player.rssi} dBm' : 'Sin lectura'),
-              _infoRow('Calidad señal', player.qualityLabel),
               _infoRow('Última actividad',
                   '${player.lastSeen.hour.toString().padLeft(2, '0')}:'
                       '${player.lastSeen.minute.toString().padLeft(2, '0')}:'
@@ -3221,7 +3281,7 @@ class _WalletScreenState extends State<WalletScreen>
                       : active
                           ? 'SERVIDOR BLE ACTIVO'
                           : 'SERVIDOR BLE';
-                  final subtitle = status.isNotEmpty
+                  final subtitle = (active && status.isNotEmpty)
                       ? status
                       : active
                           ? 'Esperando que un jugador se conecte...'
@@ -3824,6 +3884,7 @@ class _PremiumCreditCard extends StatefulWidget {
   final int colorId;
   final List<double> history;
   final bool isBank;
+  final CardTier? tier;
 
   const _PremiumCreditCard({
     required this.balance,
@@ -3832,6 +3893,7 @@ class _PremiumCreditCard extends StatefulWidget {
     required this.colorId,
     required this.history,
     required this.isBank,
+    this.tier,
   });
 
   @override
@@ -3839,7 +3901,7 @@ class _PremiumCreditCard extends StatefulWidget {
 }
 
 class _PremiumCreditCardState extends State<_PremiumCreditCard> {
-  static const double _tiltFactor = 20.0;
+  static const double _tiltFactor = 24.0;
   double _gyroX = 0.0;
   double _gyroY = 0.0;
   StreamSubscription<GyroscopeEvent>? _gyroSub;
@@ -3885,7 +3947,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
         cardContent = _buildVipBlackCard(cardHeight: cardHeight);
       } else {
         final wallet = context.read<WalletController>();
-        final tier = wallet.currentTier;
+        final tier = widget.tier ?? wallet.currentTier;
         final styles = _getStyles(tier, color);
 
         cardContent = switch (tier) {
@@ -4329,15 +4391,14 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
         children: [
           Positioned.fill(child: CustomPaint(painter: _CarbonFiberPainter())),
           Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Icon(Icons.alt_route_rounded,
-                        color: Color(0xFFD4AF37), size: 32),
+                    const SizedBox(width: 32),
                     Text(styles.tierName,
                         style: const TextStyle(
                             color: Color(0xFFD4AF37),
@@ -4348,7 +4409,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                 ),
                 const Spacer(),
                 _buildEmvChipDesign(isBlack: true),
-                const SizedBox(height: 10),
+                const SizedBox(height: 4),
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
@@ -4375,14 +4436,6 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                                     fontSize: 16,
                                     fontWeight: FontWeight.w800),
                                 overflow: TextOverflow.ellipsis),
-                            Text(_getRandomQuote(),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    color: const Color(0xFFD4AF37)
-                                        .withValues(alpha: 0.6),
-                                    fontSize: 9,
-                                    fontStyle: FontStyle.italic)),
                           ]),
                     ),
                     Row(
@@ -4401,6 +4454,15 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 4),
+                Text(_getRandomQuote(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: const Color(0xFFD4AF37)
+                            .withValues(alpha: 0.6),
+                        fontSize: 9,
+                        fontStyle: FontStyle.italic)),
               ],
             ),
           ),
