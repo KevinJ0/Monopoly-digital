@@ -10,7 +10,6 @@ import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.nfc.NfcAdapter
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
@@ -30,52 +29,6 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
 
         val messenger = flutterEngine.dartExecutor.binaryMessenger
-
-        // NFC channel
-        MethodChannel(messenger, "com.monopoly/nfc")
-            .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "hasNfcHardware" -> {
-                        val adapter = NfcAdapter.getDefaultAdapter(this)
-                        result.success(adapter != null)
-                    }
-
-                    "isNfcEnabled" -> {
-                        val adapter = NfcAdapter.getDefaultAdapter(this)
-                        result.success(adapter?.isEnabled == true)
-                    }
-
-                    "openNfcSettings" -> {
-                        try {
-                            startActivity(Intent(Settings.ACTION_NFC_SETTINGS))
-                        } catch (_: Exception) {
-                            try {
-                                startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
-                            } catch (_: Exception) {
-                                startActivity(Intent(Settings.ACTION_SETTINGS))
-                            }
-                        }
-                        result.success(null)
-                    }
-
-                    "hceStart" -> {
-                        val jsonPayload = call.argument<String>("payload") ?: ""
-                        HceService.pendingPayload = jsonPayload.toByteArray(Charsets.UTF_8)
-                        result.success(null)
-                    }
-
-                    "hceStop" -> {
-                        HceService.pendingPayload = null
-                        result.success(null)
-                    }
-
-                    "hceRead" -> {
-                        result.notImplemented()
-                    }
-
-                    else -> result.notImplemented()
-                }
-            }
 
         // BLE channel
         MethodChannel(messenger, "com.monopoly/ble")

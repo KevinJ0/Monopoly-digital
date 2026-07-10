@@ -6,7 +6,6 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/screens/nfc_test_screen.dart';
 import 'package:monopoly_banking/screens/ble_test_screen.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/animated_avatar.dart';
@@ -258,18 +257,6 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
                         Navigator.of(context).push(
                           MaterialPageRoute(
                               builder: (_) => const BleTestScreen()),
-                        );
-                      },
-                    ),
-                    IconButton(
-                      icon:
-                          const Icon(Icons.nfc_rounded, color: kTextSecondary),
-                      tooltip: 'NFC Debug',
-                      onPressed: () {
-                        SoundService.playClick();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                              builder: (_) => const NfcTestScreen()),
                         );
                       },
                     ),

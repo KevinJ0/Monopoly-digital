@@ -2,16 +2,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:monopoly_banking/services/hive_service.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
-import 'package:monopoly_banking/services/transports/nfc_transport.dart';
 import 'package:monopoly_banking/services/transports/ble_transport.dart';
 import 'package:monopoly_banking/services/transports/wifi_transport.dart';
 
-export 'package:monopoly_banking/services/transports/nfc_transport.dart'
-    show NfcDisabledException;
-
 typedef P2PPayloadHandler = void Function(Map<String, dynamic> payload);
 
-enum TransportType { nfc, ble, wifi }
+enum TransportType { ble, wifi }
 
 class P2PService {
   static const _transportSettingKey = 'connection_transport';
@@ -19,7 +15,6 @@ class P2PService {
   factory P2PService() => _instance;
   P2PService._();
 
-  final nfcTransport = NfcTransport();
   final bleTransport = BleTransport();
   final wifiTransport = WifiTransport();
 
@@ -31,10 +26,10 @@ class P2PService {
 
   final Map<TransportType, P2PTransport> transports = {};
 
-  TransportType _currentType = TransportType.nfc;
+  TransportType _currentType = TransportType.ble;
   TransportType get currentType => _currentType;
 
-  final _typeCtrl = ValueNotifier<TransportType>(TransportType.nfc);
+  final _typeCtrl = ValueNotifier<TransportType>(TransportType.ble);
   ValueNotifier<TransportType> get typeNotifier => _typeCtrl;
 
   int _txCounter = 0;
@@ -42,7 +37,6 @@ class P2PService {
   Future<void> initTransports({bool isBank = false}) async {
     bleTransport.setBankMode(isBank);
 
-    transports[TransportType.nfc] = nfcTransport;
     transports[TransportType.ble] = bleTransport;
     transports[TransportType.wifi] = wifiTransport;
 
@@ -57,7 +51,6 @@ class P2PService {
       }
     }
 
-    await nfcTransport.initialize();
     await bleTransport.initialize();
     await wifiTransport.initialize();
   }

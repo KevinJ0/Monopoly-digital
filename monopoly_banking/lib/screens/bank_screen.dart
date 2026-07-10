@@ -4,14 +4,12 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:nfc_manager/nfc_manager.dart';
 import 'package:provider/provider.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/services/bank_ledger_service.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
 import 'package:monopoly_banking/services/transports/ble_transport.dart';
-import 'package:monopoly_banking/services/transports/nfc_transport.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
@@ -189,17 +187,6 @@ class _BankScreenState extends State<BankScreen>
         );
         return;
       }
-      if (dialog.transportType == TransportType.nfc &&
-          !await _waitForNfcPlayerReady(dialog)) {
-        await _failOperationDialog(
-          dialog,
-          'No se detectó ningún jugador',
-          'Mantén ambos teléfonos juntos, con NFC activado, hasta que el banco identifique al jugador.',
-          icon: Icons.nfc_rounded,
-          color: Colors.orange,
-        );
-        return;
-      }
 
       final contactReady = await _waitForBleContactIfNeeded(dialog);
       if (!contactReady) return;
@@ -210,24 +197,15 @@ class _BankScreenState extends State<BankScreen>
       );
 
       final ledger = BankLedgerService();
-      final isNfc = dialog.transportType == TransportType.nfc;
-      final targetPlayer = isNfc ? null : _contactPlayer();
-      final playerId =
-          isNfc ? ledger.lastNfcPlayerId : targetPlayer?.displayName;
+      final targetPlayer = _contactPlayer();
+      final playerId = targetPlayer?.displayName;
       if (playerId == null || playerId.isEmpty) {
         throw const BankLedgerException(
-          'No se pudo identificar al jugador. Acércalo primero por NFC para registrarlo en el banco.',
+          'No se pudo identificar al jugador. Conéctalo por BLE primero.',
         );
       }
-      final existingNfcAccount = isNfc ? ledger.accountFor(playerId) : null;
-      final deviceInstallationId = isNfc
-          ? (ledger.lastNfcDeviceInstallationId ??
-              existingNfcAccount?.deviceInstallationId ??
-              '')
-          : (targetPlayer?.deviceInstallationId ?? '');
-      final playerIsActive = isNfc
-          ? existingNfcAccount != null && !existingNfcAccount.bankrupt
-          : (targetPlayer?.playing ?? false);
+      final deviceInstallationId = targetPlayer?.deviceInstallationId ?? '';
+      final playerIsActive = targetPlayer?.playing ?? false;
       if (deviceInstallationId.isEmpty) {
         await _failOperationDialog(
           dialog,
@@ -345,9 +323,7 @@ class _BankScreenState extends State<BankScreen>
         Navigator.of(context, rootNavigator: true).pop();
       }
       if (mounted) {
-        if (e is NfcDisabledException) {
-          await _showNfcDisabledDialog();
-        } else if (e is TransportUnavailableException) {
+        if (e is TransportUnavailableException) {
           _toast(e.transportName, kRed);
         } else {
           context.showFriendlyError(e, s);
@@ -452,42 +428,6 @@ class _BankScreenState extends State<BankScreen>
     dialog.cancelled.addListener(cancelListener);
     final timeout = Timer(const Duration(seconds: 8), () => finish(false));
     playerListener();
-
-    final result = await completer.future;
-    timeout.cancel();
-    notifier.removeListener(playerListener);
-    dialog.cancelled.removeListener(cancelListener);
-    return result;
-  }
-
-  Future<bool> _waitForNfcPlayerReady(
-      _BankOperationDialogController dialog) async {
-    final ledger = BankLedgerService();
-    ledger.beginNfcPlayerDetection();
-    final notifier = ledger.lastNfcPlayerNotifier;
-    final completer = Completer<bool>();
-
-    dialog.update(
-      title: 'Esperando jugador por NFC',
-      message:
-          'Acerca el teléfono del jugador y mantenlo junto al banco para identificarlo...',
-    );
-
-    void finish(bool value) {
-      if (!completer.isCompleted) completer.complete(value);
-    }
-
-    void playerListener() {
-      if (notifier.value?.trim().isNotEmpty == true) finish(true);
-    }
-
-    void cancelListener() {
-      if (dialog.cancelled.value) finish(false);
-    }
-
-    notifier.addListener(playerListener);
-    dialog.cancelled.addListener(cancelListener);
-    final timeout = Timer(const Duration(seconds: 15), () => finish(false));
 
     final result = await completer.future;
     timeout.cancel();
@@ -880,10 +820,7 @@ class _BankScreenState extends State<BankScreen>
                                     : failed
                                         ? controller.failedColor
                                             .withValues(alpha: 0.45)
-                                        : (controller.transportType ==
-                                                    TransportType.nfc
-                                                ? kGold
-                                                : Colors.blue)
+                                        : Colors.blue
                                             .withValues(alpha: 0.35),
                               ),
                             ),
@@ -1086,10 +1023,6 @@ class _BankScreenState extends State<BankScreen>
     final playerId = payload['targetPlayerId'];
     AppAuditLogger.instance.event('BANK_OP', 'send_to_player',
         data: {'type': payloadType, 'playerId': playerId});
-    if (P2PService().currentType == TransportType.nfc) {
-      await _sendToNfcPlayer(payload);
-      return;
-    }
     final transport = P2PService().bleTransport;
     P2PService().setTransport(TransportType.ble);
 
@@ -1164,92 +1097,6 @@ class _BankScreenState extends State<BankScreen>
       );
     } finally {
       _pendingDeliveryAcks.remove(bankTxId);
-    }
-  }
-
-  Future<void> _sendToNfcPlayer(Map<String, dynamic> payload) async {
-    final p2p = P2PService();
-    final nfc = p2p.nfcTransport;
-    final availability = await nfc.checkAvailability();
-    if (availability == NfcAvailability.disabled) {
-      throw const NfcDisabledException();
-    }
-    if (availability != NfcAvailability.enabled &&
-        defaultTargetPlatform != TargetPlatform.android) {
-      throw TransportUnavailableException(
-        'NFC no está disponible en este dispositivo.',
-      );
-    }
-
-    p2p.setTransport(TransportType.nfc);
-    final bankTxId = payload['bankTxId'] as String?;
-    final requiresConfirmation =
-        (payload['type'] == 'bank_state' || payload['type'] == 'handshake') &&
-            bankTxId != null;
-    if (!requiresConfirmation) {
-      await p2p.sendPayload(payload);
-      return;
-    }
-
-    final completer = Completer<Map<String, dynamic>>();
-    _pendingDeliveryAcks[bankTxId] = completer;
-    try {
-      await p2p.sendPayload(payload);
-      await Future<void>.delayed(const Duration(milliseconds: 1200));
-      await nfc.stopHce();
-      unawaited(p2p.startReceiving(null));
-      final confirmation =
-          await completer.future.timeout(const Duration(seconds: 10));
-      final expectedPlayer = payload['targetPlayerId'] as String?;
-      final confirmedPlayer = confirmation['playerId'] as String?;
-      final expectedBalance = (payload['balance'] as num?)?.toDouble();
-      final confirmedBalance =
-          (confirmation['appliedBalance'] as num?)?.toDouble();
-      if (expectedPlayer != confirmedPlayer ||
-          expectedBalance == null ||
-          confirmedBalance == null ||
-          (confirmedBalance - expectedBalance).abs() >= 0.001) {
-        throw TransportUnavailableException(
-          'La confirmación NFC no coincide con la operación enviada.',
-        );
-      }
-    } on TimeoutException {
-      throw TransportUnavailableException(
-        'No se recibió la confirmación NFC. Mantén ambos dispositivos juntos hasta completar.',
-      );
-    } finally {
-      _pendingDeliveryAcks.remove(bankTxId);
-      await nfc.stop();
-    }
-  }
-
-  Future<void> _showNfcDisabledDialog() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('NFC desactivado'),
-        content: const Text(
-            'Para usar la app necesitas NFC. ¿Quieres activarlo ahora?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Activar'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      _toast('Abriendo ajustes de NFC...', kGold);
-      await Future.delayed(const Duration(milliseconds: 600));
-      final nfcTransport =
-          P2PService().transports[TransportType.nfc] as NfcTransport?;
-      await nfcTransport?.openNfcSettings();
-    } else {
-      _toast('NFC necesario para continuar', kRed);
     }
   }
 
@@ -2200,11 +2047,7 @@ class _BankScreenState extends State<BankScreen>
 class _BankOperationDialogController {
   _BankOperationDialogController({required this.transportType})
       : title = ValueNotifier<String>('Preparando operación'),
-        message = ValueNotifier<String>(
-          transportType == TransportType.nfc
-              ? 'Acerca el dispositivo para iniciar el contacto NFC...'
-              : 'Esperando contacto BLE...',
-        );
+        message = ValueNotifier<String>('Esperando contacto BLE...');
 
   final TransportType transportType;
   final ValueNotifier<String> title;
@@ -2287,8 +2130,7 @@ class _OperationLoadingVisualState extends State<_OperationLoadingVisual>
 
   @override
   Widget build(BuildContext context) {
-    final isNfc = widget.transportType == TransportType.nfc;
-    final waitingColor = isNfc ? kGold : Colors.blue;
+    final waitingColor = Colors.blue;
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 320),
       switchInCurve: Curves.easeOutBack,

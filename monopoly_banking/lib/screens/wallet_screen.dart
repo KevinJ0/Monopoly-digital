@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:confetti/confetti.dart';
-import 'package:nfc_manager/nfc_manager.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/core/game_transitions.dart';
@@ -14,7 +13,6 @@ import 'package:monopoly_banking/providers/stats_provider.dart';
 import 'package:monopoly_banking/providers/wallet_controller.dart';
 import 'package:monopoly_banking/screens/bank_screen.dart';
 import 'package:monopoly_banking/screens/bankruptcy_screen.dart';
-import 'package:monopoly_banking/screens/nfc_test_screen.dart';
 import 'package:monopoly_banking/screens/ble_test_screen.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 import 'package:monopoly_banking/services/bank_ledger_service.dart';
@@ -25,7 +23,6 @@ import 'package:monopoly_banking/services/notification_service.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/services/transports/ble_transport.dart';
-import 'package:monopoly_banking/services/transports/nfc_transport.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/animated_avatar.dart';
@@ -51,9 +48,6 @@ class _WalletScreenState extends State<WalletScreen>
   late final Animation<double> _welcomeOpacity;
   late final ConfettiController _confettiCtrl;
 
-  bool _nfcListening = false;
-  final ValueNotifier<NfcAvailability> _nfcAvailability =
-      ValueNotifier<NfcAvailability>(NfcAvailability.unsupported);
   bool _showWelcome = false;
   bool _bankruptcyScreenOpen = false;
   bool _isExiting = false;
@@ -63,7 +57,6 @@ class _WalletScreenState extends State<WalletScreen>
   Timer? _tierCelebrationTimer;
   CardTier? _pendingCelebrationTier;
   bool _evolutionDialogOpen = false;
-  bool _nfcLoopRunning = false;
   bool _bleScanning = false;
   bool _userRequestedBleDisconnect = false;
   bool _dialogActive = false;
@@ -74,10 +67,6 @@ class _WalletScreenState extends State<WalletScreen>
   final Set<String> _seenTxIds = <String>{};
   final List<String> _seenTxIdOrder = <String>[];
   final Map<String, Completer<Map<String, dynamic>>> _bankDeliveryAcks = {};
-  final Map<String, _NfcConnectedPlayer> _nfcPlayersByName =
-      <String, _NfcConnectedPlayer>{};
-  final ValueNotifier<List<_NfcConnectedPlayer>> _nfcPlayersNotifier =
-      ValueNotifier<List<_NfcConnectedPlayer>>(const []);
   VoidCallback? _bankruptListener;
   VoidCallback? _bankStatsListener;
 
@@ -93,8 +82,6 @@ class _WalletScreenState extends State<WalletScreen>
   VoidCallback? _bleConnectionsListener;
   VoidCallback? _bankServerListener;
   final Set<String> _announcedBleConnections = {};
-  Completer<String>? _nfcTransferClaimCompleter;
-  String? _pendingNfcTransferId;
   Completer<void>? _pendingBankOperationCompleter;
   String? _pendingBankOperationId;
 
@@ -121,13 +108,10 @@ class _WalletScreenState extends State<WalletScreen>
     _listenForIncoming();
 
     _typeListener = () {
-      if (P2PService().currentType == TransportType.ble) {
-        _stopNfcLoop();
-      } else {
+      if (P2PService().currentType != TransportType.ble) {
         final bleConnected =
             P2PService().bleTransport.clientConnectedNotifier.value;
         if (_bleScanning || bleConnected) _stopBleClient();
-        _startNfcLoop();
       }
     };
     P2PService().typeNotifier.addListener(_typeListener);
@@ -141,16 +125,11 @@ class _WalletScreenState extends State<WalletScreen>
       _listenToBankruptcy();
       _listenToTierEvolution();
       _connectToHost(session);
-      await _refreshNfcAvailability();
       if (session.isBank) {
         _listenForBankPlayerConnections();
         _listenForBankServerState();
-        if (P2PService().currentType == TransportType.nfc) {
-          _startNfcLoop();
-        }
       } else {
         _listenForBleBankDisconnection();
-        _startNfcLoop();
       }
     });
   }
@@ -276,12 +255,6 @@ class _WalletScreenState extends State<WalletScreen>
           }
         });
       }
-      if (!session.isBank) {
-        _refreshNfcAvailability();
-        _startNfcLoop();
-      }
-    } else if (state == AppLifecycleState.paused) {
-      _stopNfcLoop();
     }
   }
 
@@ -427,16 +400,12 @@ class _WalletScreenState extends State<WalletScreen>
               ...existingAccount.toClientState(),
             };
             final sourceTransport = _transportForIncomingPayload(payload);
-            if (sourceTransport == TransportType.nfc) {
-              await _sendNfcPayloadAndResume(restorePayload);
-            } else {
-              P2PService().setTransport(sourceTransport);
-              try {
-                await P2PService().sendPayload(restorePayload);
-              } on TransportUnavailableException {
-                // La identidad se reenvía cuando el canal BLE termina de
-                // suscribirse; ese segundo intento restaurará la sesión.
-              }
+            P2PService().setTransport(sourceTransport);
+            try {
+              await P2PService().sendPayload(restorePayload);
+            } on TransportUnavailableException {
+              // La identidad se reenvía cuando el canal BLE termina de
+              // suscribirse; ese segundo intento restaurará la sesión.
             }
           } else if (isReturningPlayer) {
             final syncResult = BankLedgerResult(
@@ -470,55 +439,17 @@ class _WalletScreenState extends State<WalletScreen>
               'bankSessionId': BankLedgerService().currentBankSessionId,
               ...result.account.toClientState(),
             };
-            if (sourceTransport == TransportType.nfc) {
-              await _sendNfcPayloadAndResume(handshake);
-            } else if (sourceTransport != TransportType.nfc) {
-              P2PService().setTransport(sourceTransport);
-              try {
-                await P2PService().sendPayload(handshake);
-              } on TransportUnavailableException {
-                // La identidad BLE se repite al terminar la suscripción.
-              }
+            P2PService().setTransport(sourceTransport);
+            try {
+              await P2PService().sendPayload(handshake);
+            } on TransportUnavailableException {
+              // La identidad BLE se repite al terminar la suscripción.
             }
-          }
-          if (type == 'nfc_identity') {
-            await BankLedgerService().rememberNfcPlayer(
-              playerId,
-              deviceInstallationId: deviceInstallationId,
-            );
-          }
         }
       }
+    }
 
-      if (session.isBank && type == 'transfer_claim') {
-        final holdId = payload['holdId'] as String?;
-        final playerId = (payload['playerId'] as String?)?.trim();
-        if (holdId == _pendingNfcTransferId &&
-            playerId != null &&
-            playerId.isNotEmpty) {
-          final completer = _nfcTransferClaimCompleter;
-          if (completer != null && !completer.isCompleted) {
-            completer.complete(playerId);
-          }
-        }
-        return;
-      }
-
-      if (!session.isBank && type == 'transfer_offer') {
-        if (!session.isHandshakeDone) return;
-        final holdId = payload['holdId'] as String?;
-        if (holdId == null || holdId.isEmpty) return;
-        await _sendNfcPayloadAndResume({
-          'type': 'transfer_claim',
-          'holdId': holdId,
-          'playerId': session.name,
-          'name': session.name,
-          'deviceInstallationId': DeviceIdentityService.installationId,
-        });
-        return;
-      }
-
-      if (session.isBank && type == 'bank_operation_request') {
+    if (session.isBank && type == 'bank_operation_request') {
         await _handleBankOperationRequest(payload);
         wallet.refreshHistory();
         return;
@@ -553,7 +484,6 @@ class _WalletScreenState extends State<WalletScreen>
           'deviceInstallationId': DeviceIdentityService.installationId,
         });
       } else if (type == 'handshake_confirm') {
-        _registerNfcPlayerFromPayload(payload);
         return;
       } else if (type == 'bank_state') {
         if (!session.isHandshakeDone) return;
@@ -693,12 +623,8 @@ class _WalletScreenState extends State<WalletScreen>
     final completer = Completer<Map<String, dynamic>>();
     _bankDeliveryAcks[result.transactionId] = completer;
     try {
-      if (transportType == TransportType.nfc) {
-        await _sendNfcPayloadAndResume(payload);
-      } else {
-        P2PService().setTransport(transportType);
-        await P2PService().sendPayload(payload);
-      }
+      P2PService().setTransport(transportType);
+      await P2PService().sendPayload(payload);
 
       final confirmation =
           await completer.future.timeout(const Duration(seconds: 12));
@@ -734,10 +660,6 @@ class _WalletScreenState extends State<WalletScreen>
       'message': message,
       if (requestId != null) 'requestId': requestId,
     };
-    if (transportType == TransportType.nfc) {
-      await _sendNfcPayloadAndResume(payload);
-      return;
-    }
     P2PService().setTransport(transportType);
     await P2PService().sendPayload(payload);
   }
@@ -759,46 +681,8 @@ class _WalletScreenState extends State<WalletScreen>
       'vaultTargetPasses': 0,
       'vaultCurrentPasses': 0,
     };
-    if (transportType == TransportType.nfc) {
-      await _sendNfcPayloadAndResume(payload);
-      return;
-    }
     P2PService().setTransport(transportType);
     await P2PService().sendPayload(payload);
-  }
-
-  Future<void> _sendNfcPayloadAndResume(Map<String, dynamic> payload) async {
-    _stopNfcLoop();
-    P2PService().setTransport(TransportType.nfc);
-    final session = context.read<SessionProvider>();
-    await P2PService().sendPayload(payload);
-    unawaited(
-        Future<void>.delayed(const Duration(milliseconds: 1400), () async {
-      final nfc = P2PService().nfcTransport;
-      if (!session.isBank) {
-        await nfc.stopHce();
-      }
-      if (!mounted || P2PService().currentType != TransportType.nfc) return;
-      if (session.isBank) {
-        _startNfcLoop();
-        return;
-      }
-      if (!mounted) return;
-      _nfcLoopRunning = true;
-      try {
-        await P2PService()
-            .startReceiving(null)
-            .timeout(const Duration(seconds: 8));
-      } catch (_) {
-        await P2PService().nfcTransport.stop();
-      }
-      if (!mounted || P2PService().currentType != TransportType.nfc) return;
-      Future.delayed(const Duration(seconds: 4), () {
-        if (mounted && P2PService().currentType == TransportType.nfc) {
-          _startNfcLoop();
-        }
-      });
-    }));
   }
 
   Future<void> _showBankOperationError(String message) async {
@@ -860,29 +744,6 @@ class _WalletScreenState extends State<WalletScreen>
     }
   }
 
-  void _registerNfcPlayerFromPayload(Map<String, dynamic> payload) {
-    if (!context.read<SessionProvider>().isBank) return;
-    if (payload['_bleDeviceId'] != null) return;
-
-    final name =
-        (payload['playerId'] as String?) ?? (payload['name'] as String?);
-    final playerId = name?.trim();
-    if (playerId == null || playerId.isEmpty) return;
-
-    _nfcPlayersByName[playerId] = _NfcConnectedPlayer(
-      id: playerId,
-      lastSeen: DateTime.now(),
-    );
-    unawaited(
-      BankLedgerService().rememberNfcPlayer(
-        playerId,
-        deviceInstallationId: payload['deviceInstallationId'] as String?,
-      ),
-    );
-    _nfcPlayersNotifier.value = _nfcPlayersByName.values.toList()
-      ..sort((a, b) => b.lastSeen.compareTo(a.lastSeen));
-  }
-
   Future<void> _handleBankTransferHoldRequest(
       Map<String, dynamic> payload) async {
     final sourceTransport = _transportForIncomingPayload(payload);
@@ -937,22 +798,17 @@ class _WalletScreenState extends State<WalletScreen>
               if (sending || completed) return;
               setDialogState(() {
                 sending = true;
-                message = sourceTransport == TransportType.nfc
-                    ? 'Acerca el celular del jugador receptor al banco.'
-                    : 'Buscando al jugador receptor en contacto...';
+                message = 'Buscando al jugador receptor en contacto...';
               });
 
               try {
-                final String? receiverName;
-                if (sourceTransport == TransportType.nfc) {
-                  receiverName = await _waitForNfcTransferClaim(
-                    holdId: held.transactionId,
-                    amount: amount,
-                    fromName: fromName,
-                  );
-                } else {
-                  receiverName = _currentTransferReceiver()?.displayName;
+                var players = P2PService().bleTransport.connectedPlayersNotifier.value
+                    .where((p) => p.subscribed && p.playing).toList();
+                if (players.isEmpty) {
+                  players = P2PService().bleTransport.connectedPlayersNotifier.value
+                      .where((p) => p.subscribed).toList();
                 }
+                final String? receiverName = players.isNotEmpty ? players.first.displayName : null;
                 if (receiverName == null) {
                   if (!ctx.mounted) return;
                   setDialogState(() {
@@ -1136,101 +992,6 @@ class _WalletScreenState extends State<WalletScreen>
     });
   }
 
-  Future<String?> _waitForNfcTransferClaim({
-    required String holdId,
-    required double amount,
-    required String fromName,
-  }) async {
-    final completer = Completer<String>();
-    _nfcTransferClaimCompleter = completer;
-    _pendingNfcTransferId = holdId;
-    Timer? timeout;
-
-    try {
-      _stopNfcLoop();
-      P2PService().setTransport(TransportType.nfc);
-      await P2PService().sendPayload({
-        'type': 'transfer_offer',
-        'holdId': holdId,
-        'amount': amount,
-        'fromPlayerId': fromName,
-      });
-
-      await Future<void>.delayed(const Duration(milliseconds: 1400));
-      await P2PService().nfcTransport.stopHce();
-      if (!mounted) return null;
-      _startNfcLoop();
-
-      timeout = Timer(const Duration(seconds: 20), () {
-        if (!completer.isCompleted) completer.complete('');
-      });
-      final playerId = await completer.future;
-      return playerId.isEmpty ? null : playerId;
-    } finally {
-      timeout?.cancel();
-      if (identical(_nfcTransferClaimCompleter, completer)) {
-        _nfcTransferClaimCompleter = null;
-        _pendingNfcTransferId = null;
-      }
-    }
-  }
-
-  BleConnectedPlayer? _currentTransferReceiver() {
-    final players = P2PService().bleTransport.connectedPlayersNotifier.value;
-    for (final player in players) {
-      if (player.subscribed && player.playing) {
-        return player;
-      }
-    }
-    return null;
-  }
-
-  void _startNfcLoop() {
-    if (_nfcLoopRunning) return;
-    final currentTransport = P2PService().currentType;
-    if (currentTransport == TransportType.ble) return;
-    _nfcLoopRunning = true;
-    _runNfcOnce();
-  }
-
-  void _stopNfcLoop() {
-    _nfcLoopRunning = false;
-  }
-
-  Future<void> _runNfcOnce() async {
-    if (!mounted || !_nfcLoopRunning) {
-      _nfcLoopRunning = false;
-      return;
-    }
-    try {
-      final session = context.read<SessionProvider>();
-      if (!session.isBank) {
-        P2PService().setTransport(TransportType.nfc);
-        try {
-          await P2PService()
-              .startReceiving(null)
-              .timeout(const Duration(seconds: 3));
-        } on TimeoutException {
-          await P2PService().nfcTransport.stop();
-        }
-      } else {
-        await P2PService().startReceiving(null);
-      }
-    } catch (e, s) {
-      if (!mounted || !_nfcLoopRunning) {
-        _nfcLoopRunning = false;
-        return;
-      }
-      if (mounted) _safeShowFriendlyError(e, s);
-    }
-    if (_nfcLoopRunning && mounted) {
-      await Future.delayed(const Duration(milliseconds: 800));
-      _runNfcOnce();
-    } else {
-      _nfcLoopRunning = false;
-    }
-  }
-
   Future<void> _startBleClient() async {
     if (_bleScanning) return;
     final transport = P2PService().bleTransport;
@@ -1300,38 +1061,6 @@ class _WalletScreenState extends State<WalletScreen>
         _confettiCtrl.play();
       }
     });
-  }
-
-  // ignore: unused_element
-  Future<void> _showNfcDisabledDialog() async {
-    if (!mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('NFC desactivado'),
-        content: const Text(
-            'Para usar la app necesitas NFC. ¿Quieres activarlo ahora?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Activar'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      _showToast('Abriendo ajustes de NFC...', kGold);
-      await Future.delayed(const Duration(milliseconds: 600));
-      final nfcTransport =
-          P2PService().transports[TransportType.nfc] as NfcTransport?;
-      await nfcTransport?.openNfcSettings();
-    } else {
-      _showToast('NFC necesario para continuar', Colors.red);
-    }
   }
 
   void _showToast(String msg, Color color) {
@@ -1436,11 +1165,6 @@ class _WalletScreenState extends State<WalletScreen>
                   _showToast('Conéctate al banco por BLE primero.', kRed);
                   return;
                 }
-                if (transportType == TransportType.nfc &&
-                    _nfcAvailability.value != NfcAvailability.enabled) {
-                  await _showNfcDisabledDialog();
-                  return;
-                }
 
                 try {
                   final request = {
@@ -1451,10 +1175,6 @@ class _WalletScreenState extends State<WalletScreen>
                     'deviceInstallationId':
                         DeviceIdentityService.installationId,
                   };
-                  if (transportType == TransportType.nfc) {
-                    _showToast('Usa Bluetooth para transferencias.', Colors.orange);
-                    return;
-                  }
                   P2PService().setTransport(TransportType.ble);
                   await P2PService().sendPayload(request);
                   if (!mounted || !dialogContext.mounted) return;
@@ -1642,49 +1362,6 @@ class _WalletScreenState extends State<WalletScreen>
     );
   }
 
-  Future<void> _toggleNfc() async {
-    final availability = await _refreshNfcAvailability();
-    if (availability == NfcAvailability.unsupported) {
-      _showToast('Este dispositivo no tiene NFC disponible', kRed);
-      return;
-    }
-
-    if (availability == NfcAvailability.disabled) {
-      await _showNfcDisabledDialog();
-      await _refreshNfcAvailability();
-      return;
-    }
-
-    setState(() {
-      _nfcListening = !_nfcListening;
-      if (_nfcListening) {
-        _pulseCtrl.reset();
-        _pulseCtrl.repeat();
-      } else {
-        _pulseCtrl.stop();
-        _pulseCtrl.reset();
-      }
-    });
-  }
-
-  Future<NfcAvailability> _refreshNfcAvailability() async {
-    final transport =
-        P2PService().transports[TransportType.nfc] as NfcTransport?;
-    final availability =
-        await transport?.checkAvailability() ?? NfcAvailability.unsupported;
-    _nfcAvailability.value = availability;
-
-    if (availability != NfcAvailability.enabled && _nfcListening && mounted) {
-      _safeSetState(() {
-        _nfcListening = false;
-        _pulseCtrl.stop();
-        _pulseCtrl.reset();
-      });
-    }
-
-    return availability;
-  }
-
   Future<void> _triggerWelcomeAnimation(String? name) async {
     _safeSetState(() {
       _showWelcome = true;
@@ -1713,7 +1390,6 @@ class _WalletScreenState extends State<WalletScreen>
     }
     _bankDeliveryAcks.clear();
     WidgetsBinding.instance.removeObserver(this);
-    _stopNfcLoop();
     _stopBleClient();
     P2PService().shutdown();
     _payloadSub?.cancel();
@@ -1750,8 +1426,6 @@ class _WalletScreenState extends State<WalletScreen>
     _pulseCtrl.dispose();
     _welcomeCtrl.dispose();
     _confettiCtrl.dispose();
-    _nfcAvailability.dispose();
-    _nfcPlayersNotifier.dispose();
     super.dispose();
   }
 
@@ -1801,7 +1475,7 @@ class _WalletScreenState extends State<WalletScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            isBank && bankBleOk
+            isBank && bankBleOk && !kBankTabsActive
                 ? FloatingActionButton.extended(
                     heroTag: 'bank_panel_btn',
                     onPressed: () async {
@@ -2212,11 +1886,6 @@ class _WalletScreenState extends State<WalletScreen>
       actions: [
         if (!compactActions) ...[
           IconButton(
-            icon: const Icon(Icons.nfc_rounded, color: kTextSecondary),
-            tooltip: 'NFC Debug',
-            onPressed: _openNfcDebug,
-          ),
-          IconButton(
             icon: const Icon(Icons.bluetooth_rounded, color: kTextSecondary),
             tooltip: 'BLE Debug',
             onPressed: _openBleDebug,
@@ -2243,14 +1912,9 @@ class _WalletScreenState extends State<WalletScreen>
             tooltip: 'Más opciones',
             color: kBgCard,
             onSelected: (value) {
-              if (value == 'nfc') _openNfcDebug();
               if (value == 'ble') _openBleDebug();
             },
             itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: 'nfc',
-                child: Text('NFC Debug'),
-              ),
               PopupMenuItem(
                 value: 'ble',
                 child: Text('BLE Debug'),
@@ -2261,26 +1925,13 @@ class _WalletScreenState extends State<WalletScreen>
     );
   }
 
-  Future<void> _openNfcDebug() async {
-    SoundService.playClick();
-    _stopNfcLoop();
-    await P2PService().shutdown();
-    if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const NfcTestScreen()),
-    );
-    if (mounted) _startNfcLoop();
-  }
-
   Future<void> _openBleDebug() async {
     SoundService.playClick();
-    _stopNfcLoop();
     await P2PService().shutdown();
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const BleTestScreen()),
     );
-    if (mounted) _startNfcLoop();
   }
 
   void _confirmExit(SessionProvider session) {
@@ -2856,7 +2507,9 @@ class _WalletScreenState extends State<WalletScreen>
       if (isBank) return _buildBleBankPanel();
       return _buildBleClientPanel(color);
     }
-    return _buildNfcButton(color);
+    // Fallback: always prefer BLE
+    if (isBank) return _buildBleBankPanel();
+    return _buildBleClientPanel(color);
   }
 
   Widget _buildConnectedPlayersPanel(Color color) {
@@ -2867,61 +2520,55 @@ class _WalletScreenState extends State<WalletScreen>
       child: ValueListenableBuilder<List<BleConnectedPlayer>>(
         valueListenable: transport.connectedPlayersNotifier,
         builder: (context, blePlayers, _) {
-          return ValueListenableBuilder<List<_NfcConnectedPlayer>>(
-            valueListenable: _nfcPlayersNotifier,
-            builder: (context, nfcPlayers, _) {
-              final total = blePlayers.length + nfcPlayers.length;
+          final total = blePlayers.length;
 
-              return Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: kBgCard.withValues(alpha: 0.82),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: kBorder),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: kBgCard.withValues(alpha: 0.82),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: kBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Icon(Icons.groups_rounded, color: color, size: 18),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'Jugadores conectados',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: kTextPrimary,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 13,
-                            ),
-                          ),
+                    Icon(Icons.groups_rounded, color: color, size: 18),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Jugadores conectados',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: kTextPrimary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
                         ),
-                        Text(
-                          '$total',
-                          style: const TextStyle(
-                            color: kTextSecondary,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (total == 0) ...[
-                      const SizedBox(height: 10),
-                      const Text(
-                        'Sin jugadores activos',
-                        style: TextStyle(color: kTextSecondary, fontSize: 12),
                       ),
-                    ] else ...[
-                      const SizedBox(height: 10),
-                      ...blePlayers.map(_buildBleConnectedPlayerTile),
-                      ...nfcPlayers.map(_buildNfcConnectedPlayerTile),
-                    ],
+                    ),
+                    Text(
+                      '$total',
+                      style: const TextStyle(
+                        color: kTextSecondary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ],
                 ),
-              );
-            },
+                if (total == 0) ...[
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Sin jugadores activos',
+                    style: TextStyle(color: kTextSecondary, fontSize: 12),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 10),
+                  ...blePlayers.map(_buildBleConnectedPlayerTile),
+                ],
+              ],
+            ),
           );
         },
       ),
@@ -3037,17 +2684,6 @@ class _WalletScreenState extends State<WalletScreen>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildNfcConnectedPlayerTile(_NfcConnectedPlayer player) {
-    return _ConnectedPlayerTile(
-      name: player.id,
-      deviceName: 'Contacto NFC',
-      transport: 'NFC',
-      detail: 'Jugando - Contacto',
-      color: kGold,
-      icon: Icons.nfc_rounded,
     );
   }
 
@@ -3770,105 +3406,6 @@ class _WalletScreenState extends State<WalletScreen>
           ),
         );
       },
-    );
-  }
-
-  Widget _buildNfcButton(Color color) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-      child: ValueListenableBuilder<NfcAvailability>(
-        valueListenable: _nfcAvailability,
-        builder: (context, availability, _) {
-          final unsupported = availability == NfcAvailability.unsupported;
-          final disabled = availability == NfcAvailability.disabled;
-          final activeColor = unsupported
-              ? kTextSecondary
-              : disabled
-                  ? kRed
-                  : color;
-          final label = unsupported
-              ? 'NFC NO DISPONIBLE'
-              : disabled
-                  ? 'NFC APAGADO - ABRIR AJUSTES'
-                  : _nfcListening
-                      ? 'NFC ESCANEANDO...'
-                      : 'ACTIVAR NFC / CONTACTLESS';
-          final icon = unsupported
-              ? Icons.block_rounded
-              : disabled
-                  ? Icons.settings_rounded
-                  : _nfcListening
-                      ? Icons.nfc_rounded
-                      : Icons.sensors_off_rounded;
-
-          return GestureDetector(
-            onTap: unsupported
-                ? null
-                : () {
-                    SoundService.playClick();
-                    _toggleNfc();
-                  },
-            child: AnimatedBuilder(
-              animation: _pulseCtrl,
-              builder: (context, child) {
-                return Container(
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color:
-                        _nfcListening ? color.withValues(alpha: 0.05) : kBgCard,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: _nfcListening
-                          ? color.withValues(
-                              alpha: 0.3 + (0.7 * (1.0 - _pulseCtrl.value)))
-                          : disabled
-                              ? kRed.withValues(alpha: 0.35)
-                              : kBorder,
-                      width: _nfcListening ? 2 : 1,
-                    ),
-                    gradient: _nfcListening
-                        ? LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.transparent,
-                              color.withValues(alpha: 0.2),
-                              Colors.transparent,
-                            ],
-                            stops: [
-                              (_pulseCtrl.value - 0.3).clamp(0.0, 1.0),
-                              _pulseCtrl.value,
-                              (_pulseCtrl.value + 0.3).clamp(0.0, 1.0),
-                            ],
-                          )
-                        : null,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(icon, color: activeColor, size: 22),
-                      const SizedBox(width: 12),
-                      Flexible(
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: activeColor,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                            letterSpacing: 1.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          );
-        },
-      ),
     );
   }
 
@@ -4814,16 +4351,6 @@ class _StatChip extends StatelessWidget {
       ),
     );
   }
-}
-
-class _NfcConnectedPlayer {
-  final String id;
-  final DateTime lastSeen;
-
-  const _NfcConnectedPlayer({
-    required this.id,
-    required this.lastSeen,
-  });
 }
 
 class _ConnectedPlayerTile extends StatelessWidget {
