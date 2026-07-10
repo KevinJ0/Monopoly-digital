@@ -499,17 +499,105 @@ class _BankScreenState extends State<BankScreen>
   Future<bool> _waitForBleContactIfNeeded(
       _BankOperationDialogController dialog) async {
     if (dialog.transportType != TransportType.ble) return true;
-    return true;
+    final transport = P2PService().bleTransport;
+    if (!transport.serverActiveNotifier.value ||
+        !transport.clientConnectedNotifier.value) {
+      return true;
+    }
+
+    // Resetear todo el estado de contacto para forzar nueva verificación
+    transport.contactReadyNotifier.value = false;
+    transport.contactRssiNotifier.value = null;
+
+    // Resetear contacto de TODOS los jugadores en la lista
+    final current = transport.connectedPlayersNotifier.value;
+    final reset = <BleConnectedPlayer>[];
+    for (final player in current) {
+      if (player.contactReady) {
+        reset.add(player.copyWith(contactReady: false));
+      } else {
+        reset.add(player);
+      }
+    }
+    transport.connectedPlayersNotifier.value = reset;
+
+    final completer = Completer<bool>();
+    dialog.update(
+      title: 'Acerca el jugador al banco',
+      message: 'Acerca los dispositivos para ejecutar esta operación.',
+    );
+
+    void finish(bool value) {
+      if (completer.isCompleted) return;
+      completer.complete(value);
+    }
+
+    void contactListener() {
+      if (_hasBleContact(transport)) {
+        finish(true);
+      }
+    }
+
+    transport.contactReadyNotifier.addListener(contactListener);
+    transport.connectedPlayersNotifier.addListener(contactListener);
+    void cancelListener() {
+      if (dialog.cancelled.value) finish(false);
+    }
+
+    dialog.cancelled.addListener(cancelListener);
+
+    void rssiListener() {
+      final rssi =
+          _closestBleRssi(transport) ?? transport.contactRssiNotifier.value;
+      if (rssi == null) return;
+      dialog.update(
+        title: 'Acerca el jugador al banco',
+        message: 'Señal actual: $rssi dBm. Acerca más los dispositivos.',
+      );
+    }
+
+    transport.contactRssiNotifier.addListener(rssiListener);
+    transport.connectedPlayersNotifier.addListener(rssiListener);
+    contactListener();
+    rssiListener();
+
+    final timeout = Timer(const Duration(seconds: 15), () => finish(false));
+
+    final result = await completer.future;
+    timeout.cancel();
+    transport.contactReadyNotifier.removeListener(contactListener);
+    transport.connectedPlayersNotifier.removeListener(contactListener);
+    transport.contactRssiNotifier.removeListener(rssiListener);
+    transport.connectedPlayersNotifier.removeListener(rssiListener);
+    dialog.cancelled.removeListener(cancelListener);
+    return result;
   }
 
   BleConnectedPlayer? _contactPlayer() {
     final players = P2PService().bleTransport.connectedPlayersNotifier.value;
-    final active = players
-        .where((player) => player.subscribed && player.playing)
+    final inContact = players
+        .where((player) => player.subscribed && player.contactReady)
         .toList();
-    if (active.isEmpty) return null;
-    active.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
-    return active.first;
+    if (inContact.isEmpty) return null;
+    inContact.sort((a, b) => (b.rssi ?? -999).compareTo(a.rssi ?? -999));
+    return inContact.first;
+  }
+
+  bool _hasBleContact(BleTransport transport) {
+    if (transport.contactReadyNotifier.value) return true;
+    return transport.connectedPlayersNotifier.value.any(
+      (player) => player.subscribed && player.contactReady,
+    );
+  }
+
+  int? _closestBleRssi(BleTransport transport) {
+    final values = transport.connectedPlayersNotifier.value
+        .where((player) => player.subscribed && player.rssi != null)
+        .map((player) => player.rssi!)
+        .toList();
+    if (values.isEmpty) return null;
+    values.sort((a, b) => b.compareTo(a));
+    return values.first;
   }
 
   Future<void> _handleTransferHoldRequest(Map<String, dynamic> payload) async {
@@ -1014,6 +1102,18 @@ class _BankScreenState extends State<BankScreen>
     if (!transport.clientConnectedNotifier.value) {
       throw TransportUnavailableException(
         'No hay jugador conectado por BLE. Abre la app del jugador y conéctalo al banco.',
+      );
+    }
+
+    if (!_hasBleContact(transport)) {
+      final rssi =
+          _closestBleRssi(transport) ?? transport.contactRssiNotifier.value;
+      AppAuditLogger.instance.event('BANK_OP', 'no_ble_contact',
+          data: {'rssi': rssi, 'contactReady': transport.contactReadyNotifier.value});
+      throw TransportUnavailableException(
+        rssi == null
+            ? 'No se recibió señal de proximidad BLE. Acerca los dispositivos y mantenlos juntos.'
+            : 'Jugador fuera de contacto BLE ($rssi dBm). Acerca los dispositivos.',
       );
     }
 

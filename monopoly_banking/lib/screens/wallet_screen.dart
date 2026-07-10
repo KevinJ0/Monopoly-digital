@@ -1452,13 +1452,15 @@ class _WalletScreenState extends State<WalletScreen>
                         DeviceIdentityService.installationId,
                   };
                   if (transportType == TransportType.nfc) {
-                    await _sendNfcPayloadAndResume(request);
+                    if (!mounted || !dialogContext.mounted) return;
+                    Navigator.pop(dialogContext);
+                    await _showNfcTransferDialog(request, amount, brandColor);
                   } else {
                     P2PService().setTransport(TransportType.ble);
                     await P2PService().sendPayload(request);
+                    if (!mounted || !dialogContext.mounted) return;
+                    Navigator.pop(dialogContext);
                   }
-                  if (!mounted || !dialogContext.mounted) return;
-                  Navigator.pop(dialogContext);
                 } catch (e, s) {
                   if (mounted) _safeShowFriendlyError(e, s);
                 }
@@ -1473,6 +1475,130 @@ class _WalletScreenState extends State<WalletScreen>
     amountCtrl.dispose();
     } finally {
       _dialogActive = false;
+    }
+  }
+
+  Future<void> _showNfcTransferDialog(
+    Map<String, dynamic> request,
+    double amount,
+    Color brandColor,
+  ) async {
+    final completer = Completer<void>();
+    final notifier = ValueNotifier<String>(
+      'Acerca tu dispositivo al banco para enviar \$${amount.toStringAsFixed(0)}.',
+    );
+    final successNotifier = ValueNotifier<bool>(false);
+    bool cancelled = false;
+
+    StreamSubscription<Map<String, dynamic>>? sub;
+    sub = P2PService().payloadStream.listen((p) {
+      final type = p['type'] as String?;
+      if (type == 'bank_state' || type == 'bank_operation_error') {
+        if (!completer.isCompleted) {
+          if (type == 'bank_state') {
+            successNotifier.value = true;
+            notifier.value = 'Transferencia de ${formatMoney(amount)} enviada al banco.';
+            completer.complete();
+          } else {
+            final msg = (p['message'] as String?) ?? 'El banco rechazó.';
+            completer.completeError(Exception(msg));
+          }
+        }
+      }
+    });
+
+    _dialogActive = true;
+    try {
+      final dialogFuture = showPremiumDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        child: ValueListenableBuilder<bool>(
+          valueListenable: successNotifier,
+          builder: (c, success, _) {
+            return ValueListenableBuilder<String>(
+              valueListenable: notifier,
+              builder: (c, msg, _) {
+                return AlertDialog(
+                  backgroundColor: kBgCard,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  title: Column(children: [
+                    Icon(success ? Icons.check_circle_rounded : Icons.nfc_rounded,
+                        color: success ? kGreen : kGold, size: 64),
+                    const SizedBox(height: 12),
+                    Text(success ? 'Transferencia enviada' : 'Acercar dispositivo',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: kTextPrimary, fontWeight: FontWeight.w800)),
+                  ]),
+                  content: Text(msg, textAlign: TextAlign.center,
+                      style: const TextStyle(color: kTextSecondary, height: 1.35)),
+                  actions: [
+                    if (success)
+                      SizedBox(width: double.infinity, child:
+                        ElevatedButton(
+                          onPressed: () { SoundService.playClick(); Navigator.pop(c); },
+                          style: ElevatedButton.styleFrom(backgroundColor: brandColor, foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                          child: const Text('Aceptar', style: TextStyle(fontWeight: FontWeight.w800)),
+                        ),
+                      )
+                    else
+                      SizedBox(width: double.infinity, child:
+                        OutlinedButton(
+                          onPressed: () {
+                            SoundService.playClick();
+                            cancelled = true;
+                            if (!completer.isCompleted) completer.completeError(Exception('Cancelada.'));
+                            Navigator.pop(c);
+                          },
+                          style: OutlinedButton.styleFrom(foregroundColor: kRed, side: const BorderSide(color: kRed),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                          child: const Text('Cancelar'),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
+      );
+      unawaited(_executeNfcTransfer(request, completer, cancelled));
+      await dialogFuture;
+    } on Exception catch (e) {
+      if (mounted && e.toString() != 'Cancelada.') {
+        NotificationService().show(e.toString(), backgroundColor: Colors.orange, duration: const Duration(seconds: 4));
+      }
+    } catch (e, s) {
+      if (mounted) _safeShowFriendlyError(e, s);
+    } finally {
+      sub.cancel();
+      notifier.dispose();
+      successNotifier.dispose();
+      _dialogActive = false;
+    }
+  }
+
+  Future<void> _executeNfcTransfer(
+    Map<String, dynamic> request,
+    Completer<void> completer,
+    bool cancelled,
+  ) async {
+    try {
+      P2PService().setTransport(TransportType.nfc);
+      await P2PService().nfcTransport.sendPayload(request);
+      if (cancelled || completer.isCompleted) return;
+      await Future<void>.delayed(const Duration(milliseconds: 1400));
+      if (cancelled || completer.isCompleted) return;
+      await P2PService().nfcTransport.stopHce();
+      if (cancelled || completer.isCompleted) return;
+      try {
+        await P2PService().startReceiving(null).timeout(const Duration(seconds: 8));
+      } on TimeoutException { /* banco no respondió */ }
+      if (!cancelled && !completer.isCompleted) {
+        completer.completeError(TimeoutException('El banco no confirmó la transferencia. Acerca los dispositivos.'));
+      }
+    } catch (e) {
+      if (!cancelled && !completer.isCompleted) completer.completeError(e);
     }
   }
 
