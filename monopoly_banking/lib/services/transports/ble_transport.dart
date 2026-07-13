@@ -243,6 +243,7 @@ class BleTransport extends P2PTransport {
   bool _isReconnecting = false;
   bool _notificationRetryScheduled = false;
   bool _transportDisposed = false;
+  Timer? _scanRefreshTimer;
   Completer<DiscoveredDevice>? _pendingScanCompleter;
   String? _connectedDeviceId;
   Map<String, dynamic>? _clientIdentity;
@@ -723,6 +724,8 @@ class BleTransport extends P2PTransport {
 
   void _markClientDisconnected({String status = 'Desconectado'}) {
     _stopKeepAlive();
+    _scanRefreshTimer?.cancel();
+    _scanRefreshTimer = null;
     final connection = _connectSub;
     _connectSub = null;
     unawaited(connection?.cancel());
@@ -983,6 +986,75 @@ class BleTransport extends P2PTransport {
     });
 
     unawaited(_awaitScanAndConnect(completer, serviceUuid));
+
+    // Scan refresh: reinicia silenciosamente el scan cada 90s para
+    // evitar que el stack BLE de Android se estanque.
+    _scanRefreshTimer?.cancel();
+    _scanRefreshTimer = Timer.periodic(const Duration(seconds: 90), (_) {
+      _silentRefreshScan(onData);
+    });
+  }
+
+  Future<void> _silentRefreshScan(
+    void Function(Map<String, dynamic>) onData,
+  ) async {
+    if (_transportDisposed || !_reconnectAllowed || _clientConnected) {
+      _scanRefreshTimer?.cancel();
+      _scanRefreshTimer = null;
+      return;
+    }
+    _audit('silent_scan_refresh');
+    AppAuditLogger.instance.event('BLE_SCAN', 'silent_refresh');
+
+    // Cancelar el scan actual
+    final oldScan = _scanSub;
+    final oldCompleter = _pendingScanCompleter;
+
+    // Iniciar un scan nuevo con los mismos parámetros
+    final serviceUuid = Uuid.parse(_serviceUuid);
+    final completer = Completer<DiscoveredDevice>();
+    _pendingScanCompleter = completer;
+    _scanSub = _ble.scanForDevices(
+      withServices: [serviceUuid],
+      scanMode: ScanMode.lowLatency,
+    ).listen((device) {
+      debugPrint(
+          '[BLE client] Descubierto id=${device.id} rssi=${device.rssi}');
+      final suffix =
+          device.id.length > 6 ? device.id.substring(0, 6) : device.id;
+      final displayName =
+          device.name.trim().isEmpty ? 'Banco cercano $suffix' : device.name;
+      final next = [...discoveredBanksNotifier.value];
+      final index = next.indexWhere((bank) => bank.id == device.id);
+      final bank = BleBankDevice(
+        id: device.id,
+        name: displayName,
+        rssi: device.rssi,
+      );
+      if (index >= 0) {
+        next[index] = bank;
+      } else {
+        next.add(bank);
+      }
+      next.sort((a, b) => b.rssi.compareTo(a.rssi));
+      discoveredBanksNotifier.value = next;
+
+      if (!completer.isCompleted) {
+        completer.complete(device);
+      }
+    }, onError: (Object error, StackTrace stack) {
+      if (!completer.isCompleted) {
+        completer.completeError(error, stack);
+      }
+    });
+
+    // Cancelar el scan viejo después de iniciar el nuevo
+    await oldScan?.cancel();
+    if (oldCompleter != null && !oldCompleter.isCompleted) {
+      oldCompleter.completeError(StateError('Scan refreshed'));
+    }
+
+    unawaited(_awaitScanAndConnect(completer, serviceUuid));
   }
 
   Future<void> _awaitScanAndConnect(
@@ -991,6 +1063,8 @@ class BleTransport extends P2PTransport {
       final device =
           await completer.future.timeout(const Duration(seconds: 20));
       if (_transportDisposed || !_reconnectAllowed) return;
+      _scanRefreshTimer?.cancel();
+      _scanRefreshTimer = null;
       await _scanSub?.cancel();
       _scanSub = null;
       _pendingScanCompleter = null;
@@ -1074,8 +1148,9 @@ class BleTransport extends P2PTransport {
     AppAuditLogger.instance.event('BLE_RECONNECT', 'start');
     final callback = _receiveCallback;
     await _fullStop();
+    _transportDisposed = false;
     try {
-      if (callback != null && !_transportDisposed && _reconnectAllowed) {
+      if (callback != null && _reconnectAllowed) {
         _receiveCallback = callback;
         connectionStatusNotifier.value = 'Reconectando...';
         await _startClientScan(callback);
@@ -1436,6 +1511,8 @@ class BleTransport extends P2PTransport {
     _notificationRetryScheduled = false;
     _serverStarting = false;
     _stopKeepAlive();
+    _scanRefreshTimer?.cancel();
+    _scanRefreshTimer = null;
     _clientConnected = false;
     _clientCharacteristicReady = false;
     _preparingNotificationChannel = false;
@@ -1545,6 +1622,8 @@ class BleTransport extends P2PTransport {
   @override
   void dispose() {
     _stopKeepAlive();
+    _scanRefreshTimer?.cancel();
+    _scanRefreshTimer = null;
     _scanSub?.cancel();
     _connectSub?.cancel();
     _notifySub?.cancel();

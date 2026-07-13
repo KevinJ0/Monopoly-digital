@@ -30,6 +30,7 @@ import 'package:monopoly_banking/widgets/odometer_widget.dart';
 import 'package:monopoly_banking/widgets/premium_dialog.dart';
 import 'package:monopoly_banking/widgets/monopoly_background.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
+import 'package:monopoly_banking/widgets/player_info_widget.dart';
 import 'package:monopoly_banking/widgets/transaction_tile.dart';
 import 'package:monopoly_banking/widgets/transport_selector.dart';
 
@@ -147,7 +148,9 @@ class _WalletScreenState extends State<WalletScreen>
         });
       }
     };
-    P2PService().bleTransport.serverActiveNotifier
+    P2PService()
+        .bleTransport
+        .serverActiveNotifier
         .addListener(_bankServerListener!);
   }
 
@@ -445,11 +448,11 @@ class _WalletScreenState extends State<WalletScreen>
             } on TransportUnavailableException {
               // La identidad BLE se repite al terminar la suscripción.
             }
+          }
         }
       }
-    }
 
-    if (session.isBank && type == 'bank_operation_request') {
+      if (session.isBank && type == 'bank_operation_request') {
         await _handleBankOperationRequest(payload);
         wallet.refreshHistory();
         return;
@@ -557,8 +560,7 @@ class _WalletScreenState extends State<WalletScreen>
 
   Future<void> _disconnectBannedBleClient(String bleDeviceId) async {
     try {
-      await P2PService().bleTransport
-          .disconnectClient(bleDeviceId);
+      await P2PService().bleTransport.disconnectClient(bleDeviceId);
     } catch (_) {}
   }
 
@@ -802,13 +804,22 @@ class _WalletScreenState extends State<WalletScreen>
               });
 
               try {
-                var players = P2PService().bleTransport.connectedPlayersNotifier.value
-                    .where((p) => p.subscribed && p.playing).toList();
+                var players = P2PService()
+                    .bleTransport
+                    .connectedPlayersNotifier
+                    .value
+                    .where((p) => p.subscribed && p.playing)
+                    .toList();
                 if (players.isEmpty) {
-                  players = P2PService().bleTransport.connectedPlayersNotifier.value
-                      .where((p) => p.subscribed).toList();
+                  players = P2PService()
+                      .bleTransport
+                      .connectedPlayersNotifier
+                      .value
+                      .where((p) => p.subscribed)
+                      .toList();
                 }
-                final String? receiverName = players.isNotEmpty ? players.first.displayName : null;
+                final String? receiverName =
+                    players.isNotEmpty ? players.first.displayName : null;
                 if (receiverName == null) {
                   if (!ctx.mounted) return;
                   setDialogState(() {
@@ -1078,7 +1089,8 @@ class _WalletScreenState extends State<WalletScreen>
     }
   }
 
-  Future<void> _safeShowFriendlyError(dynamic error, [StackTrace? stack]) async {
+  Future<void> _safeShowFriendlyError(dynamic error,
+      [StackTrace? stack]) async {
     final friendly = await ErrorTranslatorService().translate(error, stack);
     if (!mounted) return;
     if (friendly.severity == ErrorSeverity.error ||
@@ -1106,91 +1118,95 @@ class _WalletScreenState extends State<WalletScreen>
 
     _dialogActive = true;
     try {
-    await showPremiumDialog<void>(
-      context: context,
-      child: Builder(
-        builder: (dialogContext) => AlertDialog(
-          backgroundColor: kBgCard,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text(
-            'Transferir a jugador',
-            style: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w800),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'El banco retendra este dinero hasta que el jugador receptor acerque su celular.',
-                style: TextStyle(color: kTextSecondary, height: 1.35),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: amountCtrl,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  labelText: 'Monto',
-                  prefixText: '\$ ',
+      await showPremiumDialog<void>(
+        context: context,
+        child: Builder(
+          builder: (dialogContext) => AlertDialog(
+            backgroundColor: kBgCard,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text(
+              'Transferir a jugador',
+              style:
+                  TextStyle(color: kTextPrimary, fontWeight: FontWeight.w800),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'El banco retendra este dinero hasta que el jugador receptor acerque su celular.',
+                  style: TextStyle(color: kTextSecondary, height: 1.35),
                 ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: amountCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    labelText: 'Monto',
+                    prefixText: '\$ ',
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  SoundService.playClick();
+                  Navigator.pop(dialogContext);
+                },
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: brandColor,
+                  foregroundColor: brandColor.computeLuminance() > 0.5
+                      ? Colors.black
+                      : Colors.white,
+                ),
+                onPressed: () async {
+                  SoundService.playClick();
+                  final amount = double.tryParse(amountCtrl.text) ?? 0;
+                  if (amount <= 0) {
+                    _showToast('Ingresa un monto valido.', kRed);
+                    return;
+                  }
+                  final transportType = P2PService().currentType;
+                  if (transportType == TransportType.ble &&
+                      !P2PService()
+                          .bleTransport
+                          .clientConnectedNotifier
+                          .value) {
+                    _showToast('Conéctate al banco por BLE primero.', kRed);
+                    return;
+                  }
+
+                  try {
+                    final request = {
+                      'type': 'transfer_hold_request',
+                      'amount': amount,
+                      'fromPlayerId': session.name,
+                      'fromName': session.name,
+                      'deviceInstallationId':
+                          DeviceIdentityService.installationId,
+                    };
+                    P2PService().setTransport(TransportType.ble);
+                    await P2PService().sendPayload(request);
+                    if (!mounted || !dialogContext.mounted) return;
+                    Navigator.pop(dialogContext);
+                  } catch (e, s) {
+                    if (mounted) _safeShowFriendlyError(e, s);
+                  }
+                },
+                child: const Text('Retener en banco'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                SoundService.playClick();
-                Navigator.pop(dialogContext);
-              },
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: brandColor,
-                foregroundColor: brandColor.computeLuminance() > 0.5
-                    ? Colors.black
-                    : Colors.white,
-              ),
-              onPressed: () async {
-                SoundService.playClick();
-                final amount = double.tryParse(amountCtrl.text) ?? 0;
-                if (amount <= 0) {
-                  _showToast('Ingresa un monto valido.', kRed);
-                  return;
-                }
-                final transportType = P2PService().currentType;
-                if (transportType == TransportType.ble &&
-                    !P2PService().bleTransport.clientConnectedNotifier.value) {
-                  _showToast('Conéctate al banco por BLE primero.', kRed);
-                  return;
-                }
-
-                try {
-                  final request = {
-                    'type': 'transfer_hold_request',
-                    'amount': amount,
-                    'fromPlayerId': session.name,
-                    'fromName': session.name,
-                    'deviceInstallationId':
-                        DeviceIdentityService.installationId,
-                  };
-                  P2PService().setTransport(TransportType.ble);
-                  await P2PService().sendPayload(request);
-                  if (!mounted || !dialogContext.mounted) return;
-                  Navigator.pop(dialogContext);
-                } catch (e, s) {
-                  if (mounted) _safeShowFriendlyError(e, s);
-                }
-              },
-              child: const Text('Retener en banco'),
-            ),
-          ],
         ),
-      ),
-    );
+      );
 
-    amountCtrl.dispose();
+      amountCtrl.dispose();
     } finally {
       _dialogActive = false;
     }
@@ -1419,7 +1435,9 @@ class _WalletScreenState extends State<WalletScreen>
     }
     final bankServerListener = _bankServerListener;
     if (bankServerListener != null) {
-      P2PService().bleTransport.serverActiveNotifier
+      P2PService()
+          .bleTransport
+          .serverActiveNotifier
           .removeListener(bankServerListener);
     }
     _announcedBleConnections.clear();
@@ -1455,8 +1473,7 @@ class _WalletScreenState extends State<WalletScreen>
     final bleConnected = isBank ||
         P2PService().currentType != TransportType.ble ||
         P2PService().bleTransport.clientConnectedNotifier.value;
-    final playerReady =
-        isBank || (session.isHandshakeDone && bleConnected);
+    final playerReady = isBank || (session.isHandshakeDone && bleConnected);
     final shownBalance = playerReady ? displayBalance : 0.0;
     // Si el banco no tiene Bluetooth, mostrar pantalla limpia como al inicio
     final bankBleOk = !isBank || P2PService().bleTransport.isEnabled;
@@ -1475,7 +1492,7 @@ class _WalletScreenState extends State<WalletScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            isBank && bankBleOk && !kBankTabsActive
+            isBank && bankBleOk
                 ? FloatingActionButton.extended(
                     heroTag: 'bank_panel_btn',
                     onPressed: () async {
@@ -1527,17 +1544,17 @@ class _WalletScreenState extends State<WalletScreen>
             child: Stack(
               children: [
                 Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 600),
-                  child: CustomScrollView(
-                    slivers: [
-                      _buildAppBar(displayAvatar, displayColor, displayName,
-                          displayRole, isBank),
-                      if (!isBank)
-                        SliverToBoxAdapter(
-                          child: AnimatedEntry(
-                            delay: const Duration(milliseconds: 100),
-                            child: _buildBalanceCard(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 600),
+                    child: CustomScrollView(
+                      slivers: [
+                        _buildAppBar(displayAvatar, displayColor, displayName,
+                            displayRole, isBank),
+                        if (!isBank)
+                          SliverToBoxAdapter(
+                            child: AnimatedEntry(
+                              delay: const Duration(milliseconds: 100),
+                              child: _buildBalanceCard(
                                 shownBalance,
                                 displayColor,
                                 displayName,
@@ -1546,130 +1563,134 @@ class _WalletScreenState extends State<WalletScreen>
                                 isBank,
                                 tier: shownTier,
                               ),
+                            ),
                           ),
-                        ),
-                      if (!isBank && playerReady)
+                        if (!isBank && playerReady)
+                          SliverToBoxAdapter(
+                            child: AnimatedEntry(
+                              delay: const Duration(milliseconds: 200),
+                              child: _buildVaultSection(wallet, displayColor),
+                            ),
+                          ),
+                        if (playerReady)
+                          SliverToBoxAdapter(
+                            child: AnimatedEntry(
+                              delay: const Duration(milliseconds: 300),
+                              child: _buildStatsRow(stats, displayColor),
+                            ),
+                          ),
                         SliverToBoxAdapter(
                           child: AnimatedEntry(
-                            delay: const Duration(milliseconds: 200),
-                            child: _buildVaultSection(wallet, displayColor),
+                            delay: const Duration(milliseconds: 400),
+                            child: ValueListenableBuilder<TransportType>(
+                              valueListenable: P2PService().typeNotifier,
+                              builder: (context, type, _) {
+                                return _buildConnectionPanel(
+                                    displayColor, type, isBank);
+                              },
+                            ),
                           ),
                         ),
-                      if (playerReady)
+                        if (isBank && bankBleOk)
+                          SliverToBoxAdapter(
+                            child: AnimatedEntry(
+                              delay: const Duration(milliseconds: 450),
+                              child: _buildConnectedPlayersPanel(displayColor),
+                            ),
+                          ),
                         SliverToBoxAdapter(
-                          child: AnimatedEntry(
-                            delay: const Duration(milliseconds: 300),
-                            child: _buildStatsRow(stats, displayColor),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: TransportSelector(),
                           ),
                         ),
-                      SliverToBoxAdapter(
-                        child: AnimatedEntry(
-                          delay: const Duration(milliseconds: 400),
-                          child: ValueListenableBuilder<TransportType>(
-                            valueListenable: P2PService().typeNotifier,
-                            builder: (context, type, _) {
-                              return _buildConnectionPanel(
-                                  displayColor, type, isBank);
-                            },
+                        if (playerReady)
+                          SliverToBoxAdapter(
+                            child: AnimatedEntry(
+                              delay: const Duration(milliseconds: 500),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                                child: Row(
+                                  children: [
+                                    const Text(
+                                      'HISTORIAL',
+                                      style: TextStyle(
+                                        color: kTextSecondary,
+                                        fontSize: 12,
+                                        letterSpacing: 2,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: kBgCard,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '${history.length}',
+                                        style: const TextStyle(
+                                            color: kTextSecondary,
+                                            fontSize: 11),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      if (isBank && bankBleOk)
-                        SliverToBoxAdapter(
-                          child: AnimatedEntry(
-                            delay: const Duration(milliseconds: 450),
-                            child: _buildConnectedPlayersPanel(displayColor),
-                          ),
-                        ),
-                      SliverToBoxAdapter(
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: TransportSelector(),
-                        ),
-                      ),
-                      if (playerReady)
-                        SliverToBoxAdapter(
-                          child: AnimatedEntry(
-                            delay: const Duration(milliseconds: 500),
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                              child: Row(
+                        if (playerReady && history.isEmpty)
+                          const SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Text(
-                                    'HISTORIAL',
-                                  style: TextStyle(
-                                    color: kTextSecondary,
-                                    fontSize: 12,
-                                    letterSpacing: 2,
-                                    fontWeight: FontWeight.w600,
+                                  Icon(Icons.receipt_long_rounded,
+                                      color: Color(0xFF4B5563), size: 48),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'Sin transacciones aún',
+                                    style: TextStyle(color: kTextSecondary),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: kBgCard,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    '${history.length}',
-                                    style: const TextStyle(
-                                        color: kTextSecondary, fontSize: 11),
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
+                            ),
+                          )
+                        else if (playerReady)
+                          SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (_, i) => TransactionTile(tx: history[i]),
+                              childCount: history.length,
                             ),
                           ),
+                        SliverToBoxAdapter(
+                          child: SizedBox(
+                              height:
+                                  80 + MediaQuery.of(context).padding.bottom),
                         ),
-                      ),
-                      if (playerReady && history.isEmpty)
-                        const SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.receipt_long_rounded,
-                                    color: Color(0xFF4B5563), size: 48),
-                                SizedBox(height: 12),
-                                Text(
-                                  'Sin transacciones aún',
-                                  style: TextStyle(color: kTextSecondary),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      else if (playerReady)
-                        SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (_, i) => TransactionTile(tx: history[i]),
-                            childCount: history.length,
-                          ),
-                        ),
-                      SliverToBoxAdapter(
-                        child: SizedBox(
-                            height: 80 + MediaQuery.of(context).padding.bottom),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              Align(
-                alignment: Alignment.topCenter,
-                child: ConfettiWidget(
-                  confettiController: _confettiCtrl,
-                  blastDirectionality: BlastDirectionality.explosive,
-                  shouldLoop: false,
-                  colors: const [kGold, kGreen, Colors.white, Colors.blue],
-                  numberOfParticles: 50,
-                  gravity: 0.1,
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: ConfettiWidget(
+                    confettiController: _confettiCtrl,
+                    blastDirectionality: BlastDirectionality.explosive,
+                    shouldLoop: false,
+                    colors: const [kGold, kGreen, Colors.white, Colors.blue],
+                    numberOfParticles: 50,
+                    gravity: 0.1,
+                  ),
                 ),
-              ),
-              if (_showWelcome)
-                _buildWelcomeOverlay(displayAvatar, displayColor, displayName),
-            ],
+                if (_showWelcome)
+                  _buildWelcomeOverlay(
+                      displayAvatar, displayColor, displayName),
+              ],
             ),
           ),
         ),
@@ -2188,9 +2209,11 @@ class _WalletScreenState extends State<WalletScreen>
                                             _showWithdrawDialog(wallet, color);
                                           },
                                           icon: const Icon(
-                                              Icons.account_balance_wallet_rounded,
+                                              Icons
+                                                  .account_balance_wallet_rounded,
                                               size: 18),
-                                          label: const Text('Retirar Ganancias'),
+                                          label:
+                                              const Text('Retirar Ganancias'),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: color,
                                             foregroundColor: Colors.white,
@@ -2208,10 +2231,13 @@ class _WalletScreenState extends State<WalletScreen>
                                         padding: const EdgeInsets.symmetric(
                                             vertical: 12, horizontal: 14),
                                         decoration: BoxDecoration(
-                                          color: Colors.orange.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(12),
+                                          color: Colors.orange
+                                              .withValues(alpha: 0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
                                           border: Border.all(
-                                              color: Colors.orange.withValues(alpha: 0.3)),
+                                              color: Colors.orange
+                                                  .withValues(alpha: 0.3)),
                                         ),
                                         child: const Row(
                                           mainAxisSize: MainAxisSize.min,
@@ -2284,7 +2310,8 @@ class _WalletScreenState extends State<WalletScreen>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Acerca tu dispositivo al banco para enviar la solicitud de inversión.',
+                const Text(
+                    'Acerca tu dispositivo al banco para enviar la solicitud de inversión.',
                     style: TextStyle(color: kGold, fontSize: 12, height: 1.35)),
                 const SizedBox(height: 16),
                 const Text('Monto a Invertir',
@@ -2452,8 +2479,7 @@ class _WalletScreenState extends State<WalletScreen>
                     style: TextStyle(color: Colors.white54))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                  backgroundColor: brandColor,
-                  foregroundColor: Colors.white),
+                  backgroundColor: brandColor, foregroundColor: Colors.white),
               onPressed: () async {
                 SoundService.playClick();
                 try {
@@ -2600,52 +2626,19 @@ class _WalletScreenState extends State<WalletScreen>
       builder: (ctx) => AlertDialog(
         backgroundColor: kBgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: player.qualityColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(Icons.bluetooth_connected_rounded,
-                  color: player.qualityColor, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                player.displayName,
-                style: const TextStyle(
-                    color: kTextPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _infoRow('Nombre', player.name.isNotEmpty ? player.name : '-'),
-              _infoRow('Dispositivo', player.displayDeviceName),
-              _infoRow('ID Instalación', player.deviceInstallationId.isNotEmpty
-                  ? player.deviceInstallationId
-                  : '-'),
-              _infoRow('BLE Device ID', player.id),
-              const SizedBox(height: 8),
-              _infoRow('Handshake',
-                  player.playing ? 'Completado' : 'Pendiente'),
-              _infoRow('Suscripción GATT',
-                  player.subscribed ? 'Activa' : 'Inactiva'),
-              _infoRow('Última actividad',
-                  '${player.lastSeen.hour.toString().padLeft(2, '0')}:'
-                      '${player.lastSeen.minute.toString().padLeft(2, '0')}:'
-                      '${player.lastSeen.second.toString().padLeft(2, '0')}'),
-            ],
-          ),
+        content: SizedBox(
+            width: double.maxFinite,
+            child: PlayerInfoView(
+                player: player,
+                balance: 0,
+                volume: 0,
+                passGoCount: 0,
+                txCount: 0,
+                tier: 'base',
+                tierLabel: 'Jugador',
+                tierColor: Colors.grey,
+                transactions: [],
+            )
         ),
         actions: [
           TextButton(
@@ -2657,35 +2650,6 @@ class _WalletScreenState extends State<WalletScreen>
     );
   }
 
-  Widget _infoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: const TextStyle(
-                  color: kTextSecondary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                  color: kTextPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<bool> _ensureBleReady(BleTransport transport) async {
     var status = await transport.refreshAvailability();
@@ -3012,13 +2976,10 @@ class _WalletScreenState extends State<WalletScreen>
                                       padding: const EdgeInsets.symmetric(
                                           vertical: 12),
                                       decoration: BoxDecoration(
-                                        color:
-                                            accent.withValues(alpha: 0.12),
-                                        borderRadius:
-                                            BorderRadius.circular(10),
+                                        color: accent.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(10),
                                         border: Border.all(
-                                          color: accent.withValues(
-                                              alpha: 0.35),
+                                          color: accent.withValues(alpha: 0.35),
                                         ),
                                       ),
                                       child: Row(
@@ -3039,12 +3000,10 @@ class _WalletScreenState extends State<WalletScreen>
                                                   ? 'Listo para operar con el jugador'
                                                   : 'Activo autom\u00e1ticamente',
                                               maxLines: 1,
-                                              overflow:
-                                                  TextOverflow.ellipsis,
+                                              overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
                                                 color: accent,
-                                                fontWeight:
-                                                    FontWeight.w800,
+                                                fontWeight: FontWeight.w800,
                                               ),
                                             ),
                                           ),
@@ -3065,8 +3024,7 @@ class _WalletScreenState extends State<WalletScreen>
                                         label: const Text('Reiniciar BLE'),
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: kGold,
-                                          side: const BorderSide(
-                                              color: kGold),
+                                          side: const BorderSide(color: kGold),
                                           shape: RoundedRectangleBorder(
                                             borderRadius:
                                                 BorderRadius.circular(10),
@@ -3488,11 +3446,11 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
         final styles = _getStyles(tier, color);
 
         cardContent = switch (tier) {
-          CardTier.standard => _buildStandardCard(styles,
-              cardHeight: cardHeight),
+          CardTier.standard =>
+            _buildStandardCard(styles, cardHeight: cardHeight),
           CardTier.gold => _buildGoldCard(styles, cardHeight: cardHeight),
-          CardTier.platinum => _buildPlatinumCard(styles,
-              cardHeight: cardHeight),
+          CardTier.platinum =>
+            _buildPlatinumCard(styles, cardHeight: cardHeight),
           CardTier.black => _buildBlackCard(styles, cardHeight: cardHeight),
         };
       }
@@ -3566,8 +3524,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Icon(Icons.credit_card_rounded,
-                        color: Colors.white70, size: 30),
+                    _buildEmvChipDesign(),
                     Text(styles.tierName,
                         style: const TextStyle(
                             color: Colors.white70,
@@ -3996,8 +3953,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: const Color(0xFFD4AF37)
-                            .withValues(alpha: 0.6),
+                        color: const Color(0xFFD4AF37).withValues(alpha: 0.6),
                         fontSize: 9,
                         fontStyle: FontStyle.italic)),
               ],

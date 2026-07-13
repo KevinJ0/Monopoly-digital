@@ -17,6 +17,7 @@ import 'package:monopoly_banking/services/app_audit_logger.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/monopoly_background.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
+import 'package:monopoly_banking/widgets/player_info_widget.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 
 class BankScreen extends StatefulWidget {
@@ -1654,7 +1655,7 @@ class _BankScreenState extends State<BankScreen>
                   Flexible(
                     child: TabBarView(
                       children: [
-                        _buildPlayerInfoTab(
+                        PlayerInfoView(
                           player: player,
                           balance: balance,
                           volume: volume,
@@ -1663,9 +1664,9 @@ class _BankScreenState extends State<BankScreen>
                           tier: tier,
                           tierLabel: tierLabel,
                           tierColor: tierColor,
-                          account: account,
                           transactions: transactions,
                         ),
+
                         _buildConnectionInfoTab(player),
                       ],
                     ),
