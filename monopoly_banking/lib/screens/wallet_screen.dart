@@ -478,14 +478,18 @@ class _WalletScreenState extends State<WalletScreen>
         } on TimeoutException {
           // El estado ya quedó persistido; la confirmación puede continuar.
         }
-        await P2PService().sendPayload({
-          'type': 'handshake_confirm',
-          if (payload['bankTxId'] != null) 'bankTxId': payload['bankTxId'],
-          'playerId': session.name,
-          'name': session.name,
-          'appliedBalance': wallet.balance,
-          'deviceInstallationId': DeviceIdentityService.installationId,
-        });
+        try {
+          await P2PService().sendPayload({
+            'type': 'handshake_confirm',
+            if (payload['bankTxId'] != null) 'bankTxId': payload['bankTxId'],
+            'playerId': session.name,
+            'name': session.name,
+            'appliedBalance': wallet.balance,
+            'deviceInstallationId': DeviceIdentityService.installationId,
+          });
+        } on TransportUnavailableException {
+          // La confirmación no es crítica; el estado ya se aplicó.
+        }
       } else if (type == 'handshake_confirm') {
         return;
       } else if (type == 'bank_state') {
@@ -500,14 +504,18 @@ class _WalletScreenState extends State<WalletScreen>
           } on TimeoutException {
             // El estado ya fue persistido y notificado; confirmamos igualmente.
           }
-          await P2PService().sendPayload({
-            'type': 'bank_state_ack',
-            'bankTxId': bankTxId,
-            'playerId': session.name,
-            'name': session.name,
-            'appliedBalance': wallet.balance,
-            'deviceInstallationId': DeviceIdentityService.installationId,
-          });
+          try {
+            await P2PService().sendPayload({
+              'type': 'bank_state_ack',
+              'bankTxId': bankTxId,
+              'playerId': session.name,
+              'name': session.name,
+              'appliedBalance': wallet.balance,
+              'deviceInstallationId': DeviceIdentityService.installationId,
+            });
+          } on TransportUnavailableException {
+            // El estado ya se aplicó; el ack es informativo.
+          }
         }
         final requestId = payload['requestId'] as String?;
         if (requestId == _pendingBankOperationId) {
@@ -555,7 +563,10 @@ class _WalletScreenState extends State<WalletScreen>
       }
     }
     final claimed = payload['playerId'] as String?;
-    return claimed?.trim().isEmpty == false ? claimed : null;
+    if (claimed?.trim().isNotEmpty == true) return claimed!.trim();
+    final fromPlayer = payload['fromPlayerId'] as String?;
+    if (fromPlayer?.trim().isNotEmpty == true) return fromPlayer!.trim();
+    return null;
   }
 
   Future<void> _disconnectBannedBleClient(String bleDeviceId) async {
@@ -779,6 +790,14 @@ class _WalletScreenState extends State<WalletScreen>
         transportType: sourceTransport,
       );
       return;
+    } on TransportUnavailableException catch (_) {
+      // El débito ya se realizó pero el jugador no confirmó.
+      // El estado se sincronizará en el próximo handshake o reconexión.
+      if (!mounted) return;
+      _bankTransferHoldDialogOpen = true;
+      _dialogActive = true;
+      await _showTransferDeliveryFailedDialog(sourcePlayerId, amount);
+      return;
     }
     if (!mounted) return;
     _bankTransferHoldDialogOpen = true;
@@ -997,6 +1016,76 @@ class _WalletScreenState extends State<WalletScreen>
           },
         );
       },
+    ).whenComplete(() {
+      _dialogActive = false;
+      _bankTransferHoldDialogOpen = false;
+    });
+  }
+
+  Future<void> _showTransferDeliveryFailedDialog(
+    String playerId,
+    double amount,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kBgCard,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: Colors.orange.withValues(alpha: 0.35)),
+        ),
+        title: const Text(
+          'Transferencia pendiente de confirmación',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w800),
+        ),
+        content: SizedBox(
+          width: 260,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.hourglass_empty_rounded,
+                  color: kGold, size: 64),
+              const SizedBox(height: 12),
+              Text(
+                formatMoney(amount),
+                style: const TextStyle(
+                  color: kGold,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 28,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'De: $playerId',
+                style: const TextStyle(color: kTextSecondary),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'El jugador no confirmó la recepción del débito. '
+                'El dinero ya fue retenido en el banco. '
+                'El estado se sincronizará en la próxima reconexión.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: kTextSecondary, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () async {
+              SoundService.playClick();
+              if (ctx.mounted) Navigator.of(ctx).pop();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kGold,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
     ).whenComplete(() {
       _dialogActive = false;
       _bankTransferHoldDialogOpen = false;

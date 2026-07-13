@@ -721,16 +721,14 @@ class _BankScreenState extends State<BankScreen>
                       completed ? 'Completado' : 'Entregar',
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
-                  ),
                 ),
+              ),
               ],
-            );
-          },
-        );
-      },
-    ).whenComplete(() {
-      _transferHoldDialogOpen = false;
-    });
+              );
+            },
+          );
+        },
+    );
   }
 
   Future<BleConnectedPlayer?> _waitForTransferReceiver() async {
@@ -2436,6 +2434,26 @@ class _BleServerPanel extends StatelessWidget {
     NotificationService().show(message, backgroundColor: kRed);
   }
 
+  Future<bool?> _confirmStopServer(BuildContext context) {
+    return _confirm(
+      context,
+      title: 'Detener servidor',
+      message:
+          '\u00bfEst\u00e1s seguro de que deseas detener el servidor BLE? Se desconectar\u00e1n todos los jugadores.',
+      confirmLabel: 'Detener',
+    );
+  }
+
+  Future<bool?> _confirmRestartServer(BuildContext context) {
+    return _confirm(
+      context,
+      title: 'Reiniciar servidor',
+      message:
+          '\u00bfEst\u00e1s seguro de que deseas reiniciar el servidor BLE? Se desconectar\u00e1n todos los jugadores temporalmente.',
+      confirmLabel: 'Reiniciar',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final transport = P2PService().bleTransport;
@@ -2446,21 +2464,16 @@ class _BleServerPanel extends StatelessWidget {
         return ValueListenableBuilder<bool>(
           valueListenable: transport.clientConnectedNotifier,
           builder: (context, connected, _) {
-            return ValueListenableBuilder<String>(
-              valueListenable: transport.connectionStatusNotifier,
-              builder: (context, status, _) {
-                final accent = connected ? kGreen : Colors.blue;
-                final title = connected
-                    ? 'JUGADOR CONECTADO'
-                    : active
-                        ? 'SERVIDOR BLE ACTIVO'
-                        : 'SERVIDOR BLE';
-                final subtitle = (active && status.isNotEmpty)
-                    ? status
-                    : active
-                        ? 'Esperando que un jugador se conecte...'
-                        : 'Activa el servidor para recibir jugadores por Bluetooth';
-                return Container(
+            final accent = connected ? kGreen : Colors.blue;
+            final title = connected
+                ? 'JUGADOR CONECTADO'
+                : active
+                    ? 'SERVIDOR ACTIVO'
+                    : 'SERVIDOR BLE';
+            final subtitle = active
+                ? 'Servidor en ejecuci\u00f3n${connected ? ' - Jugador(es) conectado(s)' : ''}'
+                : 'Activa el servidor para recibir jugadores por Bluetooth';
+            return Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: active ? accent.withValues(alpha: 0.08) : kBgCard,
@@ -2525,45 +2538,99 @@ class _BleServerPanel extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        child: active
-                            ? OutlinedButton.icon(
+                      if (active) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
                                 onPressed: () async {
                                   SoundService.playClick();
+                                  final confirm = await _confirmStopServer(
+                                      context);
+                                  if (confirm != true || !context.mounted) {
+                                    return;
+                                  }
                                   await transport.stopServer();
                                 },
-                                icon: const Icon(Icons.stop_circle_outlined,
+                                icon: const Icon(
+                                    Icons.stop_circle_outlined,
                                     size: 16),
-                                label: const Text('Detener Servidor BLE'),
+                                label: const Text('Detener'),
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: kRed,
                                   side: const BorderSide(color: kRed),
                                   shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10)),
-                                ),
-                              )
-                            : ElevatedButton.icon(
-                                onPressed: () async {
-                                  SoundService.playClick();
-                                  final ready =
-                                      await _ensureBleReady(context, transport);
-                                  if (!ready || !context.mounted) return;
-                                  await P2PService().startBleBankServer();
-                                  P2PService().setTransport(TransportType.ble);
-                                },
-                                icon: const Icon(
-                                    Icons.bluetooth_searching_rounded,
-                                    size: 16),
-                                label: const Text('Iniciar Servidor BLE'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.blue,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10)),
+                                      borderRadius:
+                                          BorderRadius.circular(10)),
                                 ),
                               ),
-                      ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () async {
+                                  SoundService.playClick();
+                                  final confirm = await _confirmRestartServer(
+                                      context);
+                                  if (confirm != true || !context.mounted) {
+                                    return;
+                                  }
+                                  await transport.stopServer();
+                                  await Future.delayed(
+                                      const Duration(milliseconds: 500));
+                                  if (!context.mounted) return;
+                                  final ready = await _ensureBleReady(
+                                      context, transport);
+                                  if (!ready || !context.mounted) return;
+                                  await P2PService()
+                                      .startBleBankServer();
+                                  P2PService()
+                                      .setTransport(TransportType.ble);
+                                },
+                                icon: const Icon(
+                                    Icons.restart_alt_rounded,
+                                    size: 16),
+                                label: const Text('Reiniciar'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: kGold,
+                                  side: BorderSide(
+                                      color:
+                                          kGold.withValues(alpha: 0.6)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(10)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ] else ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              SoundService.playClick();
+                              final ready = await _ensureBleReady(
+                                  context, transport);
+                              if (!ready || !context.mounted) return;
+                              await P2PService().startBleBankServer();
+                              P2PService()
+                                  .setTransport(TransportType.ble);
+                            },
+                            icon: const Icon(
+                                Icons.bluetooth_searching_rounded,
+                                size: 16),
+                            label: const Text('Iniciar Servidor BLE'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(10)),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 );
@@ -2571,8 +2638,6 @@ class _BleServerPanel extends StatelessWidget {
             );
           },
         );
-      },
-    );
   }
 }
 
