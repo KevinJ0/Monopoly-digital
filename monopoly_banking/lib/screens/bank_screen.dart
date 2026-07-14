@@ -72,6 +72,7 @@ class _BankScreenState extends State<BankScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    BankLedgerService().initHeldTransfersCount();
     _slideCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),

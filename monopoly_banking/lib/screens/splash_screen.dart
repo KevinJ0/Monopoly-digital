@@ -96,17 +96,10 @@ class _SplashScreenState extends State<SplashScreen>
                                 ],
                               ),
                             ),
-                            const Text(
-                              'MONOPOLY',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 48,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 10,
-                                shadows: [
-                                  Shadow(color: Colors.white38, blurRadius: 30),
-                                ],
-                              ),
+                            Image.asset(
+                              'assets/icon/app_icon.png',
+                              height: 80,
+                              fit: BoxFit.contain,
                             ),
                           ],
                         ),

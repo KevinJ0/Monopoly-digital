@@ -558,11 +558,21 @@ mixin _WalletIncoming on State<WalletScreen> {
       // El débito ya se realizó pero el jugador no confirmó.
       // El estado se sincronizará en el próximo handshake o reconexión.
       if (!mounted) return;
+      await BankLedgerService().registerHeldTransfer(
+        id: held.transactionId,
+        fromPlayerId: sourcePlayerId,
+        amount: amount,
+      );
       _self._bankTransferHoldDialogOpen = true;
       _self._dialogActive = true;
       await _showTransferDeliveryFailedDialog(sourcePlayerId, amount);
       return;
     }
+    await BankLedgerService().registerHeldTransfer(
+      id: held.transactionId,
+      fromPlayerId: sourcePlayerId,
+      amount: amount,
+    );
     if (!mounted) return;
     _self._bankTransferHoldDialogOpen = true;
     _self._dialogActive = true;
@@ -629,6 +639,7 @@ mixin _WalletIncoming on State<WalletScreen> {
                   delivered,
                   transportType: sourceTransport,
                 );
+                await BankLedgerService().removeHeldTransfer(held.transactionId);
                 if (!ctx.mounted) return;
                 setDialogState(() {
                   sending = false;
@@ -730,16 +741,24 @@ mixin _WalletIncoming on State<WalletScreen> {
                             SoundService.playClick();
                             if (!settled) {
                               setDialogState(() => sending = true);
-                              final refunded = await BankLedgerService().credit(
-                                sourcePlayerId,
-                                amount,
-                                type: 'transfer_cancelled',
-                                counterpartyId: 'Banco',
-                              );
-                              await _sendBankResult(
-                                refunded,
-                                transportType: sourceTransport,
-                              );
+                              try {
+                                final refunded =
+                                    await BankLedgerService().credit(
+                                  sourcePlayerId,
+                                  amount,
+                                  type: 'transfer_cancelled',
+                                  counterpartyId: 'Banco',
+                                );
+                                await _sendBankResult(
+                                  refunded,
+                                  transportType: sourceTransport,
+                                );
+                              } catch (_) {
+                                // El crédito al ledger ya se realizó.
+                                // El jugador sincronizará al reconectarse.
+                              }
+                              await BankLedgerService()
+                                  .removeHeldTransfer(held.transactionId);
                               settled = true;
                             }
                             if (!ctx.mounted) return;

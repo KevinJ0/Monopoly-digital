@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/screens/wallet_screen.dart';
 import 'package:monopoly_banking/screens/bank_screen.dart';
+import 'package:monopoly_banking/services/bank_ledger_service.dart';
 
 class BankHomeScreen extends StatefulWidget {
   const BankHomeScreen({super.key});
@@ -17,7 +18,7 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
 
   static const _tabs = [
     _TabInfo(Icons.account_balance_wallet_rounded, 'Billetera'),
-    _TabInfo(Icons.account_balance_rounded, 'Panel Banco'),
+    _TabInfo(Icons.dashboard_rounded, 'Operaciones'),
   ];
 
   @override
@@ -102,11 +103,34 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
                       scale: selected ? 1.0 : 0.88,
                       duration: 300.ms,
                       curve: Curves.easeOutBack,
-                      child: Icon(
-                        tab.icon,
-                        color: selected ? kGreen : kTextSecondary,
-                        size: selected ? 22 : 20,
-                      ),
+                      child: index == 1
+                          ? ValueListenableBuilder<int>(
+                              valueListenable:
+                                  BankLedgerService().heldTransfersCount,
+                              builder: (context, count, _) {
+                                return Badge(
+                                  isLabelVisible: count > 0,
+                                  label: Text('$count',
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w800)),
+                                  backgroundColor: Colors.orange,
+                                  child: Icon(
+                                    tab.icon,
+                                    color: selected
+                                        ? kGreen
+                                        : kTextSecondary,
+                                    size: selected ? 22 : 20,
+                                  ),
+                                );
+                              },
+                            )
+                          : Icon(
+                              tab.icon,
+                              color: selected ? kGreen : kTextSecondary,
+                              size: selected ? 22 : 20,
+                            ),
                     ),
                     AnimatedSize(
                       duration: 250.ms,

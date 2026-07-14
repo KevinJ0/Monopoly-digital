@@ -12,7 +12,7 @@ mixin _BankBuilders on State<BankScreen> {
       appBar: AppBar(
         backgroundColor: kBgDark,
         title: const Text(
-          'Panel del Banco',
+          'Operaciones',
           style: TextStyle(
               color: kTextPrimary, fontWeight: FontWeight.w700, fontSize: 18),
         ),
@@ -48,6 +48,11 @@ mixin _BankBuilders on State<BankScreen> {
                         AnimatedEntry(
                           delay: const Duration(milliseconds: 180),
                           child: _buildConnectedPlayersList(),
+                        ),
+                        const SizedBox(height: 24),
+                        AnimatedEntry(
+                          delay: const Duration(milliseconds: 190),
+                          child: _buildSpecialOperations(),
                         ),
                         const SizedBox(height: 24),
                         AnimatedEntry(
@@ -808,5 +813,271 @@ mixin _BankBuilders on State<BankScreen> {
       'charge' || 'bankruptcy' => kRed,
       _ => kGold,
     };
+  }
+
+  Widget _buildSpecialOperations() {
+    return ValueListenableBuilder<int>(
+      valueListenable: BankLedgerService().heldTransfersCount,
+      builder: (context, count, _) {
+        if (count == 0) return const SizedBox.shrink();
+        final held = BankLedgerService().heldTransfers;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'OPERACIONES ESPECIALES',
+                  style: TextStyle(
+                    color: kTextSecondary,
+                    fontSize: 11,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: const TextStyle(
+                      color: Colors.orange,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Transacciones Incompletas',
+              style: TextStyle(
+                color: kGold,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...held.map((ht) => _buildHeldTransferTile(ht)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHeldTransferTile(HeldTransfer ht) {
+    final timeAgo = _formatTimeAgo(ht.heldAt);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.hourglass_top_rounded,
+                  color: Colors.orange.withValues(alpha: 0.8), size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'De: ${ht.fromPlayerId}',
+                  style: const TextStyle(
+                    color: kTextPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              Text(
+                formatMoney(ht.amount),
+                style: const TextStyle(
+                  color: kGold,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Retenido hace $timeAgo',
+            style: const TextStyle(
+              color: kTextSecondary,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _resolveHeldTransfer(ht, returnToSender: true),
+                  icon: const Icon(Icons.replay_rounded, size: 16),
+                  label: const Text('Devolver'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orange,
+                    side: const BorderSide(color: Colors.orange),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _resolveHeldTransfer(ht, returnToSender: false),
+                  icon: const Icon(Icons.send_rounded, size: 16),
+                  label: const Text('Entregar'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: kGreen,
+                    side: const BorderSide(color: kGreen),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTimeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'hace ${diff.inSeconds}s';
+    if (diff.inMinutes < 60) return 'hace ${diff.inMinutes}m';
+    if (diff.inHours < 24) return 'hace ${diff.inHours}h';
+    return 'hace ${diff.inDays}d';
+  }
+
+  Future<void> _resolveHeldTransfer(
+    HeldTransfer ht, {
+    required bool returnToSender,
+  }) async {
+    if (returnToSender) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: kBgCard,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Devolver dinero',
+              style: TextStyle(color: kTextPrimary)),
+          content: Text(
+            'Se devolverán ${formatMoney(ht.amount)} a ${ht.fromPlayerId}.',
+            style: const TextStyle(color: kTextSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Devolver'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      try {
+        await BankLedgerService().credit(
+          ht.fromPlayerId,
+          ht.amount,
+          type: 'transfer_cancelled',
+          counterpartyId: 'Banco',
+        );
+        await BankLedgerService().removeHeldTransfer(ht.id);
+        if (mounted) {
+          NotificationService().show(
+            'Dinero devuelto a ${ht.fromPlayerId}',
+            backgroundColor: Colors.orange,
+          );
+        }
+      } catch (e, s) {
+        if (mounted) context.showFriendlyError(e, s);
+      }
+    } else {
+      final players = P2PService()
+          .bleTransport
+          .connectedPlayersNotifier
+          .value
+          .where((p) =>
+              p.subscribed && p.displayName != ht.fromPlayerId)
+          .toList();
+      if (players.isEmpty) {
+        if (mounted) {
+          NotificationService().show(
+            'No hay un jugador receptor disponible. Acerca el dispositivo.',
+            backgroundColor: Colors.orange,
+          );
+        }
+        return;
+      }
+      final receiverName = players.first.displayName;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: kBgCard,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Entregar dinero',
+              style: TextStyle(color: kTextPrimary)),
+          content: Text(
+            'Se entregarán ${formatMoney(ht.amount)} a $receiverName.',
+            style: const TextStyle(color: kTextSecondary),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kGreen,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Entregar'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+      try {
+        final delivered = await BankLedgerService().credit(
+          receiverName,
+          ht.amount,
+          type: 'transfer_received',
+          counterpartyId: ht.fromPlayerId,
+        );
+        P2PService().setTransport(TransportType.ble);
+        await P2PService().sendPayload(delivered.toClientPayload());
+        await BankLedgerService().removeHeldTransfer(ht.id);
+        if (mounted) {
+          NotificationService().show(
+            'Dinero entregado a $receiverName',
+            backgroundColor: kGreen,
+          );
+        }
+      } catch (e, s) {
+        if (mounted) context.showFriendlyError(e, s);
+      }
+    }
   }
 }

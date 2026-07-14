@@ -120,18 +120,49 @@ class BankLedgerResult {
       };
 }
 
+class HeldTransfer {
+  final String id;
+  final String fromPlayerId;
+  final double amount;
+  final DateTime heldAt;
+
+  const HeldTransfer({
+    required this.id,
+    required this.fromPlayerId,
+    required this.amount,
+    required this.heldAt,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'fromPlayerId': fromPlayerId,
+        'amount': amount,
+        'heldAt': heldAt.toIso8601String(),
+      };
+
+  factory HeldTransfer.fromMap(Map<dynamic, dynamic> map) => HeldTransfer(
+        id: map['id'] as String? ?? '',
+        fromPlayerId: map['fromPlayerId'] as String? ?? '',
+        amount: (map['amount'] as num?)?.toDouble() ?? 0,
+        heldAt: DateTime.tryParse(map['heldAt'] as String? ?? '') ??
+            DateTime.now(),
+      );
+}
+
 class BankLedgerService {
   static final BankLedgerService _instance = BankLedgerService._();
   factory BankLedgerService() => _instance;
   BankLedgerService._();
 
   final ValueNotifier<int> statsRevision = ValueNotifier<int>(0);
+  final ValueNotifier<int> heldTransfersCount = ValueNotifier<int>(0);
   String? _cachedBankSessionId;
 
   static const _accountsKey = 'bank_ledger_accounts_v1';
   static const _transactionsKey = 'bank_ledger_transactions_v1';
   static const _bankSessionIdKey = 'bank_ledger_session_id_v1';
   static const _bannedDevicesKey = 'bank_ledger_banned_devices_v1';
+  static const _heldTransfersKey = 'bank_ledger_held_transfers_v1';
 
   int _transactionCounter = 0;
 
@@ -360,12 +391,54 @@ class BankLedgerService {
     await HiveService.settingsBox.put(_bannedDevicesKey, banned);
   }
 
+  List<HeldTransfer> get heldTransfers {
+    final stored = HiveService.settingsBox.get(_heldTransfersKey);
+    if (stored is! List) return const [];
+    return stored
+        .whereType<Map>()
+        .map((e) => HeldTransfer.fromMap(e))
+        .toList();
+  }
+
+  void initHeldTransfersCount() {
+    heldTransfersCount.value = heldTransfers.length;
+  }
+
+  Future<void> registerHeldTransfer({
+    required String id,
+    required String fromPlayerId,
+    required double amount,
+  }) async {
+    final current = heldTransfers;
+    final updated = [
+      ...current,
+      HeldTransfer(id: id, fromPlayerId: fromPlayerId, amount: amount, heldAt: DateTime.now()),
+    ];
+    await HiveService.settingsBox.put(
+      _heldTransfersKey,
+      updated.map((e) => e.toMap()).toList(),
+    );
+    heldTransfersCount.value = updated.length;
+  }
+
+  Future<void> removeHeldTransfer(String id) async {
+    final current = heldTransfers;
+    final updated = current.where((e) => e.id != id).toList();
+    await HiveService.settingsBox.put(
+      _heldTransfersKey,
+      updated.map((e) => e.toMap()).toList(),
+    );
+    heldTransfersCount.value = updated.length;
+  }
+
   Future<void> closeBankSession() async {
     await HiveService.settingsBox.delete(_accountsKey);
     await HiveService.settingsBox.delete(_transactionsKey);
     await HiveService.settingsBox.delete(_bannedDevicesKey);
     await HiveService.settingsBox.delete(_bankSessionIdKey);
+    await HiveService.settingsBox.delete(_heldTransfersKey);
     _cachedBankSessionId = null;
+    heldTransfersCount.value = 0;
   }
 
   String get currentBankSessionId {
