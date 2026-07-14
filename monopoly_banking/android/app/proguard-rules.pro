@@ -11,18 +11,6 @@
 # Plugin registrant generado (contiene registerWith de todos los plugins)
 -keep class io.flutter.plugins.GeneratedPluginRegistrant { *; }
 
-# ─── NFC Manager plugin ───────────────────────────────────────
--keep class im.nfc.nfc_manager.** { *; }
--keep class im.nfc.** { *; }
--keep class com.nfc.manager.** { *; }
--dontwarn im.nfc.**
--dontwarn com.nfc.manager.**
-
-# ─── Android NFC ──────────────────────────────────────────────
--keep class android.nfc.** { *; }
--keep class android.nfc.cardemulation.** { *; }
--dontwarn android.nfc.**
-
 # ─── Android BLE ──────────────────────────────────────────────
 -keep class android.bluetooth.** { *; }
 -keep class android.bluetooth.le.** { *; }
@@ -31,7 +19,7 @@
 # ─── Nuestra app ──────────────────────────────────────────────
 -keep class com.monopoly.monopoly_banking.** { *; }
 
-# ─── Reemplazar strings codec y charset (HceService) ─────────
+# ─── Reemplazar strings codec y charset ───────────────────────
 -keep class java.nio.charset.** { *; }
 -keep class kotlin.text.Charsets { *; }
 -keep class kotlin.text.CharsetsKt { *; }

@@ -1,0 +1,812 @@
+part of '../bank_screen.dart';
+
+mixin _BankBuilders on State<BankScreen> {
+  _BankScreenState get _self => this as _BankScreenState;
+
+  @override
+  Widget build(BuildContext context) {
+    final playerColor = context.watch<SessionProvider>().color;
+
+    return Scaffold(
+      backgroundColor: kBgDark,
+      appBar: AppBar(
+        backgroundColor: kBgDark,
+        title: const Text(
+          'Panel del Banco',
+          style: TextStyle(
+              color: kTextPrimary, fontWeight: FontWeight.w700, fontSize: 18),
+        ),
+        centerTitle: true,
+      ),
+      body: MonopolyBackground(
+        child: PlayerColorBackdrop(
+        color: playerColor,
+        child: SlideTransition(
+          position: _self._slide,
+          child: FadeTransition(
+            opacity: _self._slideCtrl,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    20,
+                    20,
+                    MediaQuery.viewPaddingOf(context).bottom + 128,
+                  ),
+                  child: Form(
+                    key: _self._formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const AnimatedEntry(
+                          delay: Duration(milliseconds: 100),
+                          child: _BankHeader(),
+                        ),
+                        const SizedBox(height: 24),
+                        AnimatedEntry(
+                          delay: const Duration(milliseconds: 180),
+                          child: _buildConnectedPlayersList(),
+                        ),
+                        const SizedBox(height: 24),
+                        AnimatedEntry(
+                          delay: const Duration(milliseconds: 200),
+                          child: _buildOpSelector(),
+                        ),
+                        const SizedBox(height: 24),
+                        if (_self._selectedOp != 'passGo')
+                          AnimatedEntry(
+                            delay: const Duration(milliseconds: 300),
+                            child: _buildAmountField(),
+                          ),
+                        const SizedBox(height: 28),
+                        AnimatedEntry(
+                          delay: const Duration(milliseconds: 400),
+                          child: _buildQuickAmounts(),
+                        ),
+                        const SizedBox(height: 32),
+                        AnimatedEntry(
+                          delay: const Duration(milliseconds: 500),
+                          child: _buildSendButton(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
+  }
+
+  Widget _buildOpSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'OPERACIÓN',
+          style:
+              TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
+        ),
+        const SizedBox(height: 12),
+        ...(_self._operations.map((op) => _buildOpTile(op))),
+      ],
+    );
+  }
+
+  Widget _buildOpTile(_OpOption op) {
+    final selected = _self._selectedOp == op.id;
+    return GestureDetector(
+      onTap: () {
+        SoundService.playClick();
+        setState(() => _self._selectedOp = op.id);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: selected ? op.color.withValues(alpha: 0.12) : kBgCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected ? op.color : kBorder,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(op.icon,
+                color: selected ? op.color : kTextSecondary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                op.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? op.color : kTextSecondary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            if (selected)
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: op.color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAmountField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'MONTO',
+          style:
+              TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
+        ),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: _self._amountCtrl,
+          onTap: () => SoundService.playClick(),
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          style: const TextStyle(
+              color: kTextPrimary, fontSize: 24, fontWeight: FontWeight.w700),
+          decoration: InputDecoration(
+            prefixText: '\$ ',
+            prefixStyle: const TextStyle(
+                color: kGreen, fontSize: 24, fontWeight: FontWeight.w700),
+            hintText: '0',
+            hintStyle: const TextStyle(color: kBorder, fontSize: 24),
+            filled: true,
+            fillColor: kBgCard,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: kBorder),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: kBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: kGreen, width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(color: kRed),
+            ),
+          ),
+          validator: (v) {
+            if (v == null || v.isEmpty) return 'Ingresa un monto';
+            final n = double.tryParse(v.replaceAll(',', ''));
+            if (n == null || n <= 0) return 'Monto inv\u00e1lido';
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickAmounts() {
+    if (_self._selectedOp == 'passGo') {
+      return const SizedBox();
+    }
+    const presets = [50, 100, 200, 500, 1000, 2000];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: presets.map((p) {
+        return GestureDetector(
+          onTap: () {
+            SoundService.playClick();
+            _self._amountCtrl.text = '$p';
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: kBgCard,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: kBorder),
+            ),
+            child: Text(
+              formatMoney(p),
+              style: const TextStyle(
+                  color: kTextSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildSendButton() {
+    final op = _self._operations.firstWhere((o) => o.id == _self._selectedOp);
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        child: ElevatedButton.icon(
+          onPressed: _self._sending ? null : _self._send,
+          icon: _self._sending
+              ? const AppSpinner(
+                  size: 18,
+                  color: Colors.black,
+                )
+              : Icon(op.icon),
+          label: Text(
+            _self._sending ? 'Enviando...' : op.label,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: op.color,
+            foregroundColor:
+                op.color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            elevation: 0,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectedPlayersList() {
+    final transport = P2PService().bleTransport;
+    return ValueListenableBuilder<bool>(
+      valueListenable: transport.serverActiveNotifier,
+      builder: (context, active, _) {
+        if (!active) return const SizedBox.shrink();
+        return ValueListenableBuilder<List<BleConnectedPlayer>>(
+          valueListenable: transport.connectedPlayersNotifier,
+          builder: (context, players, _) {
+            if (players.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: kBgCard.withValues(alpha: 0.82),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: kBorder),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.groups_rounded,
+                        color: kTextSecondary, size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Jugadores conectados',
+                        style: TextStyle(
+                          color: kTextPrimary,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '0',
+                      style: TextStyle(
+                        color: kTextSecondary,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: kBgCard.withValues(alpha: 0.82),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: kBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.groups_rounded,
+                          color: kGreen, size: 18),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Jugadores conectados',
+                          style: TextStyle(
+                            color: kTextPrimary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${players.length}',
+                        style: const TextStyle(
+                          color: kTextSecondary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  ...players.map((player) => _buildPlayerTile(player)),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPlayerTile(BleConnectedPlayer player) {
+    final ledger = BankLedgerService();
+    final account = ledger.accountFor(player.displayName);
+    final quality = player.rssi == null
+        ? player.qualityLabel
+        : '${player.qualityLabel} - ${player.rssi} dBm';
+    final detail =
+        '${player.playing ? 'Jugando' : 'Handshake pendiente'} - $quality';
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _self._showPlayerDetailDialog(player, account),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: player.qualityColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(Icons.bluetooth_connected_rounded,
+                  color: player.qualityColor, size: 16),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    player.displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: kTextPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if (player.displayDeviceName.isNotEmpty)
+                    Text(
+                      player.displayDeviceName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: kTextSecondary.withValues(alpha: 0.62),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  Text(
+                    'BLE - $detail',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: kTextSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (account != null)
+              Text(
+                formatMoney(account.balance),
+                style: TextStyle(
+                  color: account.bankrupt ? kRed : kGreen,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+              ),
+            const SizedBox(width: 8),
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: player.qualityColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayerInfoTab({
+    required BleConnectedPlayer player,
+    required double balance,
+    required double volume,
+    required int passGoCount,
+    required int txCount,
+    required String tier,
+    required String tierLabel,
+    required Color tierColor,
+    BankPlayerAccount? account,
+    List<Map<String, dynamic>> transactions = const [],
+  }) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('Tarjeta del Jugador'),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  tierColor.withValues(alpha: 0.18),
+                  tierColor.withValues(alpha: 0.05),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: tierColor.withValues(alpha: 0.45),
+                width: 1.5,
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: _playerColor(player.colorId)
+                        .withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _playerColor(player.colorId)
+                          .withValues(alpha: 0.5),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      player.avatarId.isNotEmpty
+                          ? player.avatarId
+                          : '\u{1F464}',
+                      style: const TextStyle(fontSize: 24),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        tierLabel,
+                        style: TextStyle(
+                          color: tierColor,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Text(
+                        'Nivel ${_tierLevel(tier)}',
+                        style: TextStyle(
+                          color: tierColor.withValues(alpha: 0.7),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          _buildSectionHeader('Resumen'),
+          _detailRow('Nombre', player.displayName),
+          _detailRow('Dispositivo', player.displayDeviceName),
+          _detailRow('Conexi\u00f3n', 'Bluetooth (BLE)'),
+          const SizedBox(height: 12),
+          _buildSectionHeader('Finanzas'),
+          _detailRow('Saldo', formatMoney(balance)),
+          _detailRow('Volumen total',
+              formatMoney(volume)),
+          _detailRow(
+              'Pases por GO', '$passGoCount'),
+          _detailRow('Transacciones',
+              '$txCount realizadas'),
+          if (account != null && account.investedAmount > 0) ...[
+            const SizedBox(height: 12),
+            _buildSectionHeader('Inversi\u00f3n Activa'),
+            _detailRow('Invertido',
+                formatMoney(account.investedAmount)),
+            _detailRow('Generado',
+                formatMoney(account.generatedAmount)),
+            _detailRow('Progreso',
+                '${account.currentPasses} / ${account.targetPasses} pases'),
+          ],
+          if (account != null && account.bankrupt) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: kRed.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                    color: kRed.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.gavel_rounded, color: kRed, size: 18),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Jugador en Bancarrota',
+                      style: TextStyle(
+                        color: kRed,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (transactions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _buildSectionHeader(
+                '\u00daltimas Transacciones (${transactions.length})'),
+            ...transactions.take(5).map((tx) {
+              final type = tx['type'] as String? ?? '';
+              final amount =
+                  (tx['amount'] as num?)?.toDouble() ?? 0;
+              final timestamp = tx['timestamp'] as String? ?? '';
+              final time = timestamp.length >= 16
+                  ? timestamp.substring(11, 16)
+                  : '';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(_txIcon(type), size: 14,
+                        color: _txColor(type)),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        _txLabel(type),
+                        style: const TextStyle(
+                          color: kTextSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '\$${amount.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        color: _txColor(type),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      time,
+                      style: const TextStyle(
+                        color: kTextSecondary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildConnectionInfoTab(BleConnectedPlayer player) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSectionHeader('Dispositivo'),
+          _detailRow('Nombre',
+              player.name.isNotEmpty ? player.name : '-'),
+          _detailRow(
+              'Dispositivo', player.displayDeviceName),
+          _detailRow('ID BLE', player.id),
+          _detailRow(
+              'ID Instalaci\u00f3n',
+              player.deviceInstallationId.isNotEmpty
+                  ? player.deviceInstallationId
+                  : '-'),
+          const SizedBox(height: 12),
+          _buildSectionHeader('Estado Conexi\u00f3n'),
+          _detailRow('Handshake',
+              player.playing ? 'Completado' : 'Pendiente'),
+          _detailRow('Suscripci\u00f3n GATT',
+              player.subscribed ? 'Activa' : 'Inactiva'),
+          const SizedBox(height: 12),
+          _detailRow(
+              '\u00daltima actividad',
+              '${player.lastSeen.hour.toString().padLeft(2, '0')}:'
+                  '${player.lastSeen.minute.toString().padLeft(2, '0')}:'
+                  '${player.lastSeen.second.toString().padLeft(2, '0')}'),
+        ],
+      ),
+    );
+  }
+
+  String _playerTier(double balance) {
+    if (balance >= 15000) return 'black';
+    if (balance >= 8000) return 'platinum';
+    if (balance >= 4000) return 'gold';
+    return 'standard';
+  }
+
+  String _tierLabel(String tier) {
+    return switch (tier) {
+      'black' => 'ULTIMATE BLACK',
+      'platinum' => 'PLATINUM PRESTIGE',
+      'gold' => 'GOLD MEMBERSHIP',
+      _ => 'CLASSIC EDITION',
+    };
+  }
+
+  int _tierLevel(String tier) {
+    return switch (tier) {
+      'standard' => 1,
+      'gold' => 2,
+      'platinum' => 3,
+      'black' => 4,
+      _ => 1,
+    };
+  }
+
+  Color _tierColor(String tier) {
+    return switch (tier) {
+      'standard' => const Color(0xFF90A4AE),
+      'gold' => const Color(0xFFFFD700),
+      'platinum' => const Color(0xFF1E88E5),
+      'black' => const Color(0xFF424242),
+      _ => const Color(0xFF90A4AE),
+    };
+  }
+
+  Color _playerColor(String colorId) {
+    const colors = [
+      Color(0xFFE53935),
+      Color(0xFF8E24AA),
+      Color(0xFF1E88E5),
+      Color(0xFF43A047),
+      Color(0xFFFDD835),
+      Color(0xFFFF7043),
+      Color(0xFF00ACC1),
+      Color(0xFFECEFF1),
+    ];
+    final index = int.tryParse(colorId) ?? 0;
+    if (index >= 0 && index < colors.length) return colors[index];
+    return colors[0];
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: kGold,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+          letterSpacing: 1.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 130,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: kTextSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: kTextPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _txLabel(String type) {
+    return switch (type) {
+      'payment' => 'Pago del banco',
+      'charge' => 'Cobro del banco',
+      'passGo' => 'Pas\u00f3 por GO',
+      'handshake_initial' => 'Handshake inicial',
+      'handshake_reconnect' => 'Reconexi\u00f3n',
+      'bankruptcy' => 'Bancarrota',
+      'investment_opened' => 'Inversi\u00f3n abierta',
+      'investment_completed' => 'Inversi\u00f3n completada',
+      'investment_early_withdrawal' => 'Retiro anticipado',
+      _ => type,
+    };
+  }
+
+  IconData _txIcon(String type) {
+    return switch (type) {
+      'payment' => Icons.arrow_downward_rounded,
+      'charge' => Icons.arrow_upward_rounded,
+      'passGo' => Icons.flag_rounded,
+      'handshake_initial' => Icons.handshake_rounded,
+      'handshake_reconnect' => Icons.handshake_rounded,
+      'bankruptcy' => Icons.gavel_rounded,
+      'investment_opened' => Icons.trending_up_rounded,
+      'investment_completed' => Icons.trending_up_rounded,
+      'investment_early_withdrawal' => Icons.trending_up_rounded,
+      _ => Icons.swap_horiz_rounded,
+    };
+  }
+
+  Color _txColor(String type) {
+    return switch (type) {
+      'payment' || 'passGo' => kGreen,
+      'charge' || 'bankruptcy' => kRed,
+      _ => kGold,
+    };
+  }
+}

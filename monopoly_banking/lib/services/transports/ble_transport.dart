@@ -233,6 +233,7 @@ class BleTransport extends P2PTransport {
   StreamSubscription<List<int>>? _notifySub;
   Timer? _bankConnectionWatchdog;
   Timer? _keepAliveTimer;
+  Timer? _proximityPollTimer;
   DateTime? _lastPongReceived;
   int _pongMissedCount = 0;
   final Map<String, int> _bankContactSampleCounts = {};
@@ -250,6 +251,7 @@ class BleTransport extends P2PTransport {
   Future<void> _clientWriteChain = Future<void>.value();
   final Map<String, _BleChunkBuffer> _incomingChunks = {};
   int _chunkMessageCounter = 0;
+  int _scanGeneration = 0;
   void Function(Map<String, dynamic>)? _receiveCallback;
 
   BleTransport() {
@@ -724,6 +726,7 @@ class BleTransport extends P2PTransport {
 
   void _markClientDisconnected({String status = 'Desconectado'}) {
     _stopKeepAlive();
+    _stopProximityPolling();
     _scanRefreshTimer?.cancel();
     _scanRefreshTimer = null;
     final connection = _connectSub;
@@ -1003,6 +1006,7 @@ class BleTransport extends P2PTransport {
       _scanRefreshTimer = null;
       return;
     }
+    _scanGeneration++;
     _audit('silent_scan_refresh');
     AppAuditLogger.instance.event('BLE_SCAN', 'silent_refresh');
 
@@ -1061,7 +1065,7 @@ class BleTransport extends P2PTransport {
       Completer<DiscoveredDevice> completer, Uuid serviceUuid) async {
     try {
       final device =
-          await completer.future.timeout(const Duration(seconds: 20));
+          await completer.future.timeout(const Duration(seconds: 85));
       if (_transportDisposed || !_reconnectAllowed) return;
       _scanRefreshTimer?.cancel();
       _scanRefreshTimer = null;
@@ -1078,7 +1082,7 @@ class BleTransport extends P2PTransport {
       await _scanSub?.cancel();
       _scanSub = null;
       if (_transportDisposed || !_reconnectAllowed) return;
-      debugPrint('[BLE client] No se encontró el servidor en 20 segundos');
+      debugPrint('[BLE client] No se encontró el servidor en 85 segundos');
       connectionStatusNotifier.value =
           'No se encontraron bancos. Reintentando...';
       _scheduleDelayedReconnect();
@@ -1095,8 +1099,10 @@ class BleTransport extends P2PTransport {
 
   void _scheduleDelayedReconnect() {
     if (_transportDisposed || !_reconnectAllowed) return;
+    final generation = _scanGeneration;
     Future.delayed(const Duration(seconds: 3), () {
       if (_transportDisposed || !_reconnectAllowed) return;
+      if (generation != _scanGeneration) return;
       _reconnectScan();
     });
   }
@@ -1214,6 +1220,7 @@ class BleTransport extends P2PTransport {
         final data = _decodeBleFrame(jsonStr);
         if (data == null) return;
         _startKeepAlive(deviceId);
+        _startProximityPolling();
         clientConnectedNotifier.value = true;
         _notificationRetryScheduled = false;
         connectionStatusNotifier.value = 'Conectado al banco';
@@ -1411,6 +1418,34 @@ class BleTransport extends P2PTransport {
     _pongMissedCount = 0;
   }
 
+  void _startProximityPolling() {
+    _stopProximityPolling();
+    _proximityPollTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      final deviceId = _connectedDeviceId;
+      if (!_clientConnected || deviceId == null || _transportDisposed) {
+        _stopProximityPolling();
+        return;
+      }
+      try {
+        final rssi = await _ble.readRssi(deviceId).timeout(
+              const Duration(seconds: 3),
+              onTimeout: () => throw TimeoutException('readRssi timeout'),
+            );
+        await _writeClientPayload({
+          'type': 'ble_proximity',
+          'rssi': rssi,
+        });
+      } catch (e) {
+        debugPrint('[BLE proximity] Error leyendo/enviando RSSI: $e');
+      }
+    });
+  }
+
+  void _stopProximityPolling() {
+    _proximityPollTimer?.cancel();
+    _proximityPollTimer = null;
+  }
+
   Future<void> _sendViaClient(Map<String, dynamic> payload) async {
     try {
       await _writeClientPayload(payload);
@@ -1511,6 +1546,7 @@ class BleTransport extends P2PTransport {
     _notificationRetryScheduled = false;
     _serverStarting = false;
     _stopKeepAlive();
+    _stopProximityPolling();
     _scanRefreshTimer?.cancel();
     _scanRefreshTimer = null;
     _clientConnected = false;

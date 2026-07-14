@@ -159,7 +159,7 @@ class ErrorTranslatorService {
 
       final prompt = '''
 Eres un asistente de una app de Monopoly digital. Traduce errores técnicos
-a lenguaje que cualquier persona entienda. La app usa NFC, pagos virtuales
+a lenguaje que cualquier persona entienda. La app usa pagos virtuales
 y conexiones entre celulares.
 
 Reglas:
@@ -204,16 +204,6 @@ Responde EXACTAMENTE así:
         severity: ErrorSeverity.warning,
       );
     }
-    if (lower.contains('nfc') ||
-        lower.contains('tag') ||
-        lower.contains('isodep') ||
-        lower.contains('transceive')) {
-      return const FriendlyError(
-        message:
-            '📡 Problema con NFC. Asegúrate de que ambos teléfonos estén pegados y NFC activado.',
-        severity: ErrorSeverity.warning,
-      );
-    }
     if (lower.contains('socket') ||
         lower.contains('connection') ||
         lower.contains('network')) {
@@ -233,13 +223,6 @@ Responde EXACTAMENTE así:
       return const FriendlyError(
         message:
             '⏱️ Tardó demasiado. Intenta de nuevo acercando los teléfonos.',
-        severity: ErrorSeverity.warning,
-      );
-    }
-    if (lower.contains('hce') || lower.contains('apdu')) {
-      return const FriendlyError(
-        message:
-            '💳 Error al emular la tarjeta. Reinicia la operación e intenta de nuevo.',
         severity: ErrorSeverity.warning,
       );
     }

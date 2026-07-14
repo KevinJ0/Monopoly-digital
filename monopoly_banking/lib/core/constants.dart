@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 const kAppVersion = '1.0.0';
 
+bool kBankTabsActive = false;
+
 const kBgDark = Color(0xFF0A0F1E);
 const kBgCard = Color(0xFF111827);
 const kGreen = Color(0xFF00C853);

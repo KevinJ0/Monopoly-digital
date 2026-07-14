@@ -4,10 +4,12 @@ import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/core/theme.dart';
 import 'package:monopoly_banking/providers/balance_tween_controller.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
+import 'package:monopoly_banking/widgets/app_spinner.dart';
 import 'package:monopoly_banking/providers/stats_provider.dart';
 import 'package:monopoly_banking/providers/wallet_controller.dart';
 import 'package:monopoly_banking/screens/role_selection_screen.dart';
 import 'package:monopoly_banking/screens/wallet_screen.dart';
+import 'package:monopoly_banking/screens/bank_home_screen.dart';
 import 'package:monopoly_banking/screens/splash_screen.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
 
@@ -89,7 +91,7 @@ class _RootRouterState extends State<_RootRouter> {
       return const Scaffold(
         backgroundColor: kBgDark,
         body: Center(
-          child: CircularProgressIndicator(color: kGreen),
+          child: AppSpinner(color: kGreen),
         ),
       );
     }
@@ -103,7 +105,9 @@ class _RootRouterState extends State<_RootRouter> {
         child: child,
       ),
       child: hasSession
-          ? const WalletScreen(key: ValueKey('wallet'))
+          ? session.isBank
+              ? const BankHomeScreen(key: ValueKey('bank_home'))
+              : const WalletScreen(key: ValueKey('wallet'))
           : const RoleSelectionScreen(key: ValueKey('role')),
     );
   }

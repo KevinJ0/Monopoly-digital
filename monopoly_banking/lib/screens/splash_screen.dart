@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:monopoly_banking/core/constants.dart';
+import 'package:monopoly_banking/widgets/app_spinner.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -133,13 +134,9 @@ class _SplashScreenState extends State<SplashScreen>
             child: FadeTransition(
               opacity: _opacityAnimation,
               child: const Center(
-                child: SizedBox(
-                  width: 30,
-                  height: 30,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white24,
-                  ),
+                child: AppSpinner(
+                  size: 30,
+                  color: Colors.white24,
                 ),
               ),
             ),

@@ -5,6 +5,7 @@ import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
+import 'package:monopoly_banking/widgets/app_spinner.dart';
 import 'package:provider/provider.dart';
 
 class BankruptcyScreen extends StatefulWidget {
@@ -267,13 +268,9 @@ class _BankruptcyScreenState extends State<BankruptcyScreen>
                                 ),
                               ),
                               icon: _leaving
-                                  ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.4,
-                                        color: Colors.white,
-                                      ),
+                                  ? const AppSpinner(
+                                      size: 20,
+                                      color: Colors.white,
                                     )
                                   : const Icon(Icons.logout_rounded),
                               label: const Text(

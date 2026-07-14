@@ -126,47 +126,12 @@ class BankLedgerService {
   BankLedgerService._();
 
   final ValueNotifier<int> statsRevision = ValueNotifier<int>(0);
-  final ValueNotifier<String?> lastNfcPlayerNotifier =
-      ValueNotifier<String?>(null);
   String? _cachedBankSessionId;
 
   static const _accountsKey = 'bank_ledger_accounts_v1';
   static const _transactionsKey = 'bank_ledger_transactions_v1';
   static const _bankSessionIdKey = 'bank_ledger_session_id_v1';
   static const _bannedDevicesKey = 'bank_ledger_banned_devices_v1';
-  static const _lastNfcPlayerKey = 'bank_ledger_last_nfc_player_v1';
-  static const _lastNfcDeviceKey = 'bank_ledger_last_nfc_device_v1';
-
-  String? get lastNfcPlayerId {
-    final value = HiveService.settingsBox.get(_lastNfcPlayerKey) as String?;
-    return value?.trim().isEmpty == false ? value!.trim() : null;
-  }
-
-  String? get lastNfcDeviceInstallationId {
-    final value = HiveService.settingsBox.get(_lastNfcDeviceKey) as String?;
-    return value?.trim().isEmpty == false ? value!.trim() : null;
-  }
-
-  void beginNfcPlayerDetection() {
-    lastNfcPlayerNotifier.value = null;
-  }
-
-  Future<void> rememberNfcPlayer(
-    String playerId, {
-    String? deviceInstallationId,
-  }) async {
-    final value = playerId.trim();
-    if (value.isEmpty) return;
-    await HiveService.settingsBox.put(_lastNfcPlayerKey, value);
-    final deviceId = deviceInstallationId?.trim();
-    if (deviceId != null && deviceId.isNotEmpty) {
-      await HiveService.settingsBox.put(_lastNfcDeviceKey, deviceId);
-    }
-    if (lastNfcPlayerNotifier.value == value) {
-      lastNfcPlayerNotifier.value = null;
-    }
-    lastNfcPlayerNotifier.value = value;
-  }
 
   int _transactionCounter = 0;
 
@@ -401,9 +366,6 @@ class BankLedgerService {
     await HiveService.settingsBox.delete(_bannedDevicesKey);
     await HiveService.settingsBox.delete(_bankSessionIdKey);
     _cachedBankSessionId = null;
-    await HiveService.settingsBox.delete(_lastNfcPlayerKey);
-    await HiveService.settingsBox.delete(_lastNfcDeviceKey);
-    lastNfcPlayerNotifier.value = null;
   }
 
   String get currentBankSessionId {

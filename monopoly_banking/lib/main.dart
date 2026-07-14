@@ -1,16 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/app.dart';
-import 'package:monopoly_banking/services/app_audit_logger.dart';
-import 'package:monopoly_banking/services/ble_diagnostic_logger.dart';
-import 'package:monopoly_banking/services/error_translator_service.dart';
-import 'package:monopoly_banking/services/hive_service.dart';
-import 'package:monopoly_banking/services/sound_service.dart';
+import 'app.dart';
+import 'services/app_audit_logger.dart';
+import 'services/ble_diagnostic_logger.dart';
+import 'services/error_translator_service.dart';
+import 'services/hive_service.dart';
+import 'services/sound_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Capturar errores de Flutter (errores en widgets, render, etc.)
   FlutterError.onError = (details) {
     AppAuditLogger.instance.error(
       'FLUTTER_ERROR',
@@ -27,7 +26,6 @@ Future<void> main() async {
     }
   };
 
-  // Capturar errores asíncronos no atrapados y errores de plataforma
   PlatformDispatcher.instance.onError = (error, stack) {
     AppAuditLogger.instance.error(
       'UNCAUGHT_ERROR',
