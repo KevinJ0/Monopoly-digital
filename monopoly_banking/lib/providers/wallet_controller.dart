@@ -85,16 +85,27 @@ class WalletController extends ChangeNotifier {
     syncTierWithBalance();
 
     final eventType = (payload['eventType'] as String?) ?? 'bank_sync';
-    final amount = (payload['amount'] as num?)?.toDouble() ??
-        (session.balance - previousBalance).abs();
-    if (bankTxId != null && eventType != 'bank_sync') {
-      _persistTx(
-        id: bankTxId,
-        type: eventType,
-        amount: amount,
-        balanceAfter: session.balance,
-        counterpartyId: payload['counterpartyId'] as String?,
-      );
+    final balanceDiff = (session.balance - previousBalance).abs();
+    final rawAmount = (payload['amount'] as num?)?.toDouble();
+    final amount = (rawAmount != null && rawAmount > 0)
+        ? rawAmount
+        : balanceDiff;
+
+    if (amount > 0 && balanceDiff > 0) {
+      final txId = bankTxId ?? 'local-${DateTime.now().microsecondsSinceEpoch}';
+      if (!HiveService.txBox.containsKey(txId)) {
+        _persistTx(
+          id: txId,
+          type: eventType == 'bank_sync'
+              ? (session.balance > previousBalance
+                  ? 'sync_credit'
+                  : 'sync_debit')
+              : eventType,
+          amount: amount,
+          balanceAfter: session.balance,
+          counterpartyId: payload['counterpartyId'] as String?,
+        );
+      }
     }
 
     if (session.balance > previousBalance) {

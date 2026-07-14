@@ -132,17 +132,43 @@ mixin _WalletDialogs on State<WalletScreen> {
                       return;
                     }
                     final transportType = P2PService().currentType;
+                    final transport = P2PService().bleTransport;
                     if (transportType == TransportType.ble &&
-                        !P2PService()
-                            .bleTransport
-                            .clientConnectedNotifier
-                            .value) {
+                        !transport.clientConnectedNotifier.value) {
                       _showToast('Conéctate al banco por BLE primero.', kRed);
                       return;
                     }
 
                     setDialogState(() {
                       sending = true;
+                      message = 'Verificando proximidad con el banco...';
+                    });
+
+                    var contactReady = false;
+                    final timeout = DateTime.now().add(const Duration(seconds: 15));
+                    while (!contactReady && DateTime.now().isBefore(timeout)) {
+                      final rssi = await transport.readCurrentRssi();
+                      if (rssi != null && transport.isRssiContactReady(rssi)) {
+                        contactReady = true;
+                        break;
+                      }
+                      await Future<void>.delayed(const Duration(seconds: 2));
+                    }
+                    if (!contactReady) {
+                      if (mounted) {
+                        setDialogState(() {
+                          sending = false;
+                          message = '';
+                        });
+                        _showToast(
+                          'No se detectó proximidad con el banco. Acerca los dispositivos.',
+                          Colors.orange,
+                        );
+                      }
+                      return;
+                    }
+
+                    setDialogState(() {
                       message = 'Esperando confirmación del banco...';
                     });
 
@@ -811,9 +837,7 @@ mixin _WalletDialogs on State<WalletScreen> {
           const SizedBox(height: 12),
           _detailRow(
               '\u00daltima actividad',
-              '${player.lastSeen.hour.toString().padLeft(2, '0')}:'
-                  '${player.lastSeen.minute.toString().padLeft(2, '0')}:'
-                  '${player.lastSeen.second.toString().padLeft(2, '0')}'),
+              _format12h(player.lastSeen)),
         ],
       ),
     );
@@ -1003,6 +1027,13 @@ mixin _WalletDialogs on State<WalletScreen> {
         ],
       ),
     );
+  }
+
+  String _format12h(DateTime dt) {
+    final h = dt.hour == 0 ? 12 : dt.hour > 12 ? dt.hour - 12 : dt.hour;
+    final m = dt.minute.toString().padLeft(2, '0');
+    final ampm = dt.hour < 12 ? 'AM' : 'PM';
+    return '$h:$m $ampm';
   }
 }
 

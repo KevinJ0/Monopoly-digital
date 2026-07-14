@@ -73,6 +73,7 @@ class TransactionTile extends StatelessWidget {
       'passGo' ||
       'transfer_received' ||
       'transfer_cancelled' ||
+      'sync_credit' ||
       'investment_completed' ||
       'investment_early_withdrawal' ||
       'bank_charge_received' =>
@@ -155,15 +156,20 @@ class TransactionTile extends StatelessWidget {
         return 'Jugador reconectado';
       case 'bank_bankruptcy':
         return 'Jugador en bancarrota';
+      case 'sync_credit':
+        return 'Ajuste por sincronización';
+      case 'sync_debit':
+        return 'Ajuste por sincronización';
       default:
         return 'Pago enviado';
     }
   }
 
   String _formatDate(DateTime dt) {
-    final h = dt.hour.toString().padLeft(2, '0');
+    final h = dt.hour == 0 ? 12 : dt.hour > 12 ? dt.hour - 12 : dt.hour;
     final m = dt.minute.toString().padLeft(2, '0');
-    return '${dt.day}/${dt.month}/${dt.year}  $h:$m';
+    final ampm = dt.hour < 12 ? 'AM' : 'PM';
+    return '${dt.day}/${dt.month}/${dt.year}  $h:$m $ampm';
   }
 }
 

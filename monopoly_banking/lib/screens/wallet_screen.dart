@@ -151,6 +151,7 @@ class _WalletScreenState extends State<WalletScreen>
         _listenForBankServerState();
       } else {
         _listenForBleBankDisconnection();
+        _startBleClient();
       }
     });
   }

@@ -599,9 +599,8 @@ mixin _BankBuilders on State<BankScreen> {
               final amount =
                   (tx['amount'] as num?)?.toDouble() ?? 0;
               final timestamp = tx['timestamp'] as String? ?? '';
-              final time = timestamp.length >= 16
-                  ? timestamp.substring(11, 16)
-                  : '';
+              final dt = DateTime.tryParse(timestamp);
+              final time = dt != null ? _format12h(dt) : '';
               return Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Row(
@@ -670,9 +669,7 @@ mixin _BankBuilders on State<BankScreen> {
           const SizedBox(height: 12),
           _detailRow(
               '\u00daltima actividad',
-              '${player.lastSeen.hour.toString().padLeft(2, '0')}:'
-                  '${player.lastSeen.minute.toString().padLeft(2, '0')}:'
-                  '${player.lastSeen.second.toString().padLeft(2, '0')}'),
+              _format12h(player.lastSeen)),
         ],
       ),
     );
@@ -961,6 +958,13 @@ mixin _BankBuilders on State<BankScreen> {
     return 'hace ${diff.inDays}d';
   }
 
+  String _format12h(DateTime dt) {
+    final h = dt.hour == 0 ? 12 : dt.hour > 12 ? dt.hour - 12 : dt.hour;
+    final m = dt.minute.toString().padLeft(2, '0');
+    final ampm = dt.hour < 12 ? 'AM' : 'PM';
+    return '$h:$m $ampm';
+  }
+
   Future<void> _resolveHeldTransfer(
     HeldTransfer ht, {
     required bool returnToSender,
@@ -996,12 +1000,22 @@ mixin _BankBuilders on State<BankScreen> {
       );
       if (confirmed != true || !mounted) return;
       try {
-        await BankLedgerService().credit(
+        final credited = await BankLedgerService().credit(
           ht.fromPlayerId,
           ht.amount,
           type: 'transfer_cancelled',
           counterpartyId: 'Banco',
         );
+        try {
+          await _self._sendToConnectedPlayer(credited.toClientPayload());
+        } on TransportUnavailableException catch (e) {
+          if (mounted) {
+            NotificationService().show(
+              'Dinero devuelto en el libro, pero ${ht.fromPlayerId} no confirmó: ${e.transportName}. Se sincronizará al reconectar.',
+              backgroundColor: Colors.orange,
+            );
+          }
+        }
         await BankLedgerService().removeHeldTransfer(ht.id);
         if (mounted) {
           NotificationService().show(
@@ -1039,8 +1053,8 @@ mixin _BankBuilders on State<BankScreen> {
           title: const Text('Entregar dinero',
               style: TextStyle(color: kTextPrimary)),
           content: Text(
-            'Se entregarán ${formatMoney(ht.amount)} a $receiverName.',
-            style: const TextStyle(color: kTextSecondary),
+            'Se entregarán ${formatMoney(ht.amount)} a $receiverName.\n\nAcerca los dispositivos para confirmar la entrega.',
+            style: const TextStyle(color: kTextSecondary, height: 1.35),
           ),
           actions: [
             TextButton(
@@ -1059,23 +1073,67 @@ mixin _BankBuilders on State<BankScreen> {
         ),
       );
       if (confirmed != true || !mounted) return;
+
+      final dialog = _BankOperationDialogController(
+        transportType: TransportType.ble,
+      );
+      var dialogOpen = true;
+      _self._showOperationDialog(dialog).whenComplete(() {
+        dialogOpen = false;
+      });
+      await Future<void>.delayed(Duration.zero);
+
       try {
+        final contactReady = await _self._waitForBleContactIfNeeded(dialog);
+        if (!contactReady) {
+          await _self._failOperationDialog(
+            dialog,
+            'Sin contacto BLE',
+            'No se detectó proximidad con el jugador receptor. Acerca los dispositivos e intenta de nuevo.',
+            icon: Icons.bluetooth_disabled_rounded,
+            color: Colors.orange,
+          );
+          return;
+        }
+
+        dialog.update(
+          title: 'Entregando dinero',
+          message: 'Enviando ${formatMoney(ht.amount)} a $receiverName...',
+        );
+
         final delivered = await BankLedgerService().credit(
           receiverName,
           ht.amount,
           type: 'transfer_received',
           counterpartyId: ht.fromPlayerId,
         );
-        P2PService().setTransport(TransportType.ble);
-        await P2PService().sendPayload(delivered.toClientPayload());
-        await BankLedgerService().removeHeldTransfer(ht.id);
-        if (mounted) {
-          NotificationService().show(
-            'Dinero entregado a $receiverName',
-            backgroundColor: kGreen,
+        try {
+          await _self._sendToConnectedPlayer(delivered.toClientPayload());
+        } on TransportUnavailableException catch (e) {
+          await _self._failOperationDialog(
+            dialog,
+            'Entrega sin confirmación',
+            'Dinero acreditado a $receiverName, pero el dispositivo no confirmó: ${e.transportName}. Se sincronizará al reconectar.',
+            icon: Icons.warning_amber_rounded,
+            color: Colors.orange,
           );
+          await BankLedgerService().removeHeldTransfer(ht.id);
+          return;
         }
+        await BankLedgerService().removeHeldTransfer(ht.id);
+        SoundService.playSuccess();
+        HapticFeedback.mediumImpact();
+        dialog.complete(
+          'Dinero entregado a $receiverName.',
+        );
+        NotificationService().show(
+          'Dinero entregado a $receiverName',
+          backgroundColor: kGreen,
+        );
       } catch (e, s) {
+        if (dialogOpen && mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
         if (mounted) context.showFriendlyError(e, s);
       }
     }

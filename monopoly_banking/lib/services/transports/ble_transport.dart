@@ -297,6 +297,19 @@ class BleTransport extends P2PTransport {
 
   bool isRssiContactReady(int rssi) => rssi >= contactProfile.rssiThreshold;
 
+  Future<int?> readCurrentRssi() async {
+    final deviceId = _connectedDeviceId;
+    if (!_clientConnected || deviceId == null) return null;
+    try {
+      return await _ble.readRssi(deviceId).timeout(
+            const Duration(seconds: 3),
+            onTimeout: () => throw TimeoutException('readRssi timeout'),
+          );
+    } catch (_) {
+      return null;
+    }
+  }
+
   String proximityLabelFor(int rssi) {
     if (isRssiContactReady(rssi)) return 'Contacto';
     if (rssi >= -55) return 'Acerca más';
