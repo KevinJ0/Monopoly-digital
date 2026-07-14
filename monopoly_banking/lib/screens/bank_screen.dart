@@ -49,6 +49,8 @@ class _BankScreenState extends State<BankScreen>
   final Map<String, Completer<Map<String, dynamic>>> _pendingDeliveryAcks = {};
   late final AnimationController _slideCtrl;
   late final Animation<Offset> _slide;
+  String? _historyFilterPlayer;
+  bool _historySortAscending = false;
 
   final _operations = const [
     _OpOption(

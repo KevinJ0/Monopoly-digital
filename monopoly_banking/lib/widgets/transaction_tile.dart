@@ -76,7 +76,9 @@ class TransactionTile extends StatelessWidget {
       'sync_credit' ||
       'investment_completed' ||
       'investment_early_withdrawal' ||
-      'bank_charge_received' =>
+      'bank_charge_received' ||
+      'bank_transfer_received' ||
+      'bank_transfer_cancelled' =>
         _TransactionDirection.received,
       'handshake_initial' ||
       'handshake_reconnect' ||
@@ -96,10 +98,13 @@ class TransactionTile extends StatelessWidget {
       case 'payment':
       case 'transfer_received':
       case 'transfer_cancelled':
+      case 'bank_transfer_received':
+      case 'bank_transfer_cancelled':
         return Icons.arrow_downward_rounded;
       case 'charge':
       case 'transfer_held':
-        return Icons.arrow_upward_rounded;
+      case 'bank_transfer_held':
+        return Icons.lock_outline_rounded;
       case 'bank_charge_received':
         return Icons.call_received_rounded;
       case 'bank_player_joined':
@@ -128,8 +133,13 @@ class TransactionTile extends StatelessWidget {
       case 'transfer_received':
         return 'Transferencia recibida';
       case 'transfer_held':
-        return 'Transferencia enviada';
+      case 'bank_transfer_held':
+        return 'Dinero retenido por el banco';
       case 'transfer_cancelled':
+        return 'Transferencia devuelta';
+      case 'bank_transfer_received':
+        return 'Transferencia recibida';
+      case 'bank_transfer_cancelled':
         return 'Transferencia devuelta';
       case 'investment_opened':
         return 'Dinero invertido';
@@ -161,7 +171,7 @@ class TransactionTile extends StatelessWidget {
       case 'sync_debit':
         return 'Ajuste por sincronización';
       default:
-        return 'Pago enviado';
+        return type;
     }
   }
 

@@ -75,6 +75,8 @@ mixin _BankBuilders on State<BankScreen> {
                           delay: const Duration(milliseconds: 500),
                           child: _buildSendButton(),
                         ),
+                        const SizedBox(height: 40),
+                        _buildTransactionHistory(),
                       ],
                     ),
                   ),
@@ -270,6 +272,180 @@ mixin _BankBuilders on State<BankScreen> {
             elevation: 0,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTransactionHistory() {
+    final ledger = BankLedgerService();
+    final all = ledger.transactionHistory;
+    final playerNames = all
+        .map((tx) => tx['playerId'] as String? ?? '')
+        .where((n) => n.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    var filtered = all.where((tx) {
+      if (_self._historyFilterPlayer == null) return true;
+      return tx['playerId'] == _self._historyFilterPlayer;
+    }).toList();
+    filtered.sort((a, b) {
+      final ta = a['timestamp'] as String? ?? '';
+      final tb = b['timestamp'] as String? ?? '';
+      return _self._historySortAscending ? ta.compareTo(tb) : tb.compareTo(ta);
+    });
+    final displayed = filtered.take(50).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'HISTORIAL',
+              style: TextStyle(
+                  color: kTextSecondary, fontSize: 11, letterSpacing: 2),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: kBgCard,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '${filtered.length}',
+                style: const TextStyle(color: kTextSecondary, fontSize: 11),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: kBgCard,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: kBorder),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String?>(
+                    isExpanded: true,
+                    value: _self._historyFilterPlayer,
+                    hint: const Text('Todos los jugadores',
+                        style: TextStyle(color: kTextSecondary, fontSize: 12)),
+                    dropdownColor: kBgCard,
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('Todos los jugadores',
+                            style: TextStyle(color: kTextPrimary, fontSize: 12)),
+                      ),
+                      ...playerNames.map((name) => DropdownMenuItem(
+                            value: name,
+                            child: Text(name,
+                                style: const TextStyle(
+                                    color: kTextPrimary, fontSize: 12)),
+                          )),
+                    ],
+                    onChanged: (v) => setState(() => _self._historyFilterPlayer = v),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => setState(
+                  () => _self._historySortAscending = !_self._historySortAscending),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: kBgCard,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: kBorder),
+                ),
+                child: Icon(
+                  _self._historySortAscending
+                      ? Icons.arrow_upward_rounded
+                      : Icons.arrow_downward_rounded,
+                  color: kTextSecondary,
+                  size: 18,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (displayed.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: kBgCard.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Text(
+              'Sin transacciones',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: kTextSecondary, fontSize: 12),
+            ),
+          )
+        else
+          ...displayed.map((tx) => _buildHistoryTile(tx)),
+      ],
+    );
+  }
+
+  Widget _buildHistoryTile(Map<String, dynamic> tx) {
+    final type = tx['type'] as String? ?? '';
+    final amount = (tx['amount'] as num?)?.toDouble() ?? 0;
+    final playerId = tx['playerId'] as String? ?? '';
+    final timestamp = tx['timestamp'] as String? ?? '';
+    final dt = DateTime.tryParse(timestamp);
+    final time = dt != null ? _format12h(dt) : '';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: kBgCard.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(_txIcon(type), size: 16, color: _txColor(type)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _txLabel(type),
+                  style: const TextStyle(
+                      color: kTextPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  playerId,
+                  style: const TextStyle(color: kTextSecondary, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            '\$${amount.toStringAsFixed(0)}',
+            style: TextStyle(
+              color: _txColor(type),
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            time,
+            style: const TextStyle(color: kTextSecondary, fontSize: 10),
+          ),
+        ],
       ),
     );
   }
@@ -785,6 +961,9 @@ mixin _BankBuilders on State<BankScreen> {
       'investment_opened' => 'Inversi\u00f3n abierta',
       'investment_completed' => 'Inversi\u00f3n completada',
       'investment_early_withdrawal' => 'Retiro anticipado',
+      'transfer_held' => 'Retenci\u00f3n de transferencia',
+      'transfer_received' => 'Transferencia recibida',
+      'transfer_cancelled' => 'Transferencia devuelta',
       _ => type,
     };
   }
@@ -800,14 +979,19 @@ mixin _BankBuilders on State<BankScreen> {
       'investment_opened' => Icons.trending_up_rounded,
       'investment_completed' => Icons.trending_up_rounded,
       'investment_early_withdrawal' => Icons.trending_up_rounded,
+      'transfer_held' => Icons.lock_outline_rounded,
+      'transfer_received' => Icons.arrow_downward_rounded,
+      'transfer_cancelled' => Icons.replay_rounded,
       _ => Icons.swap_horiz_rounded,
     };
   }
 
   Color _txColor(String type) {
     return switch (type) {
-      'payment' || 'passGo' => kGreen,
+      'payment' || 'passGo' || 'transfer_received' => kGreen,
       'charge' || 'bankruptcy' => kRed,
+      'transfer_held' => kGold,
+      'transfer_cancelled' => Colors.orange,
       _ => kGold,
     };
   }
@@ -816,7 +1000,7 @@ mixin _BankBuilders on State<BankScreen> {
     return ValueListenableBuilder<int>(
       valueListenable: BankLedgerService().heldTransfersCount,
       builder: (context, count, _) {
-        if (count == 0) return const SizedBox.shrink();
+        if (count == 0 && !kDebugMode) return const SizedBox.shrink();
         final held = BankLedgerService().heldTransfers;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -861,6 +1045,65 @@ mixin _BankBuilders on State<BankScreen> {
             ),
             const SizedBox(height: 12),
             ...held.map((ht) => _buildHeldTransferTile(ht)),
+            if (held.isEmpty && kDebugMode) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: kBgCard.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.2),
+                    strokeAlign: BorderSide.strokeAlignInside,
+                  ),
+                ),
+                child: const Text(
+                  'No hay transacciones retenidas.',
+                  style: TextStyle(color: kTextSecondary, fontSize: 12),
+                ),
+              ),
+            ],
+            if (kDebugMode) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final ledger = BankLedgerService();
+                    final testNames = [
+                      'TestPlayer', 'JugadorAlpha', 'BetaUser',
+                      'DebugBot', 'Simulador',
+                    ];
+                    final randomName = testNames[
+                        DateTime.now().microsecond % testNames.length];
+                    final randomAmount =
+                        (100 + (DateTime.now().microsecond % 99) * 10)
+                            .toDouble();
+                    await ledger.registerHeldTransfer(
+                      id: 'debug-${DateTime.now().microsecondsSinceEpoch}',
+                      fromPlayerId: randomName,
+                      amount: randomAmount,
+                    );
+                    if (mounted) {
+                      NotificationService().show(
+                        'DEBUG: Transferencia retenida creada ($randomName, ${formatMoney(randomAmount)})',
+                        backgroundColor: Colors.orange,
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.bug_report_rounded, size: 16),
+                  label: const Text('Crear transferencia retenida (DEBUG)'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.orange,
+                    side: BorderSide(color: Colors.orange.withValues(alpha: 0.4)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ],
           ],
         );
       },

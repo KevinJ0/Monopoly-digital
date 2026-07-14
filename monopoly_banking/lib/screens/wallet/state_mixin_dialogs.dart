@@ -141,35 +141,7 @@ mixin _WalletDialogs on State<WalletScreen> {
 
                     setDialogState(() {
                       sending = true;
-                      message = 'Verificando proximidad con el banco...';
-                    });
-
-                    var contactReady = false;
-                    final timeout = DateTime.now().add(const Duration(seconds: 15));
-                    while (!contactReady && DateTime.now().isBefore(timeout)) {
-                      final rssi = await transport.readCurrentRssi();
-                      if (rssi != null && transport.isRssiContactReady(rssi)) {
-                        contactReady = true;
-                        break;
-                      }
-                      await Future<void>.delayed(const Duration(seconds: 2));
-                    }
-                    if (!contactReady) {
-                      if (mounted) {
-                        setDialogState(() {
-                          sending = false;
-                          message = '';
-                        });
-                        _showToast(
-                          'No se detectó proximidad con el banco. Acerca los dispositivos.',
-                          Colors.orange,
-                        );
-                      }
-                      return;
-                    }
-
-                    setDialogState(() {
-                      message = 'Esperando confirmación del banco...';
+                      message = 'Acerca tu dispositivo al banco y espera la confirmación...';
                     });
 
                     try {
@@ -190,7 +162,7 @@ mixin _WalletDialogs on State<WalletScreen> {
                       final pendingCompleter = _self._pendingTransferCompleter;
                       if (pendingCompleter != null) {
                         await pendingCompleter.future
-                            .timeout(const Duration(seconds: 12));
+                            .timeout(const Duration(seconds: 20));
                       }
                     } on TimeoutException {
                       if (mounted) {

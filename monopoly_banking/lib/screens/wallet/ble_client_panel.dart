@@ -160,21 +160,58 @@ class BleClientPanel extends StatelessWidget {
                                             BorderRadius.circular(10)),
                                   ),
                                 )
-                              : ElevatedButton.icon(
-                                  onPressed: () {
-                                    SoundService.playClick();
-                                    onStartBleClient?.call();
-                                  },
-                                  icon: const Icon(
-                                      Icons.bluetooth_searching_rounded,
-                                      size: 16),
-                                  label: const Text('Conectar por BLE'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(10)),
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        Colors.blue.withValues(alpha: 0.9),
+                                        Colors.blue.withValues(alpha: 0.6),
+                                      ],
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.blue.withValues(alpha: 0.4),
+                                        blurRadius: 12,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () {
+                                        SoundService.playClick();
+                                        onStartBleClient?.call();
+                                      },
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.bluetooth_searching_rounded,
+                                              size: 18,
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.9),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            const Text(
+                                              'Conectar por BLE',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 14,
+                                                letterSpacing: 0.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                         ),

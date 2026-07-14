@@ -113,13 +113,22 @@ mixin _WalletBuilders on State<WalletScreen> {
     return ValueListenableBuilder<bool>(
       valueListenable: P2PService().bleTransport.clientConnectedNotifier,
       builder: (context, connected, _) {
-        return BleConnectButton(
-          key: const ValueKey('bleConnect'),
-          color: color,
-          bleScanning: _self._bleScanning,
-          clientConnected: connected,
-          onStartBleClient: _self._startBleClient,
-          onStopBleClient: _self._stopBleClient,
+        return ValueListenableBuilder<String>(
+          valueListenable: P2PService().bleTransport.connectionStatusNotifier,
+          builder: (context, status, _) {
+            final connecting = !connected &&
+                (status.startsWith('Conectando') ||
+                    status.startsWith('Preparando'));
+            return BleConnectButton(
+              key: const ValueKey('bleConnect'),
+              color: color,
+              bleScanning: _self._bleScanning && !connecting,
+              clientConnected: connected,
+              connecting: connecting,
+              onStartBleClient: _self._startBleClient,
+              onStopBleClient: _self._stopBleClient,
+            );
+          },
         );
       },
     );
@@ -523,11 +532,12 @@ mixin _WalletBuilders on State<WalletScreen> {
       ),
       actions: [
         if (!compactActions) ...[
-          IconButton(
-            icon: const Icon(Icons.bluetooth_rounded, color: kTextSecondary),
-            tooltip: 'BLE Debug',
-            onPressed: _self._self._openBleDebug,
-          ),
+          if (kDebugMode)
+            IconButton(
+              icon: const Icon(Icons.bluetooth_rounded, color: kTextSecondary),
+              tooltip: 'BLE Debug',
+              onPressed: _self._self._openBleDebug,
+            ),
         ],
         IconButton(
           icon: const Icon(Icons.logout_rounded, color: kRed),
@@ -537,13 +547,14 @@ mixin _WalletBuilders on State<WalletScreen> {
             _self._confirmExit(context.read<SessionProvider>());
           },
         ),
-        IconButton(
-          icon: const Icon(Icons.refresh_rounded, color: kTextSecondary),
-          onPressed: () {
-            SoundService.playClick();
-            setState(() {});
-          },
-        ),
+        if (kDebugMode)
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: kTextSecondary),
+            onPressed: () {
+              SoundService.playClick();
+              setState(() {});
+            },
+          ),
         if (compactActions)
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert_rounded, color: kTextSecondary),
@@ -552,11 +563,12 @@ mixin _WalletBuilders on State<WalletScreen> {
             onSelected: (value) {
               if (value == 'ble') _self._openBleDebug();
             },
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: 'ble',
-                child: Text('BLE Debug'),
-              ),
+            itemBuilder: (context) => [
+              if (kDebugMode)
+                const PopupMenuItem(
+                  value: 'ble',
+                  child: Text('BLE Debug'),
+                ),
             ],
           ),
       ],

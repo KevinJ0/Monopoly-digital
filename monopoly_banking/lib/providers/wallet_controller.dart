@@ -125,16 +125,23 @@ class WalletController extends ChangeNotifier {
     } else if (session.balance < previousBalance) {
       _stats.record(amount);
       _txEvent.add(TxType.sent);
-      unawaited(_audioPlayer.play(AssetSource('sounds/click.wav')));
-      HapticFeedback.lightImpact();
-      final loss = previousBalance - session.balance;
-      if (loss >= 500) {
-        balanceDecreaseShake.value++;
-        HapticFeedback.heavyImpact();
-        SoundService.playSadTrombone();
+      if (eventType == 'investment_opened') {
+        NotificationService().show(
+            'Inversión de ${formatMoney(amount)} iniciada',
+            backgroundColor: kGold);
+      } else {
+        unawaited(_audioPlayer.play(AssetSource('sounds/click.wav')));
+        HapticFeedback.lightImpact();
+        final loss = previousBalance - session.balance;
+        if (loss >= 500) {
+          balanceDecreaseShake.value++;
+          HapticFeedback.heavyImpact();
+          SoundService.playSadTrombone();
+        }
+        NotificationService().show(
+            'Transferiste ${formatMoney(amount)}',
+            backgroundColor: kRed);
       }
-      NotificationService().show('Pagaste ${formatMoney(amount)}',
-          backgroundColor: kRed);
     }
 
     if (session.isBankrupt) {
