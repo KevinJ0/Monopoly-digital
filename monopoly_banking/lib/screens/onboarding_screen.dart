@@ -343,7 +343,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       delay: const Duration(milliseconds: 300),
                       child: _buildColorGrid(isWide, isShort),
                     ),
-                    SizedBox(height: isShort ? 20 : 32),
+                    SizedBox(height: isShort ? 16 : 30),
                     AnimatedEntry(
                       delay: const Duration(milliseconds: 400),
                       child: _buildPreviewCard(isShort),
@@ -490,22 +490,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildColorGrid(bool isWide, bool isShort) {
-    final crossAxisCount = isWide ? 8 : 4;
-    final spacing = isShort ? 8.0 : 14.0;
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        mainAxisSpacing: spacing,
-        crossAxisSpacing: spacing,
-      ),
-      itemCount: _palette.length,
-      itemBuilder: (context, index) => _buildColorCircle(index),
+    final gap = isShort ? 4.0 : 7.0;
+    final circleSize = isWide ? 44.0 : 48.0;
+    return Wrap(
+      spacing: gap,
+      runSpacing: gap,
+      alignment: WrapAlignment.center,
+      children:
+          List.generate(_palette.length, (i) => _buildColorCircle(i, circleSize)),
     );
   }
 
-  Widget _buildColorCircle(int index) {
+  Widget _buildColorCircle(int index, double size) {
     final color = _palette[index];
     final selected = _selectedColorIndex == index;
     final isLight = color.computeLuminance() > 0.5;
@@ -514,9 +510,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         SoundService.playClick();
         setState(() => _selectedColorIndex = index);
       },
-      child: FractionallySizedBox(
-        widthFactor: 0.7,
-        heightFactor: 0.7,
+      child: SizedBox(
+        width: size,
+        height: size,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           decoration: BoxDecoration(
