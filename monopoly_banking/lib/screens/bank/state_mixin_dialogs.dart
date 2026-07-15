@@ -290,7 +290,7 @@ mixin _BankDialogs on State<BankScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Mantén los dispositivos en contacto BLE hasta completar.',
+                'Esperando confirmación del jugador.',
                 style: TextStyle(color: kTextSecondary, fontSize: 12),
               ),
             ],
@@ -329,31 +329,21 @@ mixin _BankDialogs on State<BankScreen> {
     await Future<void>.delayed(Duration.zero);
 
     try {
-      if (dialog.transportType == TransportType.ble &&
-          !P2PService().bleTransport.clientConnectedNotifier.value) {
-        await _failOperationDialog(
-          dialog,
-          'Sin jugador conectado',
-          'No hay ningún jugador conectado por BLE. Abre la app del jugador, conéctalo al banco y vuelve a intentar.',
-          icon: Icons.bluetooth_disabled_rounded,
-          color: Colors.orange,
-        );
-        return;
-      }
-      if (dialog.transportType == TransportType.ble &&
-          !await _self._waitForBlePlayerReady(dialog)) {
+      if (!await _self._waitForPlayerReady(dialog)) {
         await _failOperationDialog(
           dialog,
           'Jugador no disponible',
-          'El dispositivo aparece conectado, pero no terminó de preparar el canal BLE. Mantén ambas aplicaciones abiertas e intenta nuevamente.',
+          'No hay jugadores conectados. Espera a que un jugador se conecte al banco e intenta nuevamente.',
           icon: Icons.phonelink_off_rounded,
           color: Colors.orange,
         );
         return;
       }
 
-      final contactReady = await _self._waitForBleContactIfNeeded(dialog);
-      if (!contactReady) return;
+      final targetPlayer = await _self._selectTargetPlayer(
+        title: 'Seleccionar jugador',
+      );
+      if (targetPlayer == null) return;
 
       dialog.update(
         title: _self._operationWaitTitle(),
@@ -361,15 +351,8 @@ mixin _BankDialogs on State<BankScreen> {
       );
 
       final ledger = BankLedgerService();
-      final targetPlayer = _self._contactPlayer();
-      final playerId = targetPlayer?.displayName;
-      if (playerId == null || playerId.isEmpty) {
-        throw const BankLedgerException(
-          'No se pudo identificar al jugador. Conéctalo por BLE primero.',
-        );
-      }
-      final deviceInstallationId = targetPlayer?.deviceInstallationId ?? '';
-      final playerIsActive = targetPlayer?.playing ?? false;
+      final playerId = targetPlayer.displayName;
+      final deviceInstallationId = targetPlayer.deviceInstallationId;
       if (deviceInstallationId.isEmpty) {
         await _failOperationDialog(
           dialog,
@@ -382,14 +365,6 @@ mixin _BankDialogs on State<BankScreen> {
       }
 
       if (_self._selectedOp == 'passGo') {
-        if (!playerIsActive) {
-          await _failOperationDialog(
-            dialog,
-            'Handshake requerido',
-            'El jugador debe recibir el handshake inicial antes de jugar.',
-          );
-          return;
-        }
         final result = await ledger.passGo(playerId);
           await _self._sendToConnectedPlayer(result.toClientPayload());
           SoundService.playFanfare();
@@ -397,14 +372,6 @@ mixin _BankDialogs on State<BankScreen> {
           NotificationService().show('$playerId pasó por GO: +${formatMoney(200)}',
               backgroundColor: kGold);
       } else {
-        if (!playerIsActive) {
-          await _failOperationDialog(
-            dialog,
-            'Handshake requerido',
-            'El jugador debe recibir el handshake inicial antes de jugar.',
-          );
-          return;
-        }
         final amount = double.parse(_self._amountCtrl.text.replaceAll(',', ''));
         if (_self._selectedOp == 'receive') {
           final result = await ledger.credit(
@@ -454,9 +421,6 @@ mixin _BankDialogs on State<BankScreen> {
             NotificationService().show(
                 '$playerId en bancarrota. Expulsado de la partida.',
                 backgroundColor: kRed);
-            if (targetPlayer != null) {
-              P2PService().bleTransport.markPlayerInactive(targetPlayer.id);
-            }
             dialog.complete(
               '$playerId fue declarado en bancarrota y expulsado de la partida.',
             );
@@ -477,7 +441,7 @@ mixin _BankDialogs on State<BankScreen> {
         }
       }
       dialog
-          .complete('Proceso completado con el jugador ${_self._playerNameLabel()}');
+          .complete('Proceso completado con el jugador $playerId');
     } catch (e, s) {
       AppAuditLogger.instance.event('BANK_OP', '_send_error',
           data: {'op': _self._selectedOp, 'error': e.toString()},
@@ -521,7 +485,7 @@ mixin _BankDialogs on State<BankScreen> {
         var delivering = false;
         var completed = false;
         var status =
-            'Acerca el celular del jugador que recibirá el dinero y pulsa entregar.';
+            'Selecciona el jugador que recibirá el dinero y pulsa entregar.';
 
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -529,22 +493,24 @@ mixin _BankDialogs on State<BankScreen> {
               if (delivering || completed) return;
               setDialogState(() {
                 delivering = true;
-                status = 'Esperando contacto del jugador receptor...';
+                status = 'Seleccionando jugador receptor...';
               });
 
-              final receiver = await _self._waitForTransferReceiver();
+              final receiver = await _self._selectTransferReceiver(
+                excludePlayerId: fromName,
+              );
               if (receiver == null) {
                 if (!ctx.mounted) return;
                 setDialogState(() {
                   delivering = false;
                   status =
-                      'No detecté un jugador en contacto. Acércalo e intenta de nuevo.';
+                      'No hay jugadores disponibles. Conecta al receptor e intenta de nuevo.';
                 });
                 return;
               }
 
               try {
-                P2PService().setTransport(TransportType.ble);
+                P2PService().setTransport(TransportType.ws);
                 await P2PService().sendPayload({
                   'type': 'payment',
                   'amount': amount,
@@ -686,7 +652,7 @@ mixin _BankDialogs on State<BankScreen> {
   }
 
   void _showPlayerDetailDialog(
-    BleConnectedPlayer player,
+    WsPlayer player,
     BankPlayerAccount? account,
   ) {
     final ledger = BankLedgerService();
@@ -701,13 +667,13 @@ mixin _BankDialogs on State<BankScreen> {
         transactions.where((tx) => tx['type'] == 'passGo').length;
     final txCount = transactions.length;
     final balance = account?.balance ?? 0;
-                final playerColor = _self._playerColor(player.colorId);
-                final avatar = player.avatarId.isNotEmpty
-                    ? player.avatarId
-                    : '\u{1F464}';
-                final tier = _self._playerTier(balance);
-                final tierLabel = _self._tierLabel(tier);
-                final tierColor = _self._tierColor(tier);
+    final playerColor = _self._playerColor(player.colorId);
+    final avatar = player.avatarId.isNotEmpty
+        ? player.avatarId
+        : '\u{1F464}';
+    final tier = _self._playerTier(balance);
+    final tierLabel = _self._tierLabel(tier);
+    final tierColor = _self._tierColor(tier);
 
     showDialog(
       context: context,
@@ -789,8 +755,7 @@ mixin _BankDialogs on State<BankScreen> {
                           tierColor: tierColor,
                           transactions: transactions,
                         ),
-
-                        _self._buildConnectionInfoTab(player),
+                        _buildConnectionInfoTab(player),
                       ],
                     ),
                   ),

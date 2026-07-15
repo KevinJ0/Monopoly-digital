@@ -2,8 +2,45 @@ part of '../wallet_screen.dart';
 
 mixin _WalletConnection on State<WalletScreen> {
   _WalletScreenState get _self => this as _WalletScreenState;
+
+  String? _wsBankIp;
+  int _wsBankPort = 8080;
+  bool _wsConnecting = false;
+
   void _connectToHost(SessionProvider session) {
     // no-op
+  }
+
+  void _startWsClient() {
+    _self._wsScanning = true;
+    if (mounted) setState(() {});
+  }
+
+  void _stopWsClient() {
+    _self._wsScanning = false;
+    _self._userRequestedWsDisconnect = true;
+    if (mounted) setState(() {});
+    P2PService().wsTransport.stop().then((_) {
+      _self._userRequestedWsDisconnect = false;
+      if (mounted) setState(() {});
+    });
+  }
+
+  void _connectToWsBank(String host, int port) {
+    _connectToBank(host, port: port);
+  }
+
+  Future<void> _reiniciarWsServer() async {
+    await P2PService().wsTransport.stop();
+    await P2PService().startWsServer();
+  }
+
+  void _detenerWsServer() {
+    P2PService().wsTransport.stop();
+  }
+
+  Future<bool> _ensureWsReady() async {
+    return P2PService().wsTransport.init();
   }
 
   void _listenForBankServerState() {
@@ -15,79 +52,76 @@ mixin _WalletConnection on State<WalletScreen> {
       }
     };
     P2PService()
-        .bleTransport
+        .wsTransport
         .serverActiveNotifier
         .addListener(_self._bankServerListener!);
   }
 
   void _listenForBankPlayerConnections() {
-    final notifier = P2PService().bleTransport.connectedPlayersNotifier;
-    _self._bleConnectionsListener ??= () {
+    final notifier = P2PService().wsTransport.connectedPlayersNotifier;
+    _self._wsConnectionsListener ??= () {
       final connected = notifier.value
-          .where((player) => player.subscribed)
+          .where((player) => player.connected)
           .toList(growable: false);
       final connectedIds = connected.map((player) => player.id).toSet();
-      _self._announcedBleConnections.removeWhere(
-        (deviceId) => !connectedIds.contains(deviceId),
+      _self._announcedWsConnections.removeWhere(
+        (id) => !connectedIds.contains(id),
       );
 
       for (final player in connected) {
-        if (_self._announcedBleConnections.contains(player.id)) {
-          continue;
-        }
-        _self._announcedBleConnections.add(player.id);
+        if (_self._announcedWsConnections.contains(player.id)) continue;
+        _self._announcedWsConnections.add(player.id);
         debugPrint(
-          '[BLE bank] Jugador suscrito id=${player.id} nombre=${player.displayName}',
+          '[WS bank] Jugador conectado id=${player.id} nombre=${player.displayName}',
         );
         NotificationService().show(
-          '${player.displayName} se conectó al banco\n'
-          'Dispositivo: ${player.displayDeviceName}',
+          '${player.displayName} se conect\u00f3 al banco',
           backgroundColor: kGreen,
           duration: const Duration(seconds: 4),
-          dedupeKey: 'ble-connected:${player.id}',
+          dedupeKey: 'ws-connected:${player.id}',
         );
       }
     };
-    notifier.addListener(_self._bleConnectionsListener!);
-    _self._bleConnectionsListener!();
+    notifier.addListener(_self._wsConnectionsListener!);
+    _self._wsConnectionsListener!();
   }
 
-  void _listenForBleBankDisconnection() {
-    final notifier = P2PService().bleTransport.clientConnectedNotifier;
-    _self._wasBleClientConnected = notifier.value;
-    _self._bleClientConnectionListener ??= () {
+  void _listenForWsDisconnection() {
+    final notifier = P2PService().wsTransport.clientConnectedNotifier;
+    _self._wasWsClientConnected = notifier.value;
+    _self._wsClientConnectionListener ??= () {
       final connected = notifier.value;
 
-      if (connected && _self._bleScanning) {
-        _self._bleScanning = false;
+      if (connected && _self._wsConnecting) {
+        _self._wsConnecting = false;
         if (mounted && !_self._dialogActive) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) setState(() {});
           });
         }
       } else if (!connected &&
-          _self._wasBleClientConnected &&
-          !_self._userRequestedBleDisconnect) {
-        _self._bleScanning = true;
+          _self._wasWsClientConnected &&
+          !_self._userRequestedWsDisconnect) {
+        _self._wsConnecting = false;
         if (mounted && !_self._dialogActive) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) setState(() {});
           });
         }
         Future.microtask(() {
-          if (!mounted || _self._userRequestedBleDisconnect) return;
+          if (!mounted || _self._userRequestedWsDisconnect) return;
           NotificationService().show(
-            'Se perdi\u00f3 la conexi\u00f3n con el banco. El servidor BLE fue apagado o dej\u00f3 de estar disponible.',
+            'Se perdi\u00f3 la conexi\u00f3n con el banco. El servidor fue apagado o dej\u00f3 de estar disponible.',
             backgroundColor: kRed,
             duration: const Duration(seconds: 5),
-            dedupeKey: 'ble-bank-disconnected',
+            dedupeKey: 'ws-bank-disconnected',
           );
         });
       }
 
-      _self._wasBleClientConnected = connected;
+      _self._wasWsClientConnected = connected;
     };
-    notifier.addListener(_self._bleClientConnectionListener!);
+    notifier.addListener(_self._wsClientConnectionListener!);
   }
 
   void _listenToBankStats() {
@@ -107,28 +141,7 @@ mixin _WalletConnection on State<WalletScreen> {
   }
 
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      final session = context.read<SessionProvider>();
-      if (session.isBank) {
-        P2PService().bleTransport.refreshAvailability().then((_) {
-          if (mounted && !_self._dialogActive) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) setState(() {});
-            });
-          }
-        });
-      }
-    }
-  }
-
-  void _setBleClientIdentity() {
-    final session = context.read<SessionProvider>();
-    P2PService().bleTransport.setClientIdentity(
-          name: session.name,
-          avatarId: session.avatarId,
-          colorId: session.colorId,
-          isHandshakeDone: session.isHandshakeDone,
-        );
+    // no-op for WS
   }
 
   void _listenToBankruptcy() {
@@ -150,134 +163,48 @@ mixin _WalletConnection on State<WalletScreen> {
     });
   }
 
-  Future<void> _startBleClient() async {
-    if (_self._bleScanning) return;
-    final transport = P2PService().bleTransport;
-    final ready = await _ensureBleReady(transport);
-    if (!ready || !mounted) return;
-
-    if (P2PService().currentType != TransportType.ble) {
-      P2PService().setTransport(TransportType.ble);
-    }
-    _setBleClientIdentity();
-    _self._bleScanning = true;
+  Future<void> _connectToBank(String host, {int port = 8080}) async {
+    if (_self._wsConnecting) return;
+    _self._wsConnecting = true;
+    _self._wsBankIp = host;
+    _wsBankPort = port;
     setState(() {});
+
     try {
-      await P2PService().startReceiving(null);
-    } catch (e, s) {
-      _self._bleScanning = false;
-      if (mounted) _self._safeSetState(() {});
-      if (mounted) _self._safeShowFriendlyError(e, s);
+      P2PService().setTransport(TransportType.ws);
+      await P2PService().wsTransport.connectToBank(host, port: port);
+
+      final session = context.read<SessionProvider>();
+      P2PService().wsTransport.sendIdentity(
+        name: session.name,
+        avatarId: session.avatarId,
+        colorId: session.colorId,
+        deviceInstallationId: DeviceIdentityService.installationId,
+      );
+
+      _self._wsConnecting = false;
+      setState(() {});
+    } catch (e) {
+      _self._wsConnecting = false;
+      if (mounted) {
+        NotificationService().show(
+          'No se pudo conectar al banco en $host:$port',
+          backgroundColor: kRed,
+          duration: const Duration(seconds: 4),
+        );
+        setState(() {});
+      }
     }
   }
 
-  Future<void> _stopBleClient() async {
-    _self._userRequestedBleDisconnect = true;
-    _self._bleScanning = false;
+  Future<void> _disconnectFromBank() async {
+    _self._userRequestedWsDisconnect = true;
+    _self._wsConnecting = false;
     try {
-      await P2PService().bleTransport.stopClientScan();
+      await P2PService().wsTransport.stop();
       if (mounted) _self._safeSetState(() {});
     } finally {
-      _self._userRequestedBleDisconnect = false;
-    }
-  }
-
-  Future<void> _connectToBleBank(BleBankDevice bank) async {
-    SoundService.playClick();
-    _setBleClientIdentity();
-    try {
-      await P2PService().bleTransport.connectToBank(bank);
-    } catch (e, s) {
-      if (mounted) _self._safeShowFriendlyError(e, s);
-    }
-  }
-
-  Future<bool> _ensureBleReady(BleTransport transport) async {
-    var status = await transport.refreshAvailability();
-    if (status == BleAvailabilityStatus.ready) return true;
-    if (!mounted) return false;
-
-    if (status == BleAvailabilityStatus.noHardware) {
-      _self._showToast('Este dispositivo no tiene Bluetooth LE disponible.', kRed);
-      return false;
-    }
-
-    if (status == BleAvailabilityStatus.missingPermissions) {
-      final allow = await _self._confirmAction(
-        title: 'Permisos de Bluetooth',
-        message:
-            'Para usar la conexión BLE necesito permisos de Bluetooth. ¿Quieres permitirlos ahora?',
-        confirmLabel: 'Permitir',
-      );
-      if (allow != true || !mounted) return false;
-
-      await transport.requestPermissions();
-      await Future.delayed(const Duration(milliseconds: 500));
-      status = await transport.refreshAvailability();
-      if (status == BleAvailabilityStatus.ready) return true;
-      if (status == BleAvailabilityStatus.bluetoothOff) {
-        return _askToOpenBleSettings(transport);
-      }
-      _self._showToast(
-          'Permisos de Bluetooth pendientes. Revisa los permisos de la app.',
-          kRed);
-      return false;
-    }
-
-    if (status == BleAvailabilityStatus.bluetoothOff) {
-      return _askToOpenBleSettings(transport);
-    }
-
-    _self._showToast(
-        'No pude verificar Bluetooth. Revisa los ajustes e intenta de nuevo.',
-        kRed);
-    return false;
-  }
-
-  Future<bool> _askToOpenBleSettings(BleTransport transport) async {
-    final open = await _self._confirmAction(
-      title: 'Bluetooth apagado',
-      message:
-          'Para conectarte por BLE debes activar Bluetooth. ¿Quieres abrir los ajustes para encenderlo?',
-      confirmLabel: 'Abrir ajustes',
-    );
-    if (open == true && mounted) {
-      await transport.openBleSettings();
-    }
-    return false;
-  }
-
-  Future<void> _reiniciarBleBanco() async {
-    final transport = P2PService().bleTransport;
-    try {
-      await transport.stopServer();
-    } catch (_) {}
-    transport.connectedPlayersNotifier.value = const [];
-    await transport.resetState();
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    final ready = await _ensureBleReady(transport);
-    if (!ready || !mounted) return;
-    await P2PService().startBleBankServer();
-    P2PService().setTransport(TransportType.ble);
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  Future<void> _detenerBleBanco() async {
-    final transport = P2PService().bleTransport;
-    try {
-      await transport.stopServer();
-    } catch (_) {}
-    transport.connectedPlayersNotifier.value = const [];
-    if (mounted) {
-      setState(() {});
+      _self._userRequestedWsDisconnect = false;
     }
   }
 }
-
-
-
-
-
-

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,8 +8,8 @@ import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/services/bank_ledger_service.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
-import 'package:monopoly_banking/services/transports/ble_transport.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
+import 'package:monopoly_banking/services/transports/ws_models.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
 import 'package:monopoly_banking/services/app_audit_logger.dart';
@@ -104,12 +103,13 @@ class _BankScreenState extends State<BankScreen>
             completer.complete(payload);
           }
         }
+        return;
       }
       if (payload['type'] == 'handshake_confirm' ||
-          payload['type'] == 'ble_identity') {
+          payload['type'] == 'ws_identity') {
         final name = payload['name'] as String? ?? 'Jugador';
         _connectedPlayerName = name;
-        if (payload['type'] == 'ble_identity') {
+        if (payload['type'] == 'ws_identity') {
           final account = BankLedgerService().accountFor(name);
           final installationId =
               (payload['deviceInstallationId'] as String?) ?? '';
@@ -117,24 +117,27 @@ class _BankScreenState extends State<BankScreen>
               !account.bankrupt &&
               account.deviceInstallationId.isNotEmpty &&
               account.deviceInstallationId == installationId;
-          if (isReturningPlayer) {
-            final bleDeviceId = payload['_bleDeviceId'] as String?;
-            if (bleDeviceId != null && bleDeviceId.isNotEmpty) {
-              P2PService().bleTransport.markPlayerActive(bleDeviceId);
-            }
-          }
+
           NotificationService().show(
             isReturningPlayer
                 ? '$name se reconectó a la partida'
                 : '$name se conectó al banco',
             backgroundColor: kGreen,
             duration: const Duration(seconds: 4),
-            dedupeKey: 'ble-connected:${payload['_bleDeviceId'] ?? name}',
+            dedupeKey: 'ws-connected:$name',
           );
         }
       }
     }, onError: (e, s) {
       if (mounted) context.showFriendlyError(e, s);
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await P2PService().startWsServer();
+      } catch (e, s) {
+        if (mounted) context.showFriendlyError(e, s);
+      }
     });
   }
 

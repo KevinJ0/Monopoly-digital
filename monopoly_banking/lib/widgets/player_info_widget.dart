@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/transports/ble_transport.dart';
+import 'package:monopoly_banking/services/transports/ws_models.dart';
 
 class PlayerInfoView extends StatelessWidget {
-  final BleConnectedPlayer player;
+  final WsPlayer player;
   final double balance;
   final double volume;
   final int passGoCount;

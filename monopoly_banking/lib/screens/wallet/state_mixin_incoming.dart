@@ -21,20 +21,19 @@ mixin _WalletIncoming on State<WalletScreen> {
       final type = payload['type'] as String?;
 
       if (!session.isBank && type == 'bank_server_stopping') {
-        _self._userRequestedBleDisconnect = true;
-        _self._bleScanning = false;
+        _self._userRequestedWsDisconnect = true;
         try {
-          await P2PService().bleTransport.stopClientScan();
+          await P2PService().wsTransport.stop();
         } finally {
-          _self._userRequestedBleDisconnect = false;
+          _self._userRequestedWsDisconnect = false;
         }
         if (mounted) {
           _self._safeSetState(() {});
           NotificationService().show(
-            'El banco apagó el servidor BLE. Has sido desconectado.',
+            'El banco apag\u00f3 el servidor. Has sido desconectado.',
             backgroundColor: kRed,
             duration: const Duration(seconds: 5),
-            dedupeKey: 'ble-bank-disconnected',
+            dedupeKey: 'ws-bank-disconnected',
           );
         }
         return;
@@ -62,7 +61,7 @@ mixin _WalletIncoming on State<WalletScreen> {
           payload['bankSessionId'] as String?,
         );
         if (changed) {
-          _self._setBleClientIdentity();
+          _self._setClientIdentity();
           NotificationService().show(
             'El banco terminó la partida anterior. Se inició una nueva partida.',
             backgroundColor: kGold,
@@ -73,7 +72,7 @@ mixin _WalletIncoming on State<WalletScreen> {
         if (type == 'bank_session_status') return;
       }
 
-      if (session.isBank && type != 'ble_proximity') {
+      if (session.isBank) {
         final deviceInstallationId =
             (payload['deviceInstallationId'] as String?)?.trim();
         if (deviceInstallationId != null &&
@@ -85,17 +84,12 @@ mixin _WalletIncoming on State<WalletScreen> {
               .trim();
           await _sendBlockedDeviceState(
             playerId,
-            transportType: _transportForIncomingPayload(payload),
+            transportType: TransportType.ws,
           );
-          final bleDeviceId = payload['_bleDeviceId'] as String?;
-          if (bleDeviceId != null) {
-            P2PService().bleTransport.markPlayerInactive(bleDeviceId);
-            unawaited(_disconnectBannedBleClient(bleDeviceId));
-          }
           return;
         }
 
-        if (type == 'ble_identity' &&
+        if (type == 'ws_identity' &&
             deviceInstallationId != null &&
             deviceInstallationId.isNotEmpty) {
           final playerId = ((payload['playerId'] as String?) ??
@@ -111,12 +105,8 @@ mixin _WalletIncoming on State<WalletScreen> {
             await _sendBankError(
               playerId,
               'El nombre "$playerId" ya pertenece a otro jugador de esta partida. Elige un nombre diferente.',
-              transportType: _transportForIncomingPayload(payload),
+              transportType: TransportType.ws,
             );
-            final bleDeviceId = payload['_bleDeviceId'] as String?;
-            if (bleDeviceId != null) {
-              P2PService().bleTransport.markPlayerInactive(bleDeviceId);
-            }
             return;
           }
           final isReturningPlayer = existingAccount != null &&
@@ -124,10 +114,6 @@ mixin _WalletIncoming on State<WalletScreen> {
               existingAccount.deviceInstallationId == deviceInstallationId;
           final playerNeedsHandshake =
               (payload['isHandshakeDone'] as bool?) != true;
-          final bleDeviceId = payload['_bleDeviceId'] as String?;
-          if (isReturningPlayer && bleDeviceId != null) {
-            P2PService().bleTransport.markPlayerActive(bleDeviceId);
-          }
           if (isReturningPlayer && playerNeedsHandshake) {
             final restorePayload = <String, dynamic>{
               'type': 'handshake',
@@ -141,13 +127,11 @@ mixin _WalletIncoming on State<WalletScreen> {
               'bankSessionId': BankLedgerService().currentBankSessionId,
               ...existingAccount.toClientState(),
             };
-            final sourceTransport = _transportForIncomingPayload(payload);
-            P2PService().setTransport(sourceTransport);
+            P2PService().setTransport(TransportType.ws);
             try {
               await P2PService().sendPayload(restorePayload);
             } on TransportUnavailableException {
-              // La identidad se reenvía cuando el canal BLE termina de
-              // suscribirse; ese segundo intento restaurará la sesión.
+              // Se reintenta en la próxima identidad.
             }
           } else if (isReturningPlayer) {
             final syncResult = BankLedgerResult(
@@ -159,10 +143,9 @@ mixin _WalletIncoming on State<WalletScreen> {
             );
             await _sendBankResult(
               syncResult,
-              transportType: _transportForIncomingPayload(payload),
+              transportType: TransportType.ws,
             );
           } else {
-            final sourceTransport = _transportForIncomingPayload(payload);
             final result = await BankLedgerService().ensurePlayer(
               playerId,
               kInitialBalance,
@@ -181,11 +164,11 @@ mixin _WalletIncoming on State<WalletScreen> {
               'bankSessionId': BankLedgerService().currentBankSessionId,
               ...result.account.toClientState(),
             };
-            P2PService().setTransport(sourceTransport);
+            P2PService().setTransport(TransportType.ws);
             try {
               await P2PService().sendPayload(handshake);
             } on TransportUnavailableException {
-              // La identidad BLE se repite al terminar la suscripción.
+              // Se reintenta.
             }
           }
         }
@@ -207,7 +190,7 @@ mixin _WalletIncoming on State<WalletScreen> {
         if (!_isPayloadForPlayer(payload, session.name)) return;
         if (!session.isHandshakeDone) {
           await session.applyHandshake(payload);
-          _self._setBleClientIdentity();
+          _self._setClientIdentity();
           _self._triggerWelcomeAnimation(payload['name'] as String?);
         }
         await wallet.applyBankState(payload);
@@ -299,7 +282,7 @@ mixin _WalletIncoming on State<WalletScreen> {
         }
       } else if (type == 'bank_access_denied') {
         if (!_isPayloadForPlayer(payload, session.name)) return;
-        _self._stopBleClient();
+        _self._stopWsClient();
         await wallet.applyBankState(payload);
       }
     }, onError: (e, s) {
@@ -312,16 +295,17 @@ mixin _WalletIncoming on State<WalletScreen> {
     return target == null || target == playerId;
   }
 
+  void _setClientIdentity() {
+    final session = context.read<SessionProvider>();
+    P2PService().wsTransport.sendIdentity(
+      name: session.name,
+      avatarId: session.avatarId,
+      colorId: session.colorId,
+      deviceInstallationId: DeviceIdentityService.installationId,
+    );
+  }
+
   String? _connectedPlayerIdForPayload(Map<String, dynamic> payload) {
-    final deviceId = payload['_bleDeviceId'] as String?;
-    if (deviceId != null) {
-      for (final player
-          in P2PService().bleTransport.connectedPlayersNotifier.value) {
-        if (player.id == deviceId && player.displayName.trim().isNotEmpty) {
-          return player.displayName;
-        }
-      }
-    }
     final claimed = payload['playerId'] as String?;
     if (claimed?.trim().isNotEmpty == true) return claimed!.trim();
     final fromPlayer = payload['fromPlayerId'] as String?;
@@ -329,15 +313,8 @@ mixin _WalletIncoming on State<WalletScreen> {
     return null;
   }
 
-  Future<void> _disconnectBannedBleClient(String bleDeviceId) async {
-    try {
-      await P2PService().bleTransport.disconnectClient(bleDeviceId);
-    } catch (_) {}
-  }
-
   TransportType _transportForIncomingPayload(Map<String, dynamic> payload) {
-    if (payload['_bleDeviceId'] != null) return TransportType.ble;
-    return P2PService().currentType;
+    return TransportType.ws;
   }
 
   Future<void> _handleBankOperationRequest(Map<String, dynamic> payload) async {
@@ -388,7 +365,7 @@ mixin _WalletIncoming on State<WalletScreen> {
 
   Future<void> _sendBankResult(
     BankLedgerResult result, {
-    TransportType transportType = TransportType.ble,
+    TransportType transportType = TransportType.ws,
     String? requestId,
   }) async {
     final payload = result.toClientPayload();
@@ -423,7 +400,7 @@ mixin _WalletIncoming on State<WalletScreen> {
   Future<void> _sendBankError(
     String playerId,
     String message, {
-    TransportType transportType = TransportType.ble,
+    TransportType transportType = TransportType.ws,
     String? requestId,
   }) async {
     final payload = {
@@ -477,8 +454,7 @@ mixin _WalletIncoming on State<WalletScreen> {
 
   Future<void> _requestBankOperation(Map<String, dynamic> request) async {
     final session = context.read<SessionProvider>();
-    final transport = P2PService().bleTransport;
-    if (!session.isHandshakeDone || !transport.clientConnectedNotifier.value) {
+    if (!session.isHandshakeDone) {
       throw TransportUnavailableException(
         'Debes estar conectado al banco y completar el handshake.',
       );
@@ -494,7 +470,7 @@ mixin _WalletIncoming on State<WalletScreen> {
     final completer = Completer<void>();
     _self._pendingBankOperationId = requestId;
     _self._pendingBankOperationCompleter = completer;
-    P2PService().setTransport(TransportType.ble);
+    P2PService().setTransport(TransportType.ws);
     try {
       await P2PService().sendPayload({
         'type': 'bank_operation_request',
@@ -585,7 +561,7 @@ mixin _WalletIncoming on State<WalletScreen> {
         var completed = false;
         var settled = false;
         var message =
-            'Acerca el celular del jugador receptor y pulsa entregar.';
+            'Selecciona el jugador receptor y pulsa entregar.';
 
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -593,87 +569,16 @@ mixin _WalletIncoming on State<WalletScreen> {
                   if (sending || completed) return;
                   setDialogState(() {
                     sending = true;
-                    message =
-                        'Acerca el jugador receptor al banco...';
+                    message = 'Buscando jugador receptor...';
                   });
 
-                  final transport = P2PService().bleTransport;
-                  if (P2PService().currentType == TransportType.ble &&
-                      transport.serverActiveNotifier.value &&
-                      transport.clientConnectedNotifier.value) {
-                    transport.contactReadyNotifier.value = false;
-                    final current =
-                        transport.connectedPlayersNotifier.value;
-                    final reset = <BleConnectedPlayer>[];
-                    for (final player in current) {
-                      if (player.contactReady) {
-                        reset.add(player.copyWith(contactReady: false));
-                      } else {
-                        reset.add(player);
-                      }
-                    }
-                    transport.connectedPlayersNotifier.value = reset;
-
-                    final contactCompleter = Completer<bool>();
-                    void finish(bool v) {
-                      if (contactCompleter.isCompleted) return;
-                      contactCompleter.complete(v);
-                    }
-                    void contactListener() {
-                      if (transport.contactReadyNotifier.value ||
-                          transport.connectedPlayersNotifier.value.any(
-                              (p) => p.subscribed && p.contactReady)) {
-                        finish(true);
-                      }
-                    }
-                    transport.contactReadyNotifier
-                        .addListener(contactListener);
-                    transport.connectedPlayersNotifier
-                        .addListener(contactListener);
-                    final timeout = Timer(
-                        const Duration(seconds: 15),
-                        () => finish(false));
-                    contactListener();
-                    final contactReady = await contactCompleter.future;
-                    timeout.cancel();
-                    transport.contactReadyNotifier
-                        .removeListener(contactListener);
-                    transport.connectedPlayersNotifier
-                        .removeListener(contactListener);
-
-                    if (!contactReady) {
-                      if (ctx.mounted) {
-                        setDialogState(() {
-                          sending = false;
-                          message =
-                              'No se detectó contacto. Acerca el jugador e intenta de nuevo.';
-                        });
-                      }
-                      return;
-                    }
-                    setDialogState(() {
-                      message =
-                          'Buscando al jugador receptor en contacto...';
-                    });
-                  }
-
                   try {
-                    final isNotSource = (BleConnectedPlayer p) =>
-                        p.displayName != fromName;
-                var players = P2PService()
-                    .bleTransport
-                    .connectedPlayersNotifier
-                    .value
-                    .where((p) => p.subscribed && p.playing && isNotSource(p))
-                    .toList();
-                if (players.isEmpty) {
-                  players = P2PService()
-                      .bleTransport
-                      .connectedPlayersNotifier
-                      .value
-                      .where((p) => p.subscribed && isNotSource(p))
-                      .toList();
-                }
+                    final players = P2PService()
+                        .wsTransport
+                        .connectedPlayersNotifier
+                        .value
+                        .where((p) => p.connected && p.name != fromName)
+                        .toList();
                 final String? receiverName =
                     players.isNotEmpty ? players.first.displayName : null;
                 if (receiverName == null) {
@@ -681,7 +586,7 @@ mixin _WalletIncoming on State<WalletScreen> {
                   setDialogState(() {
                     sending = false;
                     message =
-                        'No se detectó un jugador listo. Acércalo e intenta de nuevo.';
+                        'No hay jugadores disponibles. Conecta al receptor e intenta de nuevo.';
                   });
                   return;
                 }

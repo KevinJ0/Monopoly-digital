@@ -3,19 +3,19 @@ part of '../wallet_screen.dart';
 class ConnectionPanel extends StatelessWidget {
   final Color color;
   final bool isBank;
-  final bool bleScanning;
-  final VoidCallback? onStopBleClient;
-  final VoidCallback? onStartBleClient;
-  final void Function(BleBankDevice bank)? onConnectToBleBank;
+  final bool wsScanning;
+  final VoidCallback? onStopWsClient;
+  final VoidCallback? onStartWsClient;
+  final void Function(String host, int port)? onConnectToWsBank;
 
   const ConnectionPanel({
     super.key,
     required this.color,
     required this.isBank,
-    required this.bleScanning,
-    this.onStopBleClient,
-    this.onStartBleClient,
-    this.onConnectToBleBank,
+    required this.wsScanning,
+    this.onStopWsClient,
+    this.onStartWsClient,
+    this.onConnectToWsBank,
   });
 
   @override
@@ -26,12 +26,14 @@ class ConnectionPanel extends StatelessWidget {
         if (isBank) {
           return const SizedBox.shrink();
         }
-        return BleClientPanel(
+        return WsConnectButton(
+          key: const ValueKey('wsConnect'),
           color: color,
-          bleScanning: bleScanning,
-          onStopBleClient: onStopBleClient,
-          onStartBleClient: onStartBleClient,
-          onConnectToBleBank: onConnectToBleBank,
+          scanning: wsScanning,
+          clientConnected: P2PService().wsTransport.clientConnectedNotifier.value,
+          connecting: false,
+          onStartWsClient: onStartWsClient,
+          onStopWsClient: onStopWsClient,
         );
       },
     );
@@ -40,7 +42,7 @@ class ConnectionPanel extends StatelessWidget {
 
 class ConnectedPlayersPanel extends StatelessWidget {
   final Color color;
-  final void Function(BleConnectedPlayer player)? onPlayerTap;
+  final void Function(WsPlayer player)? onPlayerTap;
 
   const ConnectedPlayersPanel({
     super.key,
@@ -50,14 +52,14 @@ class ConnectedPlayersPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final transport = P2PService().bleTransport;
+    final transport = P2PService().wsTransport;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: ValueListenableBuilder<List<BleConnectedPlayer>>(
+      child: ValueListenableBuilder<List<WsPlayer>>(
         valueListenable: transport.connectedPlayersNotifier,
-        builder: (context, blePlayers, _) {
-          final total = blePlayers.length;
+        builder: (context, wsPlayers, _) {
+          final total = wsPlayers.where((p) => p.connected).length;
 
           return Container(
             padding: const EdgeInsets.all(14),
@@ -102,24 +104,19 @@ class ConnectedPlayersPanel extends StatelessWidget {
                   ),
                 ] else ...[
                   const SizedBox(height: 10),
-                  ...blePlayers.map((player) {
-                    final quality = player.rssi == null
-                        ? player.qualityLabel
-                        : '${player.qualityLabel} - ${player.rssi} dBm';
+                  ...wsPlayers.where((p) => p.connected).map((player) {
                     final detail =
-                        '${player.playing ? 'Jugando' : 'Esperando handshake'} - $quality';
+                        '${player.connected ? 'Conectado' : 'Desconectado'}';
                     return GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () => onPlayerTap?.call(player),
                       child: _ConnectedPlayerTile(
                         name: player.displayName,
-                        deviceName: player.displayDeviceName,
-                        transport: 'BLE',
+                        deviceName: '',
+                        transport: 'WS',
                         detail: detail,
-                        color: player.playing
-                            ? player.qualityColor
-                            : Colors.blue,
-                        icon: Icons.bluetooth_connected_rounded,
+                        color: player.connected ? kGreen : Colors.grey,
+                        icon: Icons.wifi_rounded,
                       ),
                     );
                   }),

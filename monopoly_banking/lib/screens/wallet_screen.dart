@@ -15,7 +15,6 @@ import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/providers/stats_provider.dart';
 import 'package:monopoly_banking/providers/wallet_controller.dart';
 import 'package:monopoly_banking/screens/bankruptcy_screen.dart';
-import 'package:monopoly_banking/screens/ble_test_screen.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 import 'package:monopoly_banking/services/bank_ledger_service.dart';
 import 'package:monopoly_banking/services/hive_service.dart';
@@ -24,7 +23,6 @@ import 'package:monopoly_banking/services/network_service.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/services/transports/ble_transport.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/animated_avatar.dart';
@@ -45,11 +43,9 @@ part 'wallet/carbon_fiber_painter.dart';
 part 'wallet/shimmer_card.dart';
 part 'wallet/balance_card_section.dart';
 part 'wallet/vault_section_widget.dart';
-part 'wallet/ble_bank_panel.dart';
-part 'wallet/ble_client_panel.dart';
-part 'wallet/discovered_banks_list.dart';
+part 'wallet/ws_bank_panel.dart';
 part 'wallet/connection_panel.dart';
-part 'wallet/ble_connect_button.dart';
+part 'wallet/ws_connect_button.dart';
 part 'wallet/state_mixin_connection.dart';
 part 'wallet/state_mixin_incoming.dart';
 part 'wallet/state_mixin_builders.dart';
@@ -79,11 +75,11 @@ class _WalletScreenState extends State<WalletScreen>
   Timer? _tierCelebrationTimer;
   CardTier? _pendingCelebrationTier;
   bool _evolutionDialogOpen = false;
-  bool _bleScanning = false;
-  bool _userRequestedBleDisconnect = false;
+  bool _wsScanning = false;
+  bool _userRequestedWsDisconnect = false;
   bool _dialogActive = false;
-  VoidCallback? _bleClientConnectionListener;
-  bool _wasBleClientConnected = false;
+  VoidCallback? _wsClientConnectionListener;
+  bool _wasWsClientConnected = false;
   bool _bankTransferHoldDialogOpen = false;
   ValueNotifier<bool>? _bankruptNotifierRef;
   final Set<String> _seenTxIds = <String>{};
@@ -101,9 +97,9 @@ class _WalletScreenState extends State<WalletScreen>
   final List<double> _lastHistory = [];
 
   late final VoidCallback _typeListener;
-  VoidCallback? _bleConnectionsListener;
+  VoidCallback? _wsConnectionsListener;
   VoidCallback? _bankServerListener;
-  final Set<String> _announcedBleConnections = {};
+  final Set<String> _announcedWsConnections = {};
   Completer<void>? _pendingBankOperationCompleter;
   String? _pendingBankOperationId;
   Completer<void>? _pendingTransferCompleter;
@@ -131,10 +127,10 @@ class _WalletScreenState extends State<WalletScreen>
     _listenForIncoming();
 
     _typeListener = () {
-      if (P2PService().currentType != TransportType.ble) {
-        final bleConnected =
-            P2PService().bleTransport.clientConnectedNotifier.value;
-        if (_bleScanning || bleConnected) _stopBleClient();
+      if (P2PService().currentType != TransportType.ws) {
+        final wsConnected =
+            P2PService().wsTransport.clientConnectedNotifier.value;
+        if (_wsScanning || wsConnected) _stopWsClient();
       }
     };
     P2PService().typeNotifier.addListener(_typeListener);
@@ -148,12 +144,13 @@ class _WalletScreenState extends State<WalletScreen>
       _listenToBankruptcy();
       _listenToTierEvolution();
       _connectToHost(session);
+
       if (session.isBank) {
         _listenForBankPlayerConnections();
         _listenForBankServerState();
       } else {
-        _listenForBleBankDisconnection();
-        _startBleClient();
+        _listenForWsDisconnection();
+        _startWsClient();
       }
     });
   }
@@ -167,7 +164,7 @@ class _WalletScreenState extends State<WalletScreen>
     }
     _bankDeliveryAcks.clear();
     WidgetsBinding.instance.removeObserver(this);
-    _stopBleClient();
+    _stopWsClient();
     _payloadSub?.cancel();
     _txSub?.cancel();
     _tierSub?.cancel();
@@ -181,31 +178,29 @@ class _WalletScreenState extends State<WalletScreen>
       BankLedgerService().statsRevision.removeListener(bankStatsListener);
     }
     P2PService().typeNotifier.removeListener(_typeListener);
-    final bleConnectionsListener = _bleConnectionsListener;
-    if (bleConnectionsListener != null) {
-      P2PService().bleTransport.connectedPlayersNotifier.removeListener(
-            bleConnectionsListener,
+    final wsConnectionsListener = _wsConnectionsListener;
+    if (wsConnectionsListener != null) {
+      P2PService().wsTransport.connectedPlayersNotifier.removeListener(
+            wsConnectionsListener,
           );
     }
-    final bleClientConnectionListener = _bleClientConnectionListener;
-    if (bleClientConnectionListener != null) {
-      P2PService().bleTransport.clientConnectedNotifier.removeListener(
-            bleClientConnectionListener,
+    final wsClientConnectionListener = _wsClientConnectionListener;
+    if (wsClientConnectionListener != null) {
+      P2PService().wsTransport.clientConnectedNotifier.removeListener(
+            wsClientConnectionListener,
           );
     }
     final bankServerListener = _bankServerListener;
     if (bankServerListener != null) {
       P2PService()
-          .bleTransport
+          .wsTransport
           .serverActiveNotifier
           .removeListener(bankServerListener);
     }
-    _announcedBleConnections.clear();
+    _announcedWsConnections.clear();
     _pulseCtrl.dispose();
     _welcomeCtrl.dispose();
     _confettiCtrl.dispose();
     super.dispose();
   }
 }
-
-

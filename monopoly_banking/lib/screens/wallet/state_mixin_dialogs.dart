@@ -132,16 +132,15 @@ mixin _WalletDialogs on State<WalletScreen> {
                       return;
                     }
                     final transportType = P2PService().currentType;
-                    final transport = P2PService().bleTransport;
-                    if (transportType == TransportType.ble &&
-                        !transport.clientConnectedNotifier.value) {
-                      _showToast('Conéctate al banco por BLE primero.', kRed);
+                    if (transportType == TransportType.ws &&
+                        !P2PService().wsTransport.clientConnectedNotifier.value) {
+                      _showToast('Conéctate al banco primero.', kRed);
                       return;
                     }
 
                     setDialogState(() {
                       sending = true;
-                      message = 'Acerca tu dispositivo al banco y espera la confirmación...';
+                      message = 'Esperando confirmación del banco...';
                     });
 
                     try {
@@ -156,7 +155,7 @@ mixin _WalletDialogs on State<WalletScreen> {
                         'deviceInstallationId':
                             DeviceIdentityService.installationId,
                       };
-                      P2PService().setTransport(TransportType.ble);
+                      P2PService().setTransport(TransportType.ws);
                       await P2PService().sendPayload(request);
 
                       final pendingCompleter = _self._pendingTransferCompleter;
@@ -351,14 +350,6 @@ mixin _WalletDialogs on State<WalletScreen> {
             ),
           )
           .whenComplete(() => _self._bankruptcyScreenOpen = false),
-    );
-  }
-
-  Future<void> _openBleDebug() async {
-    SoundService.playClick();
-    if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const BleTestScreen()),
     );
   }
 
@@ -626,7 +617,7 @@ mixin _WalletDialogs on State<WalletScreen> {
         ));
   }
 
-  void _showPlayerInfoDialog(BleConnectedPlayer player) {
+  void _showPlayerInfoDialog(WsPlayer player) {
     final ledger = BankLedgerService();
     final account = ledger.accountFor(player.displayName);
     final transactions = ledger.transactionHistory
@@ -641,9 +632,7 @@ mixin _WalletDialogs on State<WalletScreen> {
     final txCount = transactions.length;
     final balance = account?.balance ?? 0;
     final playerColor = _playerColor(player.colorId);
-    final avatar = player.avatarId.isNotEmpty
-        ? player.avatarId
-        : '\u{1F464}';
+    final avatar = player.avatarId; // already validated with fallback
     final tier = _playerTier(balance);
     final tierLabel = _tierLabel(tier);
     final tierColor = _tierColor(tier);
@@ -783,18 +772,15 @@ mixin _WalletDialogs on State<WalletScreen> {
     return colors[0];
   }
 
-  Widget _buildConnectionInfoTab(BleConnectedPlayer player) {
+  Widget _buildConnectionInfoTab(WsPlayer player) {
     return SingleChildScrollView(
       padding: const EdgeInsets.only(top: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSectionHeader('Dispositivo'),
-          _detailRow('Nombre',
-              player.name.isNotEmpty ? player.name : '-'),
-          _detailRow(
-              'Dispositivo', player.displayDeviceName),
-          _detailRow('ID BLE', player.id),
+          _detailRow('Dirección IP',
+              player.address.isNotEmpty ? player.address : '-'),
           _detailRow(
               'ID Instalaci\u00f3n',
               player.deviceInstallationId.isNotEmpty
@@ -803,9 +789,7 @@ mixin _WalletDialogs on State<WalletScreen> {
           const SizedBox(height: 12),
           _buildSectionHeader('Estado Conexi\u00f3n'),
           _detailRow('Handshake',
-              player.playing ? 'Completado' : 'Pendiente'),
-          _detailRow('Suscripci\u00f3n GATT',
-              player.subscribed ? 'Activa' : 'Inactiva'),
+              player.connected ? 'Completado' : 'Pendiente'),
           const SizedBox(height: 12),
           _detailRow(
               '\u00daltima actividad',
@@ -886,120 +870,7 @@ mixin _WalletDialogs on State<WalletScreen> {
     );
   }
 
-  Future<void> _showBleDistanceSettings() {
-    final transport = P2PService().bleTransport;
 
-    return showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: kBgCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Configurar distancia',
-          style: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w800),
-        ),
-        content: ValueListenableBuilder<int>(
-          valueListenable: transport.contactProfileIndexNotifier,
-          builder: (context, index, _) {
-            final profile = kBleContactProfiles[index];
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.settings_input_antenna_rounded,
-                        color: Colors.blue, size: 20),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        profile.label,
-                        style: const TextStyle(
-                          color: kTextPrimary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  profile.helper,
-                  style: const TextStyle(color: kTextSecondary, fontSize: 13),
-                ),
-                const SizedBox(height: 18),
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    activeTrackColor: Colors.blue,
-                    inactiveTrackColor: kBorder,
-                    thumbColor: kGold,
-                    overlayColor: kGold.withValues(alpha: 0.12),
-                    tickMarkShape:
-                        const RoundSliderTickMarkShape(tickMarkRadius: 3),
-                    activeTickMarkColor: kTextPrimary,
-                    inactiveTickMarkColor: kTextSecondary,
-                    valueIndicatorColor: kBgDark,
-                    valueIndicatorTextStyle: const TextStyle(
-                      color: kTextPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  child: Slider(
-                    min: 0,
-                    max: (kBleContactProfiles.length - 1).toDouble(),
-                    divisions: kBleContactProfiles.length - 1,
-                    value: index.toDouble(),
-                    label: profile.label,
-                    onChanged: (value) {
-                      SoundService.playClick();
-                      transport.setContactProfileIndex(value.round());
-                    },
-                  ),
-                ),
-                const Row(
-                  children: [
-                    Text(
-                      'Muy estricto',
-                      style: TextStyle(color: kTextSecondary, fontSize: 11),
-                    ),
-                    Spacer(),
-                    Text(
-                      'Lejos',
-                      style: TextStyle(color: kTextSecondary, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            height: 46,
-            child: ElevatedButton(
-              onPressed: () {
-                SoundService.playClick();
-                Navigator.pop(ctx);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'Guardar',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   String _format12h(DateTime dt) {
     final h = dt.hour == 0 ? 12 : dt.hour > 12 ? dt.hour - 12 : dt.hour;

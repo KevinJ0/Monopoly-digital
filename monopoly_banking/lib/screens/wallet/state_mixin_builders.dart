@@ -25,13 +25,10 @@ mixin _WalletBuilders on State<WalletScreen> {
     final displayColorId = _self._self._lastColorId ?? 0;
     final displayBalance = _self._lastBalance ?? 0.0;
     final isBank = displayRole == 'banco';
-    final bleConnected = isBank ||
-        P2PService().currentType != TransportType.ble ||
-        P2PService().bleTransport.clientConnectedNotifier.value;
-    final playerReady = isBank || (session.isHandshakeDone && bleConnected);
+    final wsConnected = isBank ||
+        P2PService().wsTransport.clientConnectedNotifier.value;
+    final playerReady = isBank || (session.isHandshakeDone && wsConnected);
     final shownBalance = playerReady ? displayBalance : 0.0;
-    // Si el banco no tiene Bluetooth, mostrar pantalla limpia como al inicio
-    final bankBleOk = !isBank || P2PService().bleTransport.isEnabled;
     final shownTier = playerReady ? wallet.currentTier : CardTier.standard;
 
     return PopScope(
@@ -85,7 +82,7 @@ mixin _WalletBuilders on State<WalletScreen> {
                 );
               },
               child: !isBank && !playerReady
-                  ? _buildBleConnectScreen(displayColor)
+                  ? _buildWsConnectScreen(displayColor)
                   : _buildGameView(
                       wallet: wallet,
                       session: session,
@@ -100,7 +97,6 @@ mixin _WalletBuilders on State<WalletScreen> {
                       shownTier: shownTier,
                       playerReady: playerReady,
                       isBank: isBank,
-                      bankBleOk: bankBleOk,
                     ),
             ),
           ),
@@ -109,24 +105,24 @@ mixin _WalletBuilders on State<WalletScreen> {
     );
   }
 
-  Widget _buildBleConnectScreen(Color color) {
+  Widget _buildWsConnectScreen(Color color) {
     return ValueListenableBuilder<bool>(
-      valueListenable: P2PService().bleTransport.clientConnectedNotifier,
+      valueListenable: P2PService().wsTransport.clientConnectedNotifier,
       builder: (context, connected, _) {
         return ValueListenableBuilder<String>(
-          valueListenable: P2PService().bleTransport.connectionStatusNotifier,
+          valueListenable: P2PService().wsTransport.connectionStatusNotifier,
           builder: (context, status, _) {
             final connecting = !connected &&
                 (status.startsWith('Conectando') ||
                     status.startsWith('Preparando'));
-            return BleConnectButton(
-              key: const ValueKey('bleConnect'),
+            return WsConnectButton(
+              key: const ValueKey('wsConnect'),
               color: color,
-              bleScanning: _self._bleScanning && !connecting,
+              scanning: _self._wsScanning && !connecting,
               clientConnected: connected,
               connecting: connecting,
-              onStartBleClient: _self._startBleClient,
-              onStopBleClient: _self._stopBleClient,
+              onStartWsClient: _self._startWsClient,
+              onStopWsClient: _self._stopWsClient,
             );
           },
         );
@@ -148,7 +144,6 @@ mixin _WalletBuilders on State<WalletScreen> {
     required CardTier shownTier,
     required bool playerReady,
     required bool isBank,
-    required bool bankBleOk,
   }) {
     return Stack(
       key: const ValueKey('gameView'),
@@ -197,12 +192,10 @@ mixin _WalletBuilders on State<WalletScreen> {
                   child: AnimatedEntry(
                     delay: const Duration(milliseconds: 400),
                     child: isBank
-                        ? BleBankPanel(
-                            onShowDistanceSettings: () =>
-                                _self._showBleDistanceSettings(),
-                            onReiniciarBle: () => _self._reiniciarBleBanco(),
-                            onStopBle: () => _self._detenerBleBanco(),
-                            onEnsureBleReady: _self._ensureBleReady,
+                        ? WsBankPanel(
+                            onReiniciarWs: () => _self._reiniciarWsServer(),
+                            onStopWs: () => _self._detenerWsServer(),
+                            onEnsureWsReady: _self._ensureWsReady,
                           )
                         : ValueListenableBuilder<TransportType>(
                             valueListenable: P2PService().typeNotifier,
@@ -210,16 +203,16 @@ mixin _WalletBuilders on State<WalletScreen> {
                               return ConnectionPanel(
                                 color: displayColor,
                                 isBank: isBank,
-                                bleScanning: _self._bleScanning,
-                                onStopBleClient: _self._stopBleClient,
-                                onStartBleClient: _self._startBleClient,
-                                onConnectToBleBank: _self._connectToBleBank,
+                                wsScanning: _self._wsScanning,
+                                onStopWsClient: _self._stopWsClient,
+                                onStartWsClient: _self._startWsClient,
+                                onConnectToWsBank: _self._connectToWsBank,
                               );
                             },
                           ),
                   ),
                 ),
-                if (isBank && bankBleOk)
+                if (isBank)
                   SliverToBoxAdapter(
                     child: AnimatedEntry(
                       delay: const Duration(milliseconds: 450),
@@ -591,22 +584,7 @@ mixin _WalletBuilders on State<WalletScreen> {
                           },
                         ),
                         if (compact)
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert_rounded,
-                                color: kTextSecondary, size: 20),
-                            tooltip: 'Más opciones',
-                            color: kBgCard,
-                            onSelected: (value) {
-                              if (value == 'ble') _self._openBleDebug();
-                            },
-                            itemBuilder: (context) => [
-                              if (kDebugMode)
-                                const PopupMenuItem(
-                                  value: 'ble',
-                                  child: Text('BLE Debug'),
-                                ),
-                            ],
-                          ),
+                        const SizedBox.shrink(),
                       ],
                     ),
                   ),

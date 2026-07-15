@@ -451,12 +451,12 @@ mixin _BankBuilders on State<BankScreen> {
   }
 
   Widget _buildConnectedPlayersList() {
-    final transport = P2PService().bleTransport;
+    final transport = P2PService().wsTransport;
     return ValueListenableBuilder<bool>(
       valueListenable: transport.serverActiveNotifier,
       builder: (context, active, _) {
         if (!active) return const SizedBox.shrink();
-        return ValueListenableBuilder<List<BleConnectedPlayer>>(
+        return ValueListenableBuilder<List<WsPlayer>>(
           valueListenable: transport.connectedPlayersNotifier,
           builder: (context, players, _) {
             if (players.isEmpty) {
@@ -538,14 +538,10 @@ mixin _BankBuilders on State<BankScreen> {
     );
   }
 
-  Widget _buildPlayerTile(BleConnectedPlayer player) {
+  Widget _buildPlayerTile(WsPlayer player) {
     final ledger = BankLedgerService();
     final account = ledger.accountFor(player.displayName);
-    final quality = player.rssi == null
-        ? player.qualityLabel
-        : '${player.qualityLabel} - ${player.rssi} dBm';
-    final detail =
-        '${player.playing ? 'Jugando' : 'Handshake pendiente'} - $quality';
+    final playerColor = _playerColor(player.colorId);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () => _self._showPlayerDetailDialog(player, account),
@@ -557,11 +553,15 @@ mixin _BankBuilders on State<BankScreen> {
               width: 30,
               height: 30,
               decoration: BoxDecoration(
-                color: player.qualityColor.withValues(alpha: 0.12),
+                color: playerColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(9),
               ),
-              child: Icon(Icons.bluetooth_connected_rounded,
-                  color: player.qualityColor, size: 16),
+              child: Center(
+                child: Text(
+                  player.avatarId.isNotEmpty ? player.avatarId : '\u{1F464}',
+                  style: TextStyle(fontSize: 16, color: playerColor),
+                ),
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -578,19 +578,8 @@ mixin _BankBuilders on State<BankScreen> {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  if (player.displayDeviceName.isNotEmpty)
-                    Text(
-                      player.displayDeviceName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: kTextSecondary.withValues(alpha: 0.62),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
                   Text(
-                    'BLE - $detail',
+                    'WiFi Direct',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -617,7 +606,7 @@ mixin _BankBuilders on State<BankScreen> {
               width: 8,
               height: 8,
               decoration: BoxDecoration(
-                color: player.qualityColor,
+                color: kGreen,
                 shape: BoxShape.circle,
               ),
             ),
@@ -628,7 +617,7 @@ mixin _BankBuilders on State<BankScreen> {
   }
 
   Widget _buildPlayerInfoTab({
-    required BleConnectedPlayer player,
+    required WsPlayer player,
     required double balance,
     required double volume,
     required int passGoCount,
@@ -819,7 +808,7 @@ mixin _BankBuilders on State<BankScreen> {
     );
   }
 
-  Widget _buildConnectionInfoTab(BleConnectedPlayer player) {
+  Widget _buildConnectionInfoTab(WsPlayer player) {
     return SingleChildScrollView(
       padding: const EdgeInsets.only(top: 12),
       child: Column(
@@ -829,19 +818,19 @@ mixin _BankBuilders on State<BankScreen> {
           _detailRow('Nombre',
               player.name.isNotEmpty ? player.name : '-'),
           _detailRow(
-              'Dispositivo', player.displayDeviceName),
-          _detailRow('ID BLE', player.id),
+              'Conexi\u00f3n', 'WiFi Direct'),
+          _detailRow('ID', player.id),
           _detailRow(
               'ID Instalaci\u00f3n',
               player.deviceInstallationId.isNotEmpty
                   ? player.deviceInstallationId
                   : '-'),
           const SizedBox(height: 12),
-          _buildSectionHeader('Estado Conexi\u00f3n'),
+          _buildSectionHeader('Estado'),
           _detailRow('Handshake',
               player.playing ? 'Completado' : 'Pendiente'),
-          _detailRow('Suscripci\u00f3n GATT',
-              player.subscribed ? 'Activa' : 'Inactiva'),
+          _detailRow('Conectado',
+              player.connected ? 'S\u00ed' : 'No'),
           const SizedBox(height: 12),
           _detailRow(
               '\u00daltima actividad',
@@ -1270,23 +1259,19 @@ mixin _BankBuilders on State<BankScreen> {
         if (mounted) context.showFriendlyError(e, s);
       }
     } else {
-      final players = P2PService()
-          .bleTransport
-          .connectedPlayersNotifier
-          .value
-          .where((p) =>
-              p.subscribed && p.displayName != ht.fromPlayerId)
-          .toList();
-      if (players.isEmpty) {
+      final receiver = await _self._selectTransferReceiver(
+        excludePlayerId: ht.fromPlayerId,
+      );
+      if (receiver == null) {
         if (mounted) {
           NotificationService().show(
-            'No hay un jugador receptor disponible. Acerca el dispositivo.',
+            'No hay un jugador receptor disponible.',
             backgroundColor: Colors.orange,
           );
         }
         return;
       }
-      final receiverName = players.first.displayName;
+      final receiverName = receiver.displayName;
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -1296,7 +1281,7 @@ mixin _BankBuilders on State<BankScreen> {
           title: const Text('Entregar dinero',
               style: TextStyle(color: kTextPrimary)),
           content: Text(
-            'Se entregarán ${formatMoney(ht.amount)} a $receiverName.\n\nAcerca los dispositivos para confirmar la entrega.',
+            'Se entregarán ${formatMoney(ht.amount)} a $receiverName.',
             style: const TextStyle(color: kTextSecondary, height: 1.35),
           ),
           actions: [
@@ -1318,7 +1303,7 @@ mixin _BankBuilders on State<BankScreen> {
       if (confirmed != true || !mounted) return;
 
       final dialog = _BankOperationDialogController(
-        transportType: TransportType.ble,
+        transportType: TransportType.ws,
       );
       var dialogOpen = true;
       _self._showOperationDialog(dialog).whenComplete(() {
@@ -1327,18 +1312,6 @@ mixin _BankBuilders on State<BankScreen> {
       await Future<void>.delayed(Duration.zero);
 
       try {
-        final contactReady = await _self._waitForBleContactIfNeeded(dialog);
-        if (!contactReady) {
-          await _self._failOperationDialog(
-            dialog,
-            'Sin contacto BLE',
-            'No se detectó proximidad con el jugador receptor. Acerca los dispositivos e intenta de nuevo.',
-            icon: Icons.bluetooth_disabled_rounded,
-            color: Colors.orange,
-          );
-          return;
-        }
-
         dialog.update(
           title: 'Entregando dinero',
           message: 'Enviando ${formatMoney(ht.amount)} a $receiverName...',

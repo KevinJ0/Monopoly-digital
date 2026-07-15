@@ -3,11 +3,11 @@ import 'package:flutter/foundation.dart';
 import 'package:monopoly_banking/services/hive_service.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
 import 'package:monopoly_banking/services/transports/ble_transport.dart';
-import 'package:monopoly_banking/services/transports/wifi_transport.dart';
+import 'package:monopoly_banking/services/transports/ws_transport.dart';
 
 typedef P2PPayloadHandler = void Function(Map<String, dynamic> payload);
 
-enum TransportType { ble, wifi }
+enum TransportType { ble, wifi, ws }
 
 class P2PService {
   static const _transportSettingKey = 'connection_transport';
@@ -16,7 +16,7 @@ class P2PService {
   P2PService._();
 
   final bleTransport = BleTransport();
-  final wifiTransport = WifiTransport();
+  final wsTransport = WsTransport();
 
   final _payloadStreamCtrl = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get payloadStream => _payloadStreamCtrl.stream;
@@ -26,19 +26,20 @@ class P2PService {
 
   final Map<TransportType, P2PTransport> transports = {};
 
-  TransportType _currentType = TransportType.ble;
+  TransportType _currentType = TransportType.ws;
   TransportType get currentType => _currentType;
 
-  final _typeCtrl = ValueNotifier<TransportType>(TransportType.ble);
+  final _typeCtrl = ValueNotifier<TransportType>(TransportType.ws);
   ValueNotifier<TransportType> get typeNotifier => _typeCtrl;
 
   int _txCounter = 0;
 
   Future<void> initTransports({bool isBank = false}) async {
     bleTransport.setBankMode(isBank);
+    wsTransport.setBankMode(isBank);
 
     transports[TransportType.ble] = bleTransport;
-    transports[TransportType.wifi] = wifiTransport;
+    transports[TransportType.ws] = wsTransport;
 
     final savedTransport = HiveService.settingsBox.get(_transportSettingKey);
     if (savedTransport is String) {
@@ -52,7 +53,7 @@ class P2PService {
     }
 
     await bleTransport.initialize();
-    await wifiTransport.initialize();
+    await wsTransport.initialize();
   }
 
   void setTransport(TransportType type) {
@@ -82,14 +83,22 @@ class P2PService {
     });
   }
 
+  Future<void> startWsServer() async {
+    wsTransport.setBankMode(true);
+    if (!wsTransport.isEnabled) return;
+    await wsTransport.startReceiving((payload) {
+      _payloadStreamCtrl.add(payload);
+    });
+  }
+
   Future<void> sendPayload(Map<String, dynamic> payload) async {
     _txCounter++;
     payload['txId'] = '${DateTime.now().millisecondsSinceEpoch}-$_txCounter';
 
     final transport = _active;
     if (!transport.isEnabled) {
-      if (_currentType == TransportType.ble) {
-        throw TransportUnavailableException('Bluetooth no está disponible');
+      if (_currentType == TransportType.ws) {
+        throw TransportUnavailableException('WiFi no está disponible');
       }
       for (final entry in transports.entries) {
         if (entry.value.isEnabled) {
