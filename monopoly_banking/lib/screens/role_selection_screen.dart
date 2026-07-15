@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -6,23 +7,10 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/screens/ble_test_screen.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
-import 'package:monopoly_banking/widgets/animated_avatar.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
-
-const _avatars = ['🎩', '🚗', '🐶', '⚓', '🎸', '👢', '💰', '🛳️'];
-const _colors = [
-  Color(0xFFE53935),
-  Color(0xFF8E24AA),
-  Color(0xFF1E88E5),
-  Color(0xFF43A047),
-  Color(0xFFFDD835),
-  Color(0xFFFF7043),
-  Color(0xFF00ACC1),
-  Color(0xFFECEFF1),
-];
+import 'package:monopoly_banking/screens/onboarding_screen.dart';
 
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
@@ -33,9 +21,6 @@ class RoleSelectionScreen extends StatefulWidget {
 
 class _RoleSelectionScreenState extends State<RoleSelectionScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
-  int _selectedAvatar = 0;
-  int _selectedColor = 0;
-
   late final AnimationController _fadeCtrl;
   late final Animation<double> _fade;
   late final AnimationController _bgAnimCtrl;
@@ -86,21 +71,41 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
   }
 
   Future<void> _pickRole(String role) async {
-    String? name;
     String avatarId;
     String colorId;
 
     if (role == 'banco') {
-      avatarId = '💰';
-      colorId = '4'; // Gold index
-    } else {
-      name = await _showNameDialog();
-      if (!mounted) return;
-      if (name == null || name.trim().isEmpty) return;
-      name = name.trim();
-      avatarId = _avatars[_selectedAvatar];
-      colorId = _selectedColor.toString();
+      avatarId = '🏦';
+      colorId = '4';
+      final session = context.read<SessionProvider>();
+      try {
+        await session.createSession(
+          role: role,
+          avatarId: avatarId,
+          colorId: colorId,
+          initialBalance: double.infinity,
+          name: 'Banco',
+        );
+      } catch (e, s) {
+        if (mounted) context.showFriendlyError(e, s);
+        return;
+      }
+      if (mounted) setState(() {});
+      return;
     }
+
+    // Cliente: onboarding (color → nombre → avatar)
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+    );
+    if (!mounted || result == null) return;
+
+    final selectedColorIndex = result['colorIndex'] as int;
+    final playerName = result['name'] as String;
+    final avatarEmoji = result['avatarEmoji'] as String;
+
+    avatarId = avatarEmoji;
+    colorId = selectedColorIndex.toString();
 
     final session = context.read<SessionProvider>();
     try {
@@ -108,67 +113,14 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
         role: role,
         avatarId: avatarId,
         colorId: colorId,
-        initialBalance: role == 'banco' ? double.infinity : 0,
-        name: name,
+        initialBalance: 0,
+        name: playerName,
       );
     } catch (e, s) {
       if (mounted) context.showFriendlyError(e, s);
       return;
     }
     if (mounted) setState(() {});
-  }
-
-  Future<String?> _showNameDialog() {
-    final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: kBgCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('¿Cómo te llamas?',
-            style: TextStyle(color: kTextPrimary)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          style: const TextStyle(color: kTextPrimary),
-          decoration: InputDecoration(
-            hintText: 'Tu nombre',
-            hintStyle: TextStyle(color: kTextSecondary.withValues(alpha: 0.5)),
-            filled: true,
-            fillColor: kBgDark,
-            border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              SoundService.playClick();
-              Navigator.pop(ctx);
-            },
-            child:
-                const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              SoundService.playClick();
-              Navigator.pop(ctx, controller.text);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _colors[_selectedColor],
-              foregroundColor: _colors[_selectedColor].computeLuminance() > 0.5
-                  ? Colors.black
-                  : Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text('Continuar'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _confirmExitApp() async {
@@ -225,9 +177,11 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
         _confirmExitApp();
       },
       child: Scaffold(
+        extendBodyBehindAppBar: true,
       body: PlayerColorBackdrop(
-        color: _colors[_selectedColor],
+        color: kGreen,
         child: Stack(
+          fit: StackFit.expand,
           children: [
             Positioned.fill(
               child: AnimatedBuilder(
@@ -241,29 +195,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
                 },
               ),
             ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: SafeArea(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.bluetooth_rounded,
-                          color: kTextSecondary),
-                      tooltip: 'BLE Debug',
-                      onPressed: () {
-                        SoundService.playClick();
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                              builder: (_) => const BleTestScreen()),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            // (reserved for future actions)
             FadeTransition(
               opacity: _fade,
               child: SafeArea(
@@ -286,13 +218,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
                             child: _buildBankSection(),
                           ),
                           const SizedBox(height: 40),
-                          const AnimatedEntry(
-                            delay: Duration(milliseconds: 600),
-                            child: _DividerWidget(),
-                          ),
-                          const SizedBox(height: 32),
                           AnimatedEntry(
-                            delay: const Duration(milliseconds: 800),
+                            delay: const Duration(milliseconds: 600),
                             child: _buildClientSection(),
                           ),
                         ],
@@ -309,83 +236,6 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
   );
 }
 
-  Widget _buildAvatarPicker() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Elige tu ficha',
-          style:
-              TextStyle(color: kTextSecondary, fontSize: 13, letterSpacing: 1),
-        ),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 14,
-          runSpacing: 14,
-          children: List.generate(_avatars.length, (i) {
-            final selected = i == _selectedAvatar;
-            return AnimatedAvatar(
-              emoji: _avatars[i],
-              size: 68,
-              glowColor: kGreen,
-              isSelected: selected,
-              onTap: () {
-                SoundService.playClick();
-                setState(() => _selectedAvatar = i);
-              },
-            );
-          }),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildColorPicker() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Elige tu color',
-          style:
-              TextStyle(color: kTextSecondary, fontSize: 13, letterSpacing: 1),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(_colors.length, (i) {
-            final selected = i == _selectedColor;
-            return GestureDetector(
-              onTap: () {
-                SoundService.playClick();
-                setState(() => _selectedColor = i);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: _colors[i],
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: selected ? Colors.white : Colors.transparent,
-                    width: 3,
-                  ),
-                  boxShadow: selected
-                      ? [
-                          BoxShadow(
-                              color: _colors[i].withValues(alpha: 0.6),
-                              blurRadius: 10)
-                        ]
-                      : null,
-                ),
-              ),
-            );
-          }),
-        ),
-      ],
-    );
-  }
-
   Widget _buildBankSection() {
     return Column(
       children: [
@@ -393,8 +243,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
           label: 'SER EL BANCO',
           subtitle: 'Control total de la partida',
           icon: Icons.account_balance_rounded,
-          gradient: const LinearGradient(
-              colors: [Color(0xFFB8860B), Color(0xFF8B4513)]),
+          color: const Color(0xFFB8860B),
           onTap: () => _pickRole('banco'),
         ),
       ],
@@ -402,22 +251,13 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
   }
 
   Widget _buildClientSection() {
-    final color = _colors[_selectedColor];
-    final bool isLight = color.computeLuminance() > 0.5;
-
     return Column(
       children: [
-        _buildAvatarPicker(),
-        const SizedBox(height: 28),
-        _buildColorPicker(),
-        const SizedBox(height: 32),
         _RoleButton(
-          label: 'ENTRAR COMO CLIENTE',
+          label: 'ENTRAR COMO JUGADOR',
           subtitle: 'Recibe capital al vincular con Banca',
           icon: Icons.person_rounded,
-          gradient:
-              LinearGradient(colors: [color, color.withValues(alpha: 0.7)]),
-          foregroundColor: isLight ? Colors.black : Colors.white,
+          color: kGreen,
           onTap: () => _pickRole('cliente'),
         ),
       ],
@@ -429,17 +269,15 @@ class _RoleButton extends StatelessWidget {
   final String label;
   final String subtitle;
   final IconData icon;
-  final Gradient gradient;
+  final Color color;
   final VoidCallback onTap;
-  final Color foregroundColor;
 
   const _RoleButton({
     required this.label,
     required this.subtitle,
     required this.icon,
-    required this.gradient,
+    required this.color,
     required this.onTap,
-    this.foregroundColor = Colors.white,
   });
 
   @override
@@ -449,53 +287,84 @@ class _RoleButton extends StatelessWidget {
         SoundService.playClick();
         onTap();
       },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-        decoration: BoxDecoration(
-          gradient: gradient,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  color.withValues(alpha: 0.2),
+                  color.withValues(alpha: 0.05),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              child: Icon(icon, color: foregroundColor, size: 28),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: color.withValues(alpha: 0.2),
+                width: 1,
+              ),
             ),
-            const SizedBox(width: 16),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: foregroundColor,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        color,
+                        color.withValues(alpha: 0.55),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.35),
+                        blurRadius: 12,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    color: foregroundColor.withValues(alpha: 0.75),
-                    fontSize: 12,
-                  ),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Colors.white.withValues(alpha: 0.3),
+                  size: 16,
                 ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -597,104 +466,88 @@ class _HeaderWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            // Money flying decorations
-            Positioned(
-              top: -20,
-              right: -30,
-              child: Transform.rotate(
-                angle: 0.5,
-                child: Icon(Icons.payments_rounded,
-                    color: Colors.white.withValues(alpha: 0.1), size: 40),
-              ),
+    final width = MediaQuery.sizeOf(context).width;
+    final horizontalPad = (width * 0.06).clamp(16.0, 32.0);
+    final verticalPad = (width * 0.08).clamp(24.0, 40.0);
+    final titleSize = (width * 0.12).clamp(28.0, 48.0);
+    final titleSpacing = (width * 0.018).clamp(4.0, 10.0);
+    final subtitleSize = (width * 0.035).clamp(12.0, 16.0);
+    final subtitleSpacing = (width * 0.01).clamp(2.0, 6.0);
+    final iconSize = (width * 0.08).clamp(24.0, 40.0);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(
+              vertical: verticalPad, horizontal: horizontalPad),
+          decoration: BoxDecoration(
+            color: kBgDark.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: kGold.withValues(alpha: 0.12),
+              width: 1,
             ),
-            Positioned(
-              bottom: -15,
-              left: -35,
-              child: Transform.rotate(
-                angle: -0.4,
-                child: Icon(Icons.currency_exchange_rounded,
-                    color: Colors.white.withValues(alpha: 0.08), size: 35),
-              ),
-            ),
-            Positioned(
-              top: 5,
-              left: -50,
-              child: Transform.rotate(
-                angle: 0.2,
-                child: Icon(Icons.payments_rounded,
-                    color: Colors.white.withValues(alpha: 0.05), size: 45),
-              ),
-            ),
-            const Text(
-              'MONOPOLY',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 42,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 8,
-                shadows: [
-                  Shadow(color: Colors.white24, blurRadius: 20),
+          ),
+          child: Column(
+            children: [
+              Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned(
+                    top: -iconSize * 0.5,
+                    right: -iconSize * 0.5,
+                    child: Transform.rotate(
+                      angle: 0.5,
+                      child: Icon(Icons.payments_rounded,
+                          color: kGold.withValues(alpha: 0.15),
+                          size: iconSize),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: -iconSize * 0.5,
+                    left: -iconSize * 0.6,
+                    child: Transform.rotate(
+                      angle: -0.4,
+                      child: Icon(Icons.currency_exchange_rounded,
+                          color: kGold.withValues(alpha: 0.1),
+                          size: iconSize * 0.9),
+                    ),
+                  ),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      'MONOPOLY',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: titleSize,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: titleSpacing,
+                        shadows: [
+                          Shadow(color: Colors.white24, blurRadius: 20),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        const Text(
-          'BANCA DIGITAL',
-          style: TextStyle(
-            color: kTextSecondary,
-            fontSize: 14,
-            letterSpacing: 4,
-            fontWeight: FontWeight.w500,
+              const SizedBox(height: 6),
+              Text(
+                'BANCA DIGITAL',
+                style: TextStyle(
+                  color: kTextSecondary,
+                  fontSize: subtitleSize,
+                  letterSpacing: subtitleSpacing,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 24),
-        Container(
-          height: 1,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.transparent,
-                kGold.withValues(alpha: 0.5),
-                Colors.transparent
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DividerWidget extends StatelessWidget {
-  const _DividerWidget();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-            child: Container(height: 1, color: kBorder.withValues(alpha: 0.3))),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'O TAMBIÉN',
-            style: TextStyle(
-                color: kTextSecondary.withValues(alpha: 0.5),
-                fontSize: 10,
-                letterSpacing: 2),
-          ),
-        ),
-        Expanded(
-            child: Container(height: 1, color: kBorder.withValues(alpha: 0.3))),
-      ],
+      ),
     );
   }
 }

@@ -15,38 +15,29 @@ class _StatChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-        decoration: BoxDecoration(
-          color: kBgCard,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: kBorder),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(height: 4),
+        SizedBox(
+          width: double.infinity,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value,
+                style: const TextStyle(
+                    color: kTextPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13)),
+          ),
         ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 18),
-            const SizedBox(height: 4),
-            SizedBox(
-              width: double.infinity,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(value,
-                    style: const TextStyle(
-                        color: kTextPrimary,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13)),
-              ),
-            ),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: kTextSecondary, fontSize: 10),
-            ),
-          ],
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: kTextSecondary, fontSize: 10),
         ),
-      ),
+      ],
     );
   }
 }

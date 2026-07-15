@@ -589,16 +589,77 @@ mixin _WalletIncoming on State<WalletScreen> {
 
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            Future<void> deliver() async {
-              if (sending || completed) return;
-              setDialogState(() {
-                sending = true;
-                message = 'Buscando al jugador receptor en contacto...';
-              });
+              Future<void> deliver() async {
+                  if (sending || completed) return;
+                  setDialogState(() {
+                    sending = true;
+                    message =
+                        'Acerca el jugador receptor al banco...';
+                  });
 
-              try {
-                final isNotSource = (BleConnectedPlayer p) =>
-                    p.displayName != fromName;
+                  final transport = P2PService().bleTransport;
+                  if (P2PService().currentType == TransportType.ble &&
+                      transport.serverActiveNotifier.value &&
+                      transport.clientConnectedNotifier.value) {
+                    transport.contactReadyNotifier.value = false;
+                    final current =
+                        transport.connectedPlayersNotifier.value;
+                    final reset = <BleConnectedPlayer>[];
+                    for (final player in current) {
+                      if (player.contactReady) {
+                        reset.add(player.copyWith(contactReady: false));
+                      } else {
+                        reset.add(player);
+                      }
+                    }
+                    transport.connectedPlayersNotifier.value = reset;
+
+                    final contactCompleter = Completer<bool>();
+                    void finish(bool v) {
+                      if (contactCompleter.isCompleted) return;
+                      contactCompleter.complete(v);
+                    }
+                    void contactListener() {
+                      if (transport.contactReadyNotifier.value ||
+                          transport.connectedPlayersNotifier.value.any(
+                              (p) => p.subscribed && p.contactReady)) {
+                        finish(true);
+                      }
+                    }
+                    transport.contactReadyNotifier
+                        .addListener(contactListener);
+                    transport.connectedPlayersNotifier
+                        .addListener(contactListener);
+                    final timeout = Timer(
+                        const Duration(seconds: 15),
+                        () => finish(false));
+                    contactListener();
+                    final contactReady = await contactCompleter.future;
+                    timeout.cancel();
+                    transport.contactReadyNotifier
+                        .removeListener(contactListener);
+                    transport.connectedPlayersNotifier
+                        .removeListener(contactListener);
+
+                    if (!contactReady) {
+                      if (ctx.mounted) {
+                        setDialogState(() {
+                          sending = false;
+                          message =
+                              'No se detectó contacto. Acerca el jugador e intenta de nuevo.';
+                        });
+                      }
+                      return;
+                    }
+                    setDialogState(() {
+                      message =
+                          'Buscando al jugador receptor en contacto...';
+                    });
+                  }
+
+                  try {
+                    final isNotSource = (BleConnectedPlayer p) =>
+                        p.displayName != fromName;
                 var players = P2PService()
                     .bleTransport
                     .connectedPlayersNotifier

@@ -1123,6 +1123,7 @@ class BleTransport extends P2PTransport {
   void _connect(String deviceId) async {
     _audit('action_connect', data: {'deviceId': deviceId});
     final serviceUuid = Uuid.parse(_serviceUuid);
+    await _connectSub?.cancel();
     _connectSub = _ble
         .connectToAdvertisingDevice(
       id: deviceId,
@@ -1305,11 +1306,15 @@ class BleTransport extends P2PTransport {
         debugPrint('[BLE client] No se pudo negociar MTU: $error');
       }
 
-      if (!_clientConnected || _connectedDeviceId != deviceId) return;
-      clientConnectedNotifier.value = false;
-      connectionStatusNotifier.value = 'Preparando canal de datos...';
-      _subscribeToNotifications();
-      Future<void>.delayed(const Duration(milliseconds: 200), () {
+                    if (!_clientConnected || _connectedDeviceId != deviceId) return;
+                    clientConnectedNotifier.value = false;
+                    connectionStatusNotifier.value = 'Preparando canal de datos...';
+                    _subscribeToNotifications();
+                    clientConnectedNotifier.value = true;
+                    connectionStatusNotifier.value = 'Conectado al banco';
+                    _startKeepAlive(deviceId);
+                    _startProximityPolling();
+                    Future<void>.delayed(const Duration(milliseconds: 200), () {
         _sendIdentityOnce();
       });
     } finally {

@@ -158,8 +158,8 @@ mixin _WalletBuilders on State<WalletScreen> {
             constraints: const BoxConstraints(maxWidth: 600),
             child: CustomScrollView(
               slivers: [
-                _buildAppBar(displayAvatar, displayColor, displayName,
-                    displayRole, isBank),
+                _buildHeader(displayAvatar, displayColor, displayName,
+                    displayRole, isBank, shownBalance, shownTier),
                 if (!isBank && playerReady)
                   SliverToBoxAdapter(
                     child: AnimatedEntry(
@@ -476,131 +476,243 @@ mixin _WalletBuilders on State<WalletScreen> {
     );
   }
 
-  SliverAppBar _buildAppBar(
-      String avatarId, Color color, String name, String role, bool isBank) {
+  Widget _buildHeader(String avatarId, Color color, String name, String role,
+      bool isBank, double balance, CardTier tier) {
     final width = MediaQuery.sizeOf(context).width;
-    final compactActions = width < 390;
+    final compact = width < 390;
     final title =
         isBank ? 'Banca Central' : (name.isNotEmpty ? name : 'Mi Billetera');
     final subtitle =
         role.toLowerCase() == 'cliente' ? 'JUGADOR' : role.toUpperCase();
+    final tierLabel = _tierName(tier);
 
-    return SliverAppBar(
-      backgroundColor: kBgDark,
-      expandedHeight: 0,
-      floating: true,
-      leadingWidth: 0,
-      titleSpacing: 12,
-      title: Row(
-        children: [
-          AnimatedAvatar(
-            emoji: avatarId,
-            size: compactActions ? 32 : 36,
-            glowColor: color,
-            showIdle: false,
-          ),
-          SizedBox(width: compactActions ? 8 : 10),
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: kTextPrimary,
-                    fontSize: compactActions ? 14 : 15,
-                    fontWeight: FontWeight.w700,
-                  ),
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(12, MediaQuery.of(context).padding.top + 8, 12, 0),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              decoration: BoxDecoration(
+                color: kBgDark.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: color.withValues(alpha: 0.15),
+                  width: 1,
                 ),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: kTextSecondary,
-                    fontSize: 10,
-                    letterSpacing: 1,
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        compact ? 12 : 16, 12, compact ? 6 : 12, 12),
+                    child: Row(
+                      children: [
+                        AnimatedAvatar(
+                          emoji: avatarId,
+                          size: compact ? 36 : 42,
+                          glowColor: color,
+                          showIdle: true,
+                        ),
+                        SizedBox(width: compact ? 10 : 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: kTextPrimary,
+                                  fontSize: compact ? 15 : 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: color.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      subtitle,
+                                      style: TextStyle(
+                                        color: color,
+                                        fontSize: 9,
+                                        letterSpacing: 1.5,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  if (!isBank && tier != CardTier.standard)
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 6),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              kGold.withValues(alpha: 0.3),
+                                              kGold.withValues(alpha: 0.1),
+                                            ],
+                                          ),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          tierLabel,
+                                          style: const TextStyle(
+                                            color: kGold,
+                                            fontSize: 9,
+                                            letterSpacing: 1,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.logout_rounded,
+                              color: kRed, size: 20),
+                          tooltip: 'Cerrar Sesión',
+                          onPressed: () {
+                            SoundService.playClick();
+                            _self._confirmExit(context.read<SessionProvider>());
+                          },
+                        ),
+                        if (compact)
+                          PopupMenuButton<String>(
+                            icon: const Icon(Icons.more_vert_rounded,
+                                color: kTextSecondary, size: 20),
+                            tooltip: 'Más opciones',
+                            color: kBgCard,
+                            onSelected: (value) {
+                              if (value == 'ble') _self._openBleDebug();
+                            },
+                            itemBuilder: (context) => [
+                              if (kDebugMode)
+                                const PopupMenuItem(
+                                  value: 'ble',
+                                  child: Text('BLE Debug'),
+                                ),
+                            ],
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  if (!isBank)
+                    Container(
+                      padding: EdgeInsets.fromLTRB(
+                          compact ? 16 : 20, 0, compact ? 16 : 20, 14),
+                      child: Row(
+                        children: [
+                          const Text(
+                            'SALDO',
+                            style: TextStyle(
+                              color: kTextSecondary,
+                              fontSize: 10,
+                              letterSpacing: 2,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OdometerWidget(
+                              value: balance,
+                              style: TextStyle(
+                                color: kTextPrimary,
+                                fontSize: compact ? 22 : 26,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
-        ],
-      ),
-      actions: [
-        if (!compactActions) ...[
-          if (kDebugMode)
-            IconButton(
-              icon: const Icon(Icons.bluetooth_rounded, color: kTextSecondary),
-              tooltip: 'BLE Debug',
-              onPressed: _self._self._openBleDebug,
-            ),
-        ],
-        IconButton(
-          icon: const Icon(Icons.logout_rounded, color: kRed),
-          tooltip: 'Cerrar Sesión',
-          onPressed: () {
-            SoundService.playClick();
-            _self._confirmExit(context.read<SessionProvider>());
-          },
         ),
-        if (kDebugMode)
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: kTextSecondary),
-            onPressed: () {
-              SoundService.playClick();
-              setState(() {});
-            },
-          ),
-        if (compactActions)
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded, color: kTextSecondary),
-            tooltip: 'Más opciones',
-            color: kBgCard,
-            onSelected: (value) {
-              if (value == 'ble') _self._openBleDebug();
-            },
-            itemBuilder: (context) => [
-              if (kDebugMode)
-                const PopupMenuItem(
-                  value: 'ble',
-                  child: Text('BLE Debug'),
-                ),
-            ],
-          ),
-      ],
+      ),
     );
+  }
+
+  String _tierName(CardTier tier) {
+    switch (tier) {
+      case CardTier.gold:
+        return 'GOLD';
+      case CardTier.platinum:
+        return 'PLATINUM';
+      case CardTier.black:
+        return 'BLACK';
+      default:
+        return '';
+    }
   }
 
   Widget _buildStatsRow(StatsProvider stats, Color color) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Row(
-        children: [
-          _StatChip(
-            label: 'Volumen',
-            value: _compact(stats.totalVolume),
-            icon: Icons.payments_rounded,
-            color: color,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: kBgDark.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: color.withValues(alpha: 0.1),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(child: _StatChip(
+                  label: 'Volumen',
+                  value: _compact(stats.totalVolume),
+                  icon: Icons.payments_rounded,
+                  color: color,
+                )),
+                Container(
+                  width: 1,
+                  height: 28,
+                  color: color.withValues(alpha: 0.1),
+                ),
+                Expanded(child: _StatChip(
+                  label: 'Tx',
+                  value: stats.txCount.toString(),
+                  icon: Icons.history_rounded,
+                  color: color,
+                )),
+                Container(
+                  width: 1,
+                  height: 28,
+                  color: color.withValues(alpha: 0.1),
+                ),
+                Expanded(child: _StatChip(
+                  label: 'Pass GO',
+                  value: 'x${stats.passGoCount}',
+                  icon: Icons.flag_rounded,
+                  color: color,
+                )),
+              ],
+            ),
           ),
-          const SizedBox(width: 12),
-          _StatChip(
-            label: 'Tx',
-            value: stats.txCount.toString(),
-            icon: Icons.history_rounded,
-            color: color,
-          ),
-          const SizedBox(width: 8),
-          _StatChip(
-            label: 'Pass GO',
-            value: 'x${stats.passGoCount}',
-            icon: Icons.flag_rounded,
-            color: color,
-          ),
-        ],
+        ),
       ),
     );
   }
