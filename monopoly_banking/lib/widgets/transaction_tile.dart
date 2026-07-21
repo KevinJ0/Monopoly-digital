@@ -73,6 +73,7 @@ class TransactionTile extends StatelessWidget {
       'passGo' ||
       'transfer_received' ||
       'transfer_cancelled' ||
+      'transfer_delivered' ||
       'sync_credit' ||
       'investment_completed' ||
       'investment_early_withdrawal' ||
@@ -98,6 +99,7 @@ class TransactionTile extends StatelessWidget {
       case 'payment':
       case 'transfer_received':
       case 'transfer_cancelled':
+      case 'transfer_delivered':
       case 'bank_transfer_received':
       case 'bank_transfer_cancelled':
         return Icons.arrow_downward_rounded;
@@ -137,6 +139,8 @@ class TransactionTile extends StatelessWidget {
         return 'Dinero retenido por el banco';
       case 'transfer_cancelled':
         return 'Transferencia devuelta';
+      case 'transfer_delivered':
+        return 'Transferencia entregada';
       case 'bank_transfer_received':
         return 'Transferencia recibida';
       case 'bank_transfer_cancelled':

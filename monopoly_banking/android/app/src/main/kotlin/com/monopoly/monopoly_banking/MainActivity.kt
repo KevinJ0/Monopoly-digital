@@ -19,6 +19,8 @@ import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import net.touchcapture.qr.flutterqr.QrShared
+import net.touchcapture.qr.flutterqr.QRViewFactory
 
 class MainActivity : FlutterActivity() {
     private var bleServer: BleServer? = null
@@ -27,6 +29,17 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // Manually register qr_code_scanner platform view factory
+        try {
+            flutterEngine.platformViewsController.registry.registerViewFactory(
+                "net.touchcapture.qr.flutterqr/qrview",
+                QRViewFactory(flutterEngine.dartExecutor.binaryMessenger)
+            )
+            QrShared.activity = this
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Failed to register QR platform view", e)
+        }
 
         val messenger = flutterEngine.dartExecutor.binaryMessenger
 

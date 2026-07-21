@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:monopoly_banking/models/session_model.dart';
@@ -71,8 +72,8 @@ class HiveService {
       if (stored != null) {
         return Uint8List.fromList(base64Decode(stored));
       }
-    } catch (e) {
-      await _secureStorage.delete(key: _keyAlias, aOptions: _androidOptions);
+    } on PlatformException {
+      await _secureStorage.deleteAll(aOptions: _androidOptions);
     }
 
     final key = Hive.generateSecureKey();

@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:monopoly_banking/core/constants.dart';
 
@@ -20,21 +18,17 @@ class PlayerColorBackdrop extends StatelessWidget {
         const Positioned.fill(child: ColoredBox(color: kBgDark)),
         Positioned.fill(
           child: IgnorePointer(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      color.withValues(alpha: 0.176),
-                      color.withValues(alpha: 0.096),
-                      color.withValues(alpha: 0.032),
-                      Colors.transparent,
-                    ],
-                    stops: const [0, 0.27, 0.5, 0.72],
-                  ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment.bottomCenter,
+                  radius: 1.2,
+                  colors: [
+                    color.withValues(alpha: 0.25),
+                    color.withValues(alpha: 0.10),
+                    Colors.transparent,
+                  ],
+                  stops: const [0, 0.4, 0.7],
                 ),
               ),
             ),

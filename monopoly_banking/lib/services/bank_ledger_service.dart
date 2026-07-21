@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/models/transaction_model.dart';
+import 'package:monopoly_banking/services/bank_settings_service.dart';
 import 'package:monopoly_banking/services/hive_service.dart';
 
 class BankLedgerException implements Exception {
@@ -23,6 +24,8 @@ class BankPlayerAccount {
   final double generatedAmount;
   final int targetPasses;
   final int currentPasses;
+  final String avatarId;
+  final String colorId;
 
   const BankPlayerAccount({
     required this.playerId,
@@ -33,6 +36,8 @@ class BankPlayerAccount {
     this.generatedAmount = 0,
     this.targetPasses = 0,
     this.currentPasses = 0,
+    this.avatarId = '',
+    this.colorId = '0',
   });
 
   factory BankPlayerAccount.fromMap(
@@ -47,6 +52,8 @@ class BankPlayerAccount {
       generatedAmount: (map['generatedAmount'] as num?)?.toDouble() ?? 0,
       targetPasses: (map['targetPasses'] as num?)?.toInt() ?? 0,
       currentPasses: (map['currentPasses'] as num?)?.toInt() ?? 0,
+      avatarId: (map['avatarId'] as String?)?.trim() ?? '',
+      colorId: (map['colorId'] as String?)?.trim() ?? '0',
     );
   }
 
@@ -58,6 +65,8 @@ class BankPlayerAccount {
     double? generatedAmount,
     int? targetPasses,
     int? currentPasses,
+    String? avatarId,
+    String? colorId,
   }) {
     return BankPlayerAccount(
       playerId: playerId,
@@ -68,6 +77,8 @@ class BankPlayerAccount {
       generatedAmount: generatedAmount ?? this.generatedAmount,
       targetPasses: targetPasses ?? this.targetPasses,
       currentPasses: currentPasses ?? this.currentPasses,
+      avatarId: avatarId ?? this.avatarId,
+      colorId: colorId ?? this.colorId,
     );
   }
 
@@ -79,6 +90,8 @@ class BankPlayerAccount {
         'generatedAmount': generatedAmount,
         'targetPasses': targetPasses,
         'currentPasses': currentPasses,
+        'avatarId': avatarId,
+        'colorId': colorId,
       };
 
   Map<String, dynamic> toClientState() => {
@@ -186,22 +199,43 @@ class BankLedgerService {
     return BankPlayerAccount.fromMap(playerId, raw);
   }
 
+  BankPlayerAccount? accountForDeviceId(String deviceInstallationId) {
+    if (deviceInstallationId.isEmpty) return null;
+    final accounts = _readAccounts();
+    for (final entry in accounts.entries) {
+      final map = entry.value;
+      if (map is Map) {
+        final storedDeviceId = (map['deviceInstallationId'] as String?)?.trim() ?? '';
+        if (storedDeviceId == deviceInstallationId) {
+          return BankPlayerAccount.fromMap(entry.key, map);
+        }
+      }
+    }
+    return null;
+  }
+
   List<Map<String, dynamic>> get transactionHistory => _readTransactions();
 
   Future<BankLedgerResult> ensurePlayer(
     String playerId,
     double initialBalance, {
     String? deviceInstallationId,
+    String? avatarId,
+    String? colorId,
   }) async {
     _validatePlayerId(playerId);
     final existing = accountFor(playerId);
     final account = existing?.copyWith(
           deviceInstallationId: deviceInstallationId,
+          avatarId: avatarId,
+          colorId: colorId,
         ) ??
         BankPlayerAccount(
           playerId: playerId,
           balance: initialBalance,
           deviceInstallationId: deviceInstallationId ?? '',
+          avatarId: avatarId ?? '',
+          colorId: colorId ?? '0',
         );
     await _saveAccount(account);
     return _record(
@@ -263,8 +297,9 @@ class BankLedgerService {
       generated += generatedInterest;
     }
 
+    final passGoAmount = BankSettingsService().passGoAmount;
     final account = current.copyWith(
-      balance: current.balance + kPassGoAmount,
+      balance: current.balance + passGoAmount,
       generatedAmount: generated,
       currentPasses: currentPasses,
     );
@@ -272,7 +307,7 @@ class BankLedgerService {
     return _record(
       account: account,
       type: 'passGo',
-      amount: kPassGoAmount,
+      amount: passGoAmount,
       metadata: {'generatedInterest': generatedInterest},
       generatedInterest: generatedInterest,
     );

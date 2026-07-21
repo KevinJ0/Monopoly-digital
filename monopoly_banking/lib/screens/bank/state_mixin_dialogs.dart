@@ -316,6 +316,31 @@ mixin _BankDialogs on State<BankScreen> {
     AppAuditLogger.instance.event('BANK_OP', '_send start',
         data: {'op': _self._selectedOp, 'amount': _self._amountCtrl.text});
 
+    final connectedPlayers = P2PService()
+        .wsTransport
+        .connectedPlayersNotifier
+        .value
+        .where((p) => p.connected && p.name.isNotEmpty)
+        .toList();
+    if (connectedPlayers.isEmpty) {
+      if (mounted) {
+        NotificationService().show(
+          'No hay jugadores conectados',
+          backgroundColor: Colors.orange,
+        );
+      }
+      setState(() => _self._sending = false);
+      return;
+    }
+
+    final targetPlayer = await _self._selectTargetPlayer(
+      title: 'Seleccionar jugador',
+    );
+    if (targetPlayer == null) {
+      setState(() => _self._sending = false);
+      return;
+    }
+
     setState(() => _self._sending = true);
     final dialog = _BankOperationDialogController(
       transportType: P2PService().currentType,
@@ -329,22 +354,6 @@ mixin _BankDialogs on State<BankScreen> {
     await Future<void>.delayed(Duration.zero);
 
     try {
-      if (!await _self._waitForPlayerReady(dialog)) {
-        await _failOperationDialog(
-          dialog,
-          'Jugador no disponible',
-          'No hay jugadores conectados. Espera a que un jugador se conecte al banco e intenta nuevamente.',
-          icon: Icons.phonelink_off_rounded,
-          color: Colors.orange,
-        );
-        return;
-      }
-
-      final targetPlayer = await _self._selectTargetPlayer(
-        title: 'Seleccionar jugador',
-      );
-      if (targetPlayer == null) return;
-
       dialog.update(
         title: _self._operationWaitTitle(),
         message: _self._operationWaitMessage(),
@@ -352,25 +361,95 @@ mixin _BankDialogs on State<BankScreen> {
 
       final ledger = BankLedgerService();
       final playerId = targetPlayer.displayName;
-      final deviceInstallationId = targetPlayer.deviceInstallationId;
-      if (deviceInstallationId.isEmpty) {
-        await _failOperationDialog(
-          dialog,
-          'Identidad pendiente',
-          'Espera un momento mientras el banco verifica la identidad del dispositivo.',
-          icon: Icons.phonelink_lock_rounded,
-          color: Colors.orange,
-        );
-        return;
-      }
 
       if (_self._selectedOp == 'passGo') {
+        final passGoAmount = BankSettingsService().passGoAmount;
         final result = await ledger.passGo(playerId);
           await _self._sendToConnectedPlayer(result.toClientPayload());
           SoundService.playFanfare();
           HapticFeedback.vibrate();
-          NotificationService().show('$playerId pasó por GO: +${formatMoney(200)}',
+          NotificationService().show(
+              '$playerId pasó por GO: +${formatMoney(passGoAmount)}',
               backgroundColor: kGold);
+      } else if (_self._selectedOp.startsWith('custom:')) {
+        final fixedAmount = _self._fixedAmountForSelectedOp();
+        if (fixedAmount <= 0) {
+          throw const BankLedgerException('Monto inválido para la operación personalizada.');
+        }
+        final customId = _self._selectedOp.substring('custom:'.length);
+        final opName = BankSettingsService()
+            .customOps
+            .where((c) => c.id == customId)
+            .firstOrNull
+            ?.name;
+        final isGive = BankSettingsService()
+            .customOps
+            .where((c) => c.id == customId)
+            .firstOrNull
+            ?.isGive ?? true;
+        if (isGive) {
+          final result = await ledger.credit(
+            playerId,
+            fixedAmount,
+            type: 'custom_$customId',
+          );
+          await _self._sendToConnectedPlayer(result.toClientPayload());
+          SoundService.playSuccess();
+          HapticFeedback.mediumImpact();
+          NotificationService().show(
+              '${opName ?? 'Operación'}: +${formatMoney(fixedAmount)} a $playerId',
+              backgroundColor: Colors.green.shade700);
+        } else {
+          final account = ledger.accountFor(playerId);
+          if (account == null) {
+            throw const BankLedgerException(
+              'El jugador necesita completar el handshake inicial.',
+            );
+          }
+          if (fixedAmount > account.balance) {
+            final proceed = await _confirmBankruptcy(
+              playerId: playerId,
+              availableBalance: account.balance,
+              chargeAmount: fixedAmount,
+            );
+            if (proceed != true) {
+              await _failOperationDialog(
+                dialog,
+                'Operación cancelada',
+                'El jugador conserva su saldo y continúa activo en la partida.',
+                icon: Icons.shield_outlined,
+                color: Colors.orange,
+              );
+              return;
+            }
+            final result = await ledger.markBankrupt(
+              playerId,
+              attemptedCharge: fixedAmount,
+              deviceInstallationId: targetPlayer.deviceInstallationId,
+            );
+            await _self._sendToConnectedPlayer(result.toClientPayload());
+            SoundService.playSadTrombone();
+            HapticFeedback.heavyImpact();
+            NotificationService().show(
+                '$playerId en bancarrota. Expulsado de la partida.',
+                backgroundColor: kRed);
+            dialog.complete(
+              '$playerId fue declarado en bancarrota y expulsado de la partida.',
+            );
+            return;
+          }
+          final result = await ledger.debit(
+            playerId,
+            fixedAmount,
+            type: 'custom_$customId',
+          );
+          await _self._sendToConnectedPlayer(result.toClientPayload());
+          SoundService.playSadTrombone();
+          HapticFeedback.heavyImpact();
+          NotificationService().show(
+              '${opName ?? 'Operación'}: -${formatMoney(fixedAmount)} a $playerId',
+              backgroundColor: Colors.orange.shade800);
+        }
       } else {
         final amount = double.parse(_self._amountCtrl.text.replaceAll(',', ''));
         if (_self._selectedOp == 'receive') {
@@ -413,7 +492,7 @@ mixin _BankDialogs on State<BankScreen> {
             final result = await ledger.markBankrupt(
               playerId,
               attemptedCharge: amount,
-              deviceInstallationId: deviceInstallationId,
+              deviceInstallationId: targetPlayer.deviceInstallationId,
             );
             await _self._sendToConnectedPlayer(result.toClientPayload());
             SoundService.playSadTrombone();
@@ -688,7 +767,7 @@ mixin _BankDialogs on State<BankScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisSize: MainAxisSize.max,
                 children: [
                   Row(
                     children: [
@@ -741,7 +820,7 @@ mixin _BankDialogs on State<BankScreen> {
                       Tab(text: 'Datos Conexion'),
                     ],
                   ),
-                  Flexible(
+                  Expanded(
                     child: TabBarView(
                       children: [
                         PlayerInfoView(
@@ -755,15 +834,97 @@ mixin _BankDialogs on State<BankScreen> {
                           tierColor: tierColor,
                           transactions: transactions,
                         ),
-                        _buildConnectionInfoTab(player),
+                        _self._buildConnectionInfoTab(player),
                       ],
                     ),
+                  ),
+                  const SizedBox(height: 5),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final confirm = await _confirmKick(
+                          context,
+                          player.displayName,
+                        );
+                        if (confirm != true || !ctx.mounted) return;
+                        Navigator.pop(ctx);
+                        try {
+                          final installationId = player.deviceInstallationId;
+                          if (installationId.isNotEmpty) {
+                            await BankLedgerService()
+                                .banDevice(installationId, player.displayName);
+                          }
+                          await P2PService().sendPayload({
+                            'type': 'kick',
+                            'targetPlayerId': player.displayName,
+                            'playerId': player.displayName,
+                          });
+                        } on TransportUnavailableException {
+                          // El jugador ya se desconectó — fue expulsado igual.
+                        }
+                      },
+                      icon: const Icon(Icons.gavel_rounded, size: 18),
+                      label: const Text(
+                        'Sacar del juego',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
                   ),
                 ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Future<bool?> _confirmKick(
+    BuildContext outerContext,
+    String playerName,
+  ) {
+    return showDialog<bool>(
+      context: outerContext,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kBgCard,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Expulsar jugador',
+            style: TextStyle(color: kTextPrimary)),
+        content: Text(
+          '¿Estás seguro de que deseas expulsar a "$playerName" de la partida? No podrá reconectarse hasta que inicies una nueva sesión.',
+          style: const TextStyle(color: kTextSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar',
+                style: TextStyle(color: kTextSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Expulsar',
+                style: TextStyle(fontWeight: FontWeight.w800)),
+          ),
+        ],
       ),
     );
   }

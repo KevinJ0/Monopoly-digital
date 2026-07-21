@@ -26,6 +26,7 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
     super.initState();
     kBankTabsActive = true;
     _pageCtrl = PageController();
+    BankLedgerService().initHeldTransfersCount();
   }
 
   @override
@@ -61,7 +62,7 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
         border: Border.all(color: kBorder.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
-            color: kGreen.withValues(alpha: 0.1),
+            color: kGold.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 6),
           ),
@@ -89,11 +90,11 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
                 margin: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: selected
-                      ? kGreen.withValues(alpha: 0.15)
+                      ? kGold.withValues(alpha: 0.15)
                       : Colors.transparent,
                   borderRadius: BorderRadius.circular(14),
                   border: selected
-                      ? Border.all(color: kGreen.withValues(alpha: 0.3))
+                      ? Border.all(color: kGold.withValues(alpha: 0.3))
                       : null,
                 ),
                 child: Row(
@@ -108,27 +109,57 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
                               valueListenable:
                                   BankLedgerService().heldTransfersCount,
                               builder: (context, count, _) {
-                                return Badge(
-                                  isLabelVisible: count > 0,
-                                  label: Text('$count',
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w800)),
-                                  backgroundColor: Colors.orange,
-                                  child: Icon(
-                                    tab.icon,
-                                    color: selected
-                                        ? kGreen
-                                        : kTextSecondary,
-                                    size: selected ? 22 : 20,
-                                  ),
+                                return Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Icon(
+                                      tab.icon,
+                                      color: selected
+                                          ? kGold
+                                          : kTextSecondary,
+                                      size: selected ? 22 : 20,
+                                    ),
+                                    if (count > 0)
+                                      Positioned(
+                                        right: -6,
+                                        top: -6,
+                                        child: TweenAnimationBuilder<double>(
+                                          tween: Tween(begin: 0, end: 1),
+                                          duration: 300.ms,
+                                          curve: Curves.elasticOut,
+                                          builder:
+                                              (context, scale, _) {
+                                            return Transform.scale(
+                                              scale: scale,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.all(4),
+                                                decoration:
+                                                    const BoxDecoration(
+                                                  color: Colors.orange,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Text(
+                                                  '$count',
+                                                  style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 9,
+                                                    fontWeight:
+                                                        FontWeight.w800,
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                  ],
                                 );
                               },
                             )
                           : Icon(
                               tab.icon,
-                              color: selected ? kGreen : kTextSecondary,
+                              color: selected ? kGold : kTextSecondary,
                               size: selected ? 22 : 20,
                             ),
                     ),
@@ -142,7 +173,7 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
                       Text(
                         tab.label,
                         style: const TextStyle(
-                          color: kGreen,
+                          color: kGold,
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.5,

@@ -16,7 +16,9 @@ class SessionProvider extends ChangeNotifier {
   String _colorId = '0';
   String _name = '';
   bool _isHandshakeDone = false;
+  String _bankDeviceId = '';
   bool _initialized = false;
+  bool _showRoleSelection = false;
 
   String get role => _role;
   String get avatarId => _avatarId;
@@ -25,6 +27,8 @@ class SessionProvider extends ChangeNotifier {
   bool get isHandshakeDone => _isHandshakeDone;
   bool get isBank => _role == 'banco';
   bool get initialized => _initialized;
+  String get bankDeviceId => _bankDeviceId;
+  bool get showRoleSelection => _showRoleSelection;
 
   Color get color {
     final index = int.tryParse(_colorId) ?? 0;
@@ -41,6 +45,14 @@ class SessionProvider extends ChangeNotifier {
     Color(0xFFFF7043),
     Color(0xFF00ACC1),
     Color(0xFFECEFF1),
+    Color(0xFF8D6E63),
+    Color(0xFF81D4FA),
+    Color(0xFFF48FB1),
+    Color(0xFFFFCC80),
+    Color(0xFFEF9A9A),
+    Color(0xFFFFF176),
+    Color(0xFFA5D6A7),
+    Color(0xFF5C6BC0),
   ];
 
   SessionProvider(this._stats, this._wallet);
@@ -90,6 +102,7 @@ class SessionProvider extends ChangeNotifier {
     String? name,
     bool isHandshakeDone = false,
   }) async {
+    debugPrint('[SESSION] createSession role=$role initialBalance=$initialBalance isHandshakeDone=$isHandshakeDone');
     _role = role;
     _avatarId = avatarId;
     _colorId = colorId;
@@ -107,12 +120,22 @@ class SessionProvider extends ChangeNotifier {
 
     await HiveService.sessionBox.put('current', session);
     _wallet.rawBalance.value = initialBalance;
+    debugPrint('[SESSION] rawBalance set to ${_wallet.rawBalance.value}');
     _wallet.syncTierWithBalance();
     _initialized = true;
     notifyListeners();
   }
 
+  bool _isClearing = false;
+
   Future<void> clearSession() async {
+    if (_isClearing) {
+      debugPrint('[┊] CLEAR_SESSION already in progress, ignoring');
+      return;
+    }
+    _isClearing = true;
+    debugPrint('[┊] CLEAR_SESSION called!');
+    debugPrint('[┊] CLEAR_SESSION Stack:\n${StackTrace.current.toString().split('\n').take(15).join('\n')}');
     if (isBank) await BankLedgerService().closeBankSession();
     await HiveService.sessionBox.delete('current');
     await HiveService.txBox.clear();
@@ -121,10 +144,56 @@ class SessionProvider extends ChangeNotifier {
     _avatarId = '';
     _colorId = '0';
     _name = '';
+    _bankDeviceId = '';
     _isHandshakeDone = false;
     _wallet.rawBalance.value = 0;
     _wallet.bankruptNotifier.value = false;
     _stats.restore(volume: 0, count: 0, passGo: 0);
+    _isClearing = false;
+    notifyListeners();
+  }
+
+  Future<void> updateProfile({
+    required String name,
+    required String avatarId,
+    required String colorId,
+  }) async {
+    _name = name;
+    _avatarId = avatarId;
+    _colorId = colorId;
+    final current = HiveService.sessionBox.get('current');
+    if (current != null) {
+      final updated = SessionModel(
+        role: current.role,
+        balance: current.balance,
+        avatarId: avatarId,
+        colorId: colorId,
+        totalVolume: current.totalVolume,
+        txCount: current.txCount,
+        passGoCount: current.passGoCount,
+        isBankrupt: current.isBankrupt,
+        name: name,
+        isHandshakeDone: current.isHandshakeDone,
+        vaultInvestedAmount: current.vaultInvestedAmount,
+        vaultGeneratedAmount: current.vaultGeneratedAmount,
+        vaultTargetPasses: current.vaultTargetPasses,
+        vaultCurrentPasses: current.vaultCurrentPasses,
+        maxTier: current.maxTier,
+        balanceHistory: current.balanceHistory,
+      );
+      await HiveService.sessionBox.put('current', updated);
+    }
+    notifyListeners();
+  }
+
+  void goHome() {
+    _showRoleSelection = true;
+    _isHandshakeDone = false;
+    notifyListeners();
+  }
+
+  void cancelGoHome() {
+    _showRoleSelection = false;
     notifyListeners();
   }
 
@@ -163,14 +232,24 @@ class SessionProvider extends ChangeNotifier {
   }
 
   Future<void> applyHandshake(Map<String, dynamic> payload) async {
+    debugPrint('[SESSION] applyHandshake payload balance=${payload['balance']} _isHandshakeDone=$_isHandshakeDone');
     if (_isHandshakeDone) return;
 
-    final balance = (payload['balance'] as num).toDouble();
-    final avatar = payload['avatarId'] as String;
-    final color = payload['colorId'] as String;
+    final balance = (payload['balance'] as num?)?.toDouble();
+    if (balance == null || !balance.isFinite) {
+      debugPrint('[┊] applyHandshake: invalid balance in payload');
+      return;
+    }
+    final avatar = payload['avatarId'] as String?;
+    final color = payload['colorId'] as String?;
+    if (avatar == null || color == null) {
+      debugPrint('[┊] applyHandshake: missing avatarId or colorId');
+      return;
+    }
     // Prefer existing name if available (already entered in RoleSelection),
     // otherwise fallback to any name sent in the handshake.
     final finalName = _name.isNotEmpty ? _name : (payload['name'] as String?);
+    _bankDeviceId = (payload['bankDeviceId'] as String?) ?? '';
 
     await createSession(
       role: 'cliente',

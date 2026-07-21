@@ -10,7 +10,6 @@ import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
-import 'package:monopoly_banking/screens/onboarding_screen.dart';
 
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
@@ -71,12 +70,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
   }
 
   Future<void> _pickRole(String role) async {
-    String avatarId;
-    String colorId;
-
     if (role == 'banco') {
-      avatarId = '🏦';
-      colorId = '4';
+      const avatarId = '🏦';
+      const colorId = '4';
       final session = context.read<SessionProvider>();
       try {
         await session.createSession(
@@ -94,32 +90,20 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
       return;
     }
 
-    // Cliente: onboarding (color → nombre → avatar)
-    final result = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-    );
-    if (!mounted || result == null) return;
-
-    final selectedColorIndex = result['colorIndex'] as int;
-    final playerName = result['name'] as String;
-    final avatarEmoji = result['avatarEmoji'] as String;
-
-    avatarId = avatarEmoji;
-    colorId = selectedColorIndex.toString();
-
+    // Cliente: create placeholder session, then connect to bank.
+    // Bank decides if device is new → onboarding, or returning → handshake.
     final session = context.read<SessionProvider>();
-    try {
-      await session.createSession(
-        role: role,
-        avatarId: avatarId,
-        colorId: colorId,
-        initialBalance: 0,
-        name: playerName,
-      );
-    } catch (e, s) {
-      if (mounted) context.showFriendlyError(e, s);
+    if (session.isHandshakeDone) {
+      session.cancelGoHome();
       return;
     }
+    await session.createSession(
+      role: role,
+      avatarId: '👤',
+      colorId: '0',
+      initialBalance: 0,
+      name: '',
+    );
     if (mounted) setState(() {});
   }
 

@@ -103,27 +103,59 @@ class _BankruptcyScreenState extends State<BankruptcyScreen>
                                 width: visualSize,
                                 height: visualSize,
                                 child: Stack(
+                                  clipBehavior: Clip.none,
                                   alignment: Alignment.center,
                                   children: [
-                                    ...List.generate(3, (index) {
-                                      final ringProgress =
-                                          (progress + index / 3) % 1.0;
-                                      return Container(
-                                        width: visualSize *
-                                            (0.48 + ringProgress * 0.47),
-                                        height: visualSize *
-                                            (0.48 + ringProgress * 0.47),
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          border: Border.all(
+                                    // pulsing red glow aura
+                                    Container(
+                                      width: visualSize * 0.8,
+                                      height: visualSize * 0.8,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
                                             color: kRed.withValues(
-                                              alpha: (1 - ringProgress) * 0.35,
+                                              alpha: 0.2 *
+                                                  (0.6 +
+                                                      0.4 *
+                                                          math.sin(progress *
+                                                              math.pi *
+                                                              2)),
                                             ),
-                                            width: 2,
+                                            blurRadius: 60,
+                                            spreadRadius: 15,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    // floating X particles
+                                    ...List.generate(6, (index) {
+                                      final p =
+                                          (progress + index * 0.15) % 1.0;
+                                      final opacity =
+                                          (1 - p).clamp(0.0, 0.5);
+                                      final xOff = math.sin(p * math.pi * 4 + index) *
+                                          visualSize *
+                                          0.15;
+                                      final yOff = -p * visualSize * 0.55;
+                                      return Positioned(
+                                        left: visualSize * 0.5 +
+                                            xOff -
+                                            6,
+                                        top: visualSize * 0.5 +
+                                            yOff -
+                                            6,
+                                        child: Opacity(
+                                          opacity: opacity,
+                                          child: const Icon(
+                                            Icons.close_rounded,
+                                            color: kRed,
+                                            size: 12,
                                           ),
                                         ),
                                       );
                                     }),
+                                    // central pulsing icon
                                     Transform.scale(
                                       scale: pulse,
                                       child: Container(
@@ -138,8 +170,7 @@ class _BankruptcyScreenState extends State<BankruptcyScreen>
                                           ),
                                           boxShadow: [
                                             BoxShadow(
-                                              color:
-                                                  kRed.withValues(alpha: 0.28),
+                                              color: kRed.withValues(alpha: 0.28),
                                               blurRadius: 30,
                                               spreadRadius: 5,
                                             ),
@@ -152,6 +183,7 @@ class _BankruptcyScreenState extends State<BankruptcyScreen>
                                         ),
                                       ),
                                     ),
+                                    // X crossing out the icon
                                     Transform.rotate(
                                       angle: -0.45,
                                       child: Container(
@@ -159,8 +191,18 @@ class _BankruptcyScreenState extends State<BankruptcyScreen>
                                         height: math.max(5, visualSize * 0.042),
                                         decoration: BoxDecoration(
                                           color: kRed,
-                                          borderRadius:
-                                              BorderRadius.circular(4),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                      ),
+                                    ),
+                                    Transform.rotate(
+                                      angle: 0.45,
+                                      child: Container(
+                                        width: visualSize * 0.73,
+                                        height: math.max(5, visualSize * 0.042),
+                                        decoration: BoxDecoration(
+                                          color: kRed,
+                                          borderRadius: BorderRadius.circular(4),
                                         ),
                                       ),
                                     ),

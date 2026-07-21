@@ -34,6 +34,7 @@ class ConnectionPanel extends StatelessWidget {
           connecting: false,
           onStartWsClient: onStartWsClient,
           onStopWsClient: onStopWsClient,
+          onConnectToBank: onConnectToWsBank,
         );
       },
     );
@@ -110,13 +111,27 @@ class ConnectedPlayersPanel extends StatelessWidget {
                     return GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () => onPlayerTap?.call(player),
-                      child: _ConnectedPlayerTile(
-                        name: player.displayName,
-                        deviceName: '',
-                        transport: 'WS',
-                        detail: detail,
-                        color: player.connected ? kGreen : Colors.grey,
-                        icon: Icons.wifi_rounded,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: kBgCard,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: kBorder),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _ConnectedPlayerTile(
+                                name: player.displayName,
+                                deviceName: '',
+                                transport: 'WS',
+                                detail: detail,
+                                color: player.connected ? kGreen : Colors.grey,
+                                icon: Icons.wifi_rounded,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   }),

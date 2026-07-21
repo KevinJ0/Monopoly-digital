@@ -125,9 +125,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final rng = Random();
     _visibleSuggestions = List.from(_allSuggestions)..shuffle(rng);
     _visibleSuggestions.removeRange(24, _visibleSuggestions.length);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _nameFocusNode.requestFocus();
-    });
+    // focus moved to onPageChanged
   }
 
   @override
@@ -186,6 +184,64 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  bool _canContinue() {
+    if (_currentPage == 0) return true;
+    if (_currentPage == 1) return _nameController.text.trim().isNotEmpty;
+    if (_currentPage == 2) return true;
+    return false;
+  }
+
+  Widget _buildContinueButton() {
+    final onPressed = _currentPage == 0
+        ? _onColorContinue
+        : _currentPage == 1
+            ? _onNameContinue
+            : _onAvatarContinue;
+    final label = _currentPage < 2 ? 'Continuar' : 'Listo';
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 200),
+      opacity: _canContinue() ? 1.0 : 0.3,
+      child: SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton(
+          onPressed: _canContinue() ? onPressed : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _accent,
+            foregroundColor: _accent.computeLuminance() > 0.5
+                ? Colors.black
+                : Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            elevation: 4,
+            shadowColor: _accent.withValues(alpha: 0.4),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                _currentPage < 2
+                    ? Icons.arrow_forward_rounded
+                    : Icons.check_rounded,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _finish({required String avatarEmoji, required int avatarIndex}) {
     Navigator.of(context).pop({
       'colorIndex': _selectedColorIndex,
@@ -241,34 +297,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   fontSize: 18),
             ),
             centerTitle: true,
-            actions: [
-              if (_currentPage < 2)
-                TextButton(
-                  onPressed: _currentPage == 0
-                      ? _onColorContinue
-                      : _onNameContinue,
-                  child: Text(
-                    'Continuar',
-                    style: TextStyle(
-                      color: _accent,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
-                  ),
-                )
-              else
-                TextButton(
-                  onPressed: _onAvatarContinue,
-                  child: Text(
-                    'Continuar',
-                    style: TextStyle(
-                      color: _accent,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-            ],
             bottom: PreferredSize(
               preferredSize: const Size.fromHeight(4),
               child: Padding(
@@ -302,15 +330,37 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Positioned.fill(
                 child: _DynamicColorBackdrop(color: _accent),
               ),
-              PageView(
-                controller: _pageCtrl,
-                physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (i) => setState(() => _currentPage = i),
-                children: [
-                  _buildColorPage(),
-                  _buildNamePage(),
-                  _buildAvatarPage(),
-                ],
+              GestureDetector(
+                onHorizontalDragEnd: (details) {
+                  if (details.primaryVelocity! < -100 && _canContinue()) {
+                    if (_currentPage == 0) {
+                      _onColorContinue();
+                    } else if (_currentPage == 1) {
+                      _onNameContinue();
+                    } else {
+                      _onAvatarContinue();
+                    }
+                  } else if (details.primaryVelocity! > 100 && _currentPage > 0) {
+                    _goToPrevious();
+                  }
+                },
+                child: PageView(
+                  controller: _pageCtrl,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onPageChanged: (i) {
+                    setState(() => _currentPage = i);
+                    if (i == 1) {
+                      _nameFocusNode.requestFocus();
+                    } else {
+                      FocusScope.of(context).unfocus();
+                    }
+                  },
+                  children: [
+                    _buildColorPage(),
+                    _buildNamePage(),
+                    _buildAvatarPage(),
+                  ],
+                ),
               ),
             ],
           ),
@@ -327,32 +377,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           final isWide = constraints.maxWidth > 600;
           final isShort = constraints.maxHeight < 700;
           final hPad = isWide ? 32.0 : 20.0;
-          return SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 24),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: Column(
-                  children: [
-                    AnimatedEntry(
-                      delay: const Duration(milliseconds: 200),
-                      child: _buildColorLabel(),
+          return Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 8),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 600),
+                      child: Column(
+                        children: [
+                          AnimatedEntry(
+                            delay: const Duration(milliseconds: 200),
+                            child: _buildColorLabel(),
+                          ),
+                          SizedBox(height: isShort ? 10 : 16),
+                          AnimatedEntry(
+                            delay: const Duration(milliseconds: 300),
+                            child: _buildColorGrid(isWide, isShort),
+                          ),
+                          SizedBox(height: isShort ? 16 : 30),
+                          AnimatedEntry(
+                            delay: const Duration(milliseconds: 400),
+                            child: _buildPreviewCard(isShort),
+                          ),
+                        ],
+                      ),
                     ),
-                    SizedBox(height: isShort ? 10 : 16),
-                    AnimatedEntry(
-                      delay: const Duration(milliseconds: 300),
-                      child: _buildColorGrid(isWide, isShort),
-                    ),
-                    SizedBox(height: isShort ? 16 : 30),
-                    AnimatedEntry(
-                      delay: const Duration(milliseconds: 400),
-                      child: _buildPreviewCard(isShort),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                  ),
                 ),
               ),
-            ),
+              Padding(
+                padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 16),
+                child: _buildContinueButton(),
+              ),
+            ],
           );
         },
       ),
@@ -370,37 +429,47 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 600;
               final hPad = isWide ? 32.0 : 20.0;
-              return SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(hPad, 8, hPad, 24),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 600),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 100),
-                          child: _NameTitleSection(accent: _accent),
+              return Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(hPad, 8, hPad, 8),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 600),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AnimatedEntry(
+                                delay: const Duration(milliseconds: 100),
+                                child: _NameTitleSection(accent: _accent),
+                              ),
+                              const SizedBox(height: 20),
+                              AnimatedEntry(
+                                delay: const Duration(milliseconds: 200),
+                                child: _buildTextField(),
+                              ),
+                              const SizedBox(height: 28),
+                              AnimatedEntry(
+                                delay: const Duration(milliseconds: 300),
+                                child: _buildSuggestionsHeader(),
+                              ),
+                              const SizedBox(height: 12),
+                              AnimatedEntry(
+                                delay: const Duration(milliseconds: 350),
+                                child: _buildSuggestionsGrid(isWide),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 20),
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 200),
-                          child: _buildTextField(),
-                        ),
-                        const SizedBox(height: 28),
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 300),
-                          child: _buildSuggestionsHeader(),
-                        ),
-                        const SizedBox(height: 12),
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 350),
-                          child: _buildSuggestionsGrid(isWide),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 16),
+                    child: _buildContinueButton(),
+                  ),
+                ],
               );
             },
           ),
@@ -418,33 +487,42 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           builder: (context, constraints) {
             final isWide = constraints.maxWidth > 600;
             final hPad = isWide ? 32.0 : 20.0;
-            return SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 24),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 600),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 8),
-                      AnimatedEntry(
-                        delay: const Duration(milliseconds: 100),
-                        child: _buildAvatarPreview(),
+            return Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(hPad, 16, hPad, 8),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 600),
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 8),
+                            AnimatedEntry(
+                              delay: const Duration(milliseconds: 100),
+                              child: _buildAvatarPreview(),
+                            ),
+                            const SizedBox(height: 28),
+                            AnimatedEntry(
+                              delay: const Duration(milliseconds: 200),
+                              child: _buildAvatarLabel(),
+                            ),
+                            const SizedBox(height: 16),
+                            AnimatedEntry(
+                              delay: const Duration(milliseconds: 300),
+                              child: _buildAvatarGrid(isWide),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 28),
-                      AnimatedEntry(
-                        delay: const Duration(milliseconds: 200),
-                        child: _buildAvatarLabel(),
-                      ),
-                      const SizedBox(height: 16),
-                      AnimatedEntry(
-                        delay: const Duration(milliseconds: 300),
-                        child: _buildAvatarGrid(isWide),
-                      ),
-                      const SizedBox(height: 24),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 16),
+                  child: _buildContinueButton(),
+                ),
+              ],
             );
           },
         ),

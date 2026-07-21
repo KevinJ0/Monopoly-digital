@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+
 
 class WsPlayer {
   final String id;
@@ -6,16 +6,18 @@ class WsPlayer {
   final String avatarId;
   final String colorId;
   final String deviceInstallationId;
+  final String address;
   final bool connected;
   final bool playing;
   final DateTime lastSeen;
 
-  const WsPlayer({
+  WsPlayer({
     required this.id,
     this.name = '',
     this.avatarId = '',
     this.colorId = '0',
     this.deviceInstallationId = '',
+    this.address = '',
     this.connected = true,
     this.playing = false,
     DateTime? lastSeen,
@@ -27,6 +29,7 @@ class WsPlayer {
     String? avatarId,
     String? colorId,
     String? deviceInstallationId,
+    String? address,
     bool? connected,
     bool? playing,
     DateTime? lastSeen,
@@ -37,6 +40,7 @@ class WsPlayer {
       avatarId: avatarId ?? this.avatarId,
       colorId: colorId ?? this.colorId,
       deviceInstallationId: deviceInstallationId ?? this.deviceInstallationId,
+      address: address ?? this.address,
       connected: connected ?? this.connected,
       playing: playing ?? this.playing,
       lastSeen: lastSeen ?? this.lastSeen,
@@ -54,4 +58,24 @@ class WsPlayer {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+class DiscoveredBank {
+  final String ip;
+  final int port;
+  final DateTime lastSeen;
+
+  DiscoveredBank({
+    required this.ip,
+    required this.port,
+    DateTime? lastSeen,
+  }) : lastSeen = lastSeen ?? DateTime.now();
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DiscoveredBank && ip == other.ip && port == other.port;
+
+  @override
+  int get hashCode => Object.hash(ip, port);
 }

@@ -58,14 +58,28 @@ class WalletController extends ChangeNotifier {
 
   Future<void> applyBankState(Map<String, dynamic> payload) async {
     final session = _session;
-    if (session == null || session.role == 'banco') return;
+    if (session == null || session.role == 'banco') {
+      debugPrint('[┊] APPLY_BANK EARLY: session is null or bank');
+      return;
+    }
 
     final bankTxId = payload['bankTxId'] as String?;
-    if (bankTxId != null && HiveService.txBox.containsKey(bankTxId)) return;
+    if (bankTxId != null && HiveService.txBox.containsKey(bankTxId)) {
+      debugPrint('[┊] APPLY_BANK EARLY: bankTxId=$bankTxId already processed — syncing notifiers from session');
+      if (session != null) {
+        _updateVaultNotifiers(session);
+      }
+      notifyListeners();
+      return;
+    }
+    debugPrint('[┊] APPLY_BANK PROCESSING: bankTxId=$bankTxId');
 
     final rawBalanceValue = payload['balance'] as num?;
     if (rawBalanceValue == null || !rawBalanceValue.isFinite) return;
 
+    final eventType = (payload['eventType'] as String?) ?? 'bank_sync';
+    final isHandshake = eventType == 'handshake_initial' || eventType == 'handshake_reconnect';
+    debugPrint('[┊] APPLY_BANK eventType=$eventType isHandshake=$isHandshake isBankrupt=${payload['isBankrupt']} skipBankruptNotifier=${isHandshake ? 'YES' : 'NO'}');
     final previousBalance = session.balance;
     session.balance = rawBalanceValue.toDouble();
     session.vaultInvestedAmount =
@@ -81,10 +95,11 @@ class WalletController extends ChangeNotifier {
     _recordHistory(session);
     await session.save();
     _updateVaultNotifiers(session);
-    bankruptNotifier.value = session.isBankrupt;
+    if (!isHandshake) {
+      bankruptNotifier.value = session.isBankrupt;
+    }
     syncTierWithBalance();
 
-    final eventType = (payload['eventType'] as String?) ?? 'bank_sync';
     final balanceDiff = (session.balance - previousBalance).abs();
     final rawAmount = (payload['amount'] as num?)?.toDouble();
     final amount = (rawAmount != null && rawAmount > 0)
@@ -142,12 +157,6 @@ class WalletController extends ChangeNotifier {
             'Transferiste ${formatMoney(amount)}',
             backgroundColor: kRed);
       }
-    }
-
-    if (session.isBankrupt) {
-      NotificationService().show(
-          'Has quedado en bancarrota. Fuera de la partida.',
-          backgroundColor: kRed);
     }
 
     notifyListeners();

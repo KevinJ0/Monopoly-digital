@@ -1,6 +1,6 @@
 part of '../wallet_screen.dart';
 
-class WsBankPanel extends StatelessWidget {
+class WsBankPanel extends StatefulWidget {
   final VoidCallback? onReiniciarWs;
   final VoidCallback? onStopWs;
   final Future<bool> Function()? onEnsureWsReady;
@@ -13,10 +13,15 @@ class WsBankPanel extends StatelessWidget {
   });
 
   @override
+  State<WsBankPanel> createState() => _WsBankPanelState();
+}
+
+class _WsBankPanelState extends State<WsBankPanel> {
+  @override
   Widget build(BuildContext context) {
     final transport = P2PService().wsTransport;
 
-    return Padding(
+    final panel = Padding(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
       child: ValueListenableBuilder<bool>(
         valueListenable: transport.serverActiveNotifier,
@@ -42,14 +47,10 @@ class WsBankPanel extends StatelessWidget {
                   return Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: active
-                          ? accent.withValues(alpha: 0.08)
-                          : kBgCard,
+                      color: active ? accent.withValues(alpha: 0.08) : kBgCard,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: active
-                            ? accent.withValues(alpha: 0.45)
-                            : kBorder,
+                        color: active ? accent.withValues(alpha: 0.45) : kBorder,
                       ),
                     ),
                     child: Column(
@@ -58,9 +59,7 @@ class WsBankPanel extends StatelessWidget {
                         Row(
                           children: [
                             Icon(
-                              connected
-                                  ? Icons.wifi_rounded
-                                  : Icons.wifi_find_rounded,
+                              connected ? Icons.wifi_rounded : Icons.wifi_find_rounded,
                               color: active ? accent : kTextSecondary,
                               size: 22,
                             ),
@@ -97,8 +96,7 @@ class WsBankPanel extends StatelessWidget {
                                 boxShadow: active
                                     ? [
                                         BoxShadow(
-                                          color:
-                                              accent.withValues(alpha: 0.6),
+                                          color: accent.withValues(alpha: 0.6),
                                           blurRadius: 8,
                                           spreadRadius: 2,
                                         )
@@ -115,35 +113,26 @@ class WsBankPanel extends StatelessWidget {
                               ? Column(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
                                       decoration: BoxDecoration(
-                                        color:
-                                            accent.withValues(alpha: 0.12),
-                                        borderRadius:
-                                            BorderRadius.circular(10),
+                                        color: accent.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(10),
                                         border: Border.all(
-                                          color: accent
-                                              .withValues(alpha: 0.35),
+                                          color: accent.withValues(alpha: 0.35),
                                         ),
                                       ),
                                       child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
+                                        mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
                                           Icon(
-                                            connected
-                                                ? Icons.link_rounded
-                                                : Icons.sensors_rounded,
+                                            connected ? Icons.link_rounded : Icons.sensors_rounded,
                                             color: accent,
                                             size: 16,
                                           ),
                                           const SizedBox(width: 8),
                                           Flexible(
                                             child: Text(
-                                              connected
-                                                  ? 'Listo para operar con el jugador'
-                                                  : 'Activo autom\u00e1ticamente',
+                                              connected ? 'Listo para operar con el jugador' : 'Activo autom\u00e1ticamente',
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
@@ -159,88 +148,151 @@ class WsBankPanel extends StatelessWidget {
                                     Row(
                                       children: [
                                         Expanded(
+                                          flex: 5,
                                           child: OutlinedButton.icon(
                                             onPressed: () async {
                                               SoundService.playClick();
                                               final confirm = await _confirm(
+                                                context: context,
                                                 title: 'Detener servidor',
                                                 message:
                                                     '\u00bfEst\u00e1s seguro de que deseas detener el servidor WS? Se desconectar\u00e1n todos los jugadores.',
                                                 confirmLabel: 'Detener',
                                               );
                                               if (confirm != true) return;
-                                              onStopWs?.call();
+                                              widget.onStopWs?.call();
                                             },
-                                            icon: const Icon(
-                                                Icons.stop_circle_outlined,
-                                                size: 16),
-                                            label: const Text('Detener'),
+                                            icon: const Icon(Icons.stop_circle_outlined, size: 16),
+                                            label: const Text(
+                                              'Detener',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                             style: OutlinedButton.styleFrom(
                                               foregroundColor: kRed,
                                               side: const BorderSide(color: kRed),
                                               shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
+                                                borderRadius: BorderRadius.circular(10),
                                               ),
                                             ),
                                           ),
                                         ),
                                         const SizedBox(width: 8),
                                         Expanded(
+                                          flex: 5,
                                           child: OutlinedButton.icon(
                                             onPressed: () async {
                                               SoundService.playClick();
                                               final confirm = await _confirm(
+                                                context: context,
                                                 title: 'Reiniciar servidor',
                                                 message:
                                                     '\u00bfEst\u00e1s seguro de que deseas reiniciar el servidor WS? Se desconectar\u00e1n todos los jugadores temporalmente.',
                                                 confirmLabel: 'Reiniciar',
                                               );
                                               if (confirm != true) return;
-                                              onReiniciarWs?.call();
+                                              widget.onReiniciarWs?.call();
                                             },
-                                            icon: const Icon(
-                                                Icons.restart_alt_rounded,
-                                                size: 16),
-                                            label:
-                                                const Text('Reiniciar WS'),
+                                            icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                                            label: const Text(
+                                              'Reiniciar',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                             style: OutlinedButton.styleFrom(
                                               foregroundColor: kGold,
                                               side: const BorderSide(color: kGold),
                                               shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(10),
+                                                borderRadius: BorderRadius.circular(10),
                                               ),
                                             ),
                                           ),
                                         ),
                                       ],
                                     ),
+                                    if (transport.localIp != null && transport.port > 0) ...[
+                                      const SizedBox(height: 12),
+                                      Container(
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black26,
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Icon(Icons.wifi_tethering_rounded, color: kGold, size: 16),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: GestureDetector(
+                                                    onTap: () {
+                                                      SoundService.playClick();
+                                                      Clipboard.setData(
+                                                        ClipboardData(
+                                                          text: '${transport.localIp}:${transport.port}',
+                                                        ),
+                                                      );
+                                                      NotificationService().show(
+                                                        'IP copiada: ${transport.localIp}:${transport.port}',
+                                                        backgroundColor: kGreen,
+                                                      );
+                                                    },
+                                                    child: Text(
+                                                      'IP: ${transport.localIp}:${transport.port}',
+                                                      style: const TextStyle(
+                                                        color: kGold,
+                                                        fontSize: 12,
+                                                        fontWeight: FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const Icon(Icons.copy_rounded, color: kTextSecondary, size: 14),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Center(
+                                              child: QrImageView(
+                                                data: 'ws://${transport.localIp}:${transport.port}',
+                                                version: QrVersions.auto,
+                                                size: 120,
+                                                backgroundColor: Colors.white,
+                                                padding: const EdgeInsets.all(6),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            const Text(
+                                              'Escanea con la app del jugador o comparte la IP',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: kTextSecondary,
+                                                fontSize: 10,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 )
                               : ElevatedButton.icon(
                                   onPressed: () async {
                                     SoundService.playClick();
-                                    final ready = await onEnsureWsReady
-                                        ?.call();
+                                    final ready = await widget.onEnsureWsReady?.call();
                                     if (ready != true || !context.mounted) {
                                       return;
                                     }
                                     await P2PService().startWsServer();
-                                    P2PService()
-                                        .setTransport(TransportType.ws);
+                                    P2PService().setTransport(TransportType.ws);
                                   },
-                                  icon: const Icon(
-                                      Icons.wifi_tethering_rounded,
-                                      size: 16),
-                                  label:
-                                      const Text('Iniciar Servidor WS'),
+                                  icon: const Icon(Icons.wifi_tethering_rounded, size: 16),
+                                  label: const Text('Iniciar Servidor WS'),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.blue,
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
                                 ),
@@ -255,9 +307,12 @@ class WsBankPanel extends StatelessWidget {
         },
       ),
     );
+
+    return panel;
   }
 
   Future<bool?> _confirm({
+    required BuildContext context,
     required String title,
     required String message,
     required String confirmLabel,

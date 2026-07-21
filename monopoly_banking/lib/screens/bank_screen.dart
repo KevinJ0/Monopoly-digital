@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,12 +14,16 @@ import 'package:monopoly_banking/services/transports/ws_models.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
 import 'package:monopoly_banking/services/app_audit_logger.dart';
+import 'package:monopoly_banking/services/bank_settings_service.dart';
+import 'package:monopoly_banking/core/game_transitions.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/monopoly_background.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/widgets/player_info_widget.dart';
 import 'package:monopoly_banking/widgets/app_spinner.dart';
+import 'package:monopoly_banking/screens/bank/bank_settings_screen.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
+import 'package:monopoly_banking/services/foreground_service.dart';
 
 part 'bank/operation_dialog_controller.dart';
 part 'bank/operation_loading_visual.dart';
@@ -37,7 +42,15 @@ class BankScreen extends StatefulWidget {
 }
 
 class _BankScreenState extends State<BankScreen>
-    with TickerProviderStateMixin, WidgetsBindingObserver, _BankConnection, _BankBuilders, _BankDialogs {
+    with TickerProviderStateMixin, WidgetsBindingObserver, AutomaticKeepAliveClientMixin, _BankConnection, _BankBuilders, _BankDialogs {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    updateKeepAlive();
+  }
   final _amountCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _sending = false;
@@ -49,31 +62,45 @@ class _BankScreenState extends State<BankScreen>
   late final AnimationController _slideCtrl;
   late final Animation<Offset> _slide;
   String? _historyFilterPlayer;
+  String? _historyFilterType;
   bool _historySortAscending = false;
+  String _historySortBy = 'date';
 
-  final _operations = const [
-    _OpOption(
-        id: 'payment',
-        label: 'Cobrar al jugador',
-        icon: Icons.arrow_upward_rounded,
-        color: kRed),
-    _OpOption(
-        id: 'receive',
-        label: 'Pagar al jugador',
-        icon: Icons.arrow_downward_rounded,
-        color: kGreen),
-    _OpOption(
-        id: 'passGo',
-        label: 'Pasar por GO',
-        icon: Icons.flag_rounded,
-        color: kGold),
-  ];
+  List<_OpOption> get _operations {
+    final settings = BankSettingsService();
+    final built = <_OpOption>[
+      const _OpOption(
+          id: 'payment',
+          label: 'Cobrar al jugador',
+          icon: Icons.arrow_upward_rounded,
+          color: kRed),
+      const _OpOption(
+          id: 'receive',
+          label: 'Pagar al jugador',
+          icon: Icons.arrow_downward_rounded,
+          color: kGreen),
+      _OpOption(
+          id: 'passGo',
+          label: 'Pasar por GO (\$${settings.passGoAmount.round()})',
+          icon: Icons.flag_rounded,
+          color: kGold),
+      for (final c in settings.customOps)
+        _OpOption(
+          id: 'custom:${c.id}',
+          label: c.name,
+          icon: BankSettingsService.availableIcons[c.iconKey] ??
+              Icons.payments_rounded,
+          color: c.isGive ? kGreen : kRed,
+        ),
+    ];
+    return built;
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    BankLedgerService().initHeldTransfersCount();
+    BankSettingsService().load();
     _slideCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 500),
@@ -108,13 +135,17 @@ class _BankScreenState extends State<BankScreen>
       if (payload['type'] == 'handshake_confirm' ||
           payload['type'] == 'ws_identity') {
         final name = payload['name'] as String? ?? 'Jugador';
-        _connectedPlayerName = name;
         if (payload['type'] == 'ws_identity') {
           final account = BankLedgerService().accountFor(name);
           final installationId =
               (payload['deviceInstallationId'] as String?) ?? '';
+          if (account != null &&
+              (account.bankrupt ||
+                  BankLedgerService().isDeviceBanned(installationId))) {
+            return;
+          }
+
           final isReturningPlayer = account != null &&
-              !account.bankrupt &&
               account.deviceInstallationId.isNotEmpty &&
               account.deviceInstallationId == installationId;
 
@@ -127,6 +158,7 @@ class _BankScreenState extends State<BankScreen>
             dedupeKey: 'ws-connected:$name',
           );
         }
+        _connectedPlayerName = name;
       }
     }, onError: (e, s) {
       if (mounted) context.showFriendlyError(e, s);
@@ -134,11 +166,58 @@ class _BankScreenState extends State<BankScreen>
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
+        await P2PService().initTransports(isBank: true);
         await P2PService().startWsServer();
+        await BankForegroundService().start();
       } catch (e, s) {
         if (mounted) context.showFriendlyError(e, s);
       }
     });
+  }
+
+  bool _isFixedOpGive() {
+    if (_selectedOp == 'passGo') return true;
+    if (_selectedOp.startsWith('custom:')) {
+      final customId = _selectedOp.substring('custom:'.length);
+      final match = BankSettingsService()
+          .customOps
+          .where((c) => c.id == customId)
+          .firstOrNull;
+      return match?.isGive ?? true;
+    }
+    return _selectedOp == 'receive';
+  }
+
+  double _fixedAmountForSelectedOp() {
+    if (_selectedOp == 'passGo') {
+      return BankSettingsService().passGoAmount;
+    }
+    if (_selectedOp.startsWith('custom:')) {
+      final customId = _selectedOp.substring('custom:'.length);
+      final match = BankSettingsService()
+          .customOps
+          .where((c) => c.id == customId)
+          .firstOrNull;
+      return match?.amount ?? 0;
+    }
+    return 0;
+  }
+
+  Future<void> _openSettings() async {
+    final changed = await Navigator.of(context).push<dynamic>(
+      GameFadeRoute(page: BankSettingsScreen()),
+    );
+    if (changed == true && mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(P2PService().startWsServer());
+      unawaited(BankForegroundService().start());
+    }
   }
 
   @override
@@ -153,6 +232,7 @@ class _BankScreenState extends State<BankScreen>
     _payloadSub?.cancel();
     _amountCtrl.dispose();
     _slideCtrl.dispose();
+    BankForegroundService().stop();
     super.dispose();
   }
 }

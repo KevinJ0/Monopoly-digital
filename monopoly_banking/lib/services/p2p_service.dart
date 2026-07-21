@@ -2,12 +2,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:monopoly_banking/services/hive_service.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
-import 'package:monopoly_banking/services/transports/ble_transport.dart';
 import 'package:monopoly_banking/services/transports/ws_transport.dart';
+import 'package:monopoly_banking/services/transports/wifi_transport.dart';
 
 typedef P2PPayloadHandler = void Function(Map<String, dynamic> payload);
 
-enum TransportType { ble, wifi, ws }
+enum TransportType { ws, wifi }
 
 class P2PService {
   static const _transportSettingKey = 'connection_transport';
@@ -15,14 +15,21 @@ class P2PService {
   factory P2PService() => _instance;
   P2PService._();
 
-  final bleTransport = BleTransport();
   final wsTransport = WsTransport();
+  final wifiTransport = WifiTransport();
 
   final _payloadStreamCtrl = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get payloadStream => _payloadStreamCtrl.stream;
   StreamSubscription<Map<String, dynamic>>? _legacyPayloadSub;
 
-  P2PTransport get _active => transports[_currentType]!;
+  P2PTransport get _active {
+    final transport = transports[_currentType];
+    if (transport == null) {
+      debugPrint('P2PService: transport $_currentType not registered, falling back to ws');
+      return transports[TransportType.ws]!;
+    }
+    return transport;
+  }
 
   final Map<TransportType, P2PTransport> transports = {};
 
@@ -35,11 +42,10 @@ class P2PService {
   int _txCounter = 0;
 
   Future<void> initTransports({bool isBank = false}) async {
-    bleTransport.setBankMode(isBank);
     wsTransport.setBankMode(isBank);
 
-    transports[TransportType.ble] = bleTransport;
     transports[TransportType.ws] = wsTransport;
+    transports[TransportType.wifi] = wifiTransport;
 
     final savedTransport = HiveService.settingsBox.get(_transportSettingKey);
     if (savedTransport is String) {
@@ -52,11 +58,15 @@ class P2PService {
       }
     }
 
-    await bleTransport.initialize();
     await wsTransport.initialize();
+    await wifiTransport.initialize();
   }
 
   void setTransport(TransportType type) {
+    if (!transports.containsKey(type)) {
+      debugPrint('P2PService: cannot set transport $type, not registered');
+      return;
+    }
     _currentType = type;
     _typeCtrl.value = type;
     unawaited(HiveService.settingsBox.put(_transportSettingKey, type.name));
@@ -76,13 +86,6 @@ class P2PService {
     });
   }
 
-  Future<void> startBleBankServer() async {
-    bleTransport.setBankMode(true);
-    await bleTransport.startReceiving((payload) {
-      _payloadStreamCtrl.add(payload);
-    });
-  }
-
   Future<void> startWsServer() async {
     wsTransport.setBankMode(true);
     if (!wsTransport.isEnabled) return;
@@ -97,16 +100,7 @@ class P2PService {
 
     final transport = _active;
     if (!transport.isEnabled) {
-      if (_currentType == TransportType.ws) {
-        throw TransportUnavailableException('WiFi no está disponible');
-      }
-      for (final entry in transports.entries) {
-        if (entry.value.isEnabled) {
-          await entry.value.sendPayload(payload);
-          return;
-        }
-      }
-      throw TransportUnavailableException('No hay transporte disponible');
+      throw TransportUnavailableException('${transport.name} no está disponible');
     }
     await transport.sendPayload(payload);
   }

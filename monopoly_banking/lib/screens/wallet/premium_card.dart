@@ -184,10 +184,11 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                                 style: TextStyle(
                                     color: Colors.white54, fontSize: 8)),
                             Text(name.toUpperCase(),
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold),
-                                overflow: TextOverflow.ellipsis),
+                                 style: const TextStyle(
+                                     color: Colors.white,
+                                     fontWeight: FontWeight.bold,
+                                     fontSize: 10),
+                                 overflow: TextOverflow.ellipsis),
                           ]),
                     ),
                     Column(
@@ -203,7 +204,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                                   value: balance,
                                   color: Colors.white,
                                   style: const TextStyle(
-                                      fontSize: 24,
+                                      fontSize: 17,
                                       fontWeight: FontWeight.w900,
                                       color: Colors.white)),
                               const SizedBox(width: 8),
@@ -317,11 +318,11 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                                     fontSize: 7,
                                     fontWeight: FontWeight.bold)),
                             Text(name.toUpperCase(),
-                                style: const TextStyle(
-                                    color: Color(0xFF3E2723),
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 16),
-                                overflow: TextOverflow.ellipsis),
+                                 style: const TextStyle(
+                                     color: Color(0xFF3E2723),
+                                     fontWeight: FontWeight.w900,
+                                     fontSize: 11),
+                                 overflow: TextOverflow.ellipsis),
                           ]),
                     ),
                     Column(
@@ -339,7 +340,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                                   value: balance,
                                   color: const Color(0xFF3E2723),
                                   style: const TextStyle(
-                                      fontSize: 28,
+                                      fontSize: 20,
                                       fontWeight: FontWeight.w900,
                                       color: Color(0xFF3E2723))),
                               const SizedBox(width: 8),
@@ -450,12 +451,12 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: 1)),
                             Text(name.toUpperCase(),
-                                style: const TextStyle(
-                                    color: Color(0xFF102A43),
-                                    fontSize: 16,
-                                    letterSpacing: 1.5,
-                                    fontWeight: FontWeight.w900),
-                                overflow: TextOverflow.ellipsis),
+                                 style: const TextStyle(
+                                     color: Color(0xFF102A43),
+                                     fontSize: 11,
+                                     letterSpacing: 1.5,
+                                     fontWeight: FontWeight.w900),
+                                 overflow: TextOverflow.ellipsis),
                           ]),
                     ),
                     Column(
@@ -473,7 +474,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                                 value: balance,
                                 color: const Color(0xFF102A43),
                                 style: const TextStyle(
-                                    fontSize: 30,
+                                    fontSize: 21,
                                     fontWeight: FontWeight.w900,
                                     color: Color(0xFF102A43))),
                             const SizedBox(width: 8),
@@ -552,11 +553,11 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(name.toUpperCase(),
-                                style: const TextStyle(
-                                    color: Color(0xFFD4AF37),
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800),
-                                overflow: TextOverflow.ellipsis),
+                                 style: const TextStyle(
+                                     color: Color(0xFFD4AF37),
+                                     fontSize: 11,
+                                     fontWeight: FontWeight.w800),
+                                 overflow: TextOverflow.ellipsis),
                           ]),
                     ),
                     Row(
@@ -566,7 +567,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                             value: balance,
                             color: const Color(0xFFD4AF37),
                             style: const TextStyle(
-                                fontSize: 34,
+                                fontSize: 24,
                                 fontWeight: FontWeight.w900,
                                 color: Color(0xFFD4AF37))),
                         const SizedBox(width: 8),
@@ -764,11 +765,11 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                             const Text('PLATINUM CARDHOLDER',
                                 style: TextStyle(color: goldDeep, fontSize: 7)),
                             Text(name.toUpperCase(),
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w900),
-                                overflow: TextOverflow.ellipsis),
+                                 style: const TextStyle(
+                                     color: Colors.white,
+                                     fontSize: 13,
+                                     fontWeight: FontWeight.w900),
+                                 overflow: TextOverflow.ellipsis),
                           ]),
                     ),
                     Row(
@@ -778,7 +779,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
                             value: balance,
                             color: goldLight,
                             style: const TextStyle(
-                                fontSize: 28,
+                                fontSize: 20,
                                 fontWeight: FontWeight.w900,
                                 color: goldLight)),
                         const SizedBox(width: 8),

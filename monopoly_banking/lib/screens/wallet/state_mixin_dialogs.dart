@@ -17,12 +17,10 @@ mixin _WalletDialogs on State<WalletScreen> {
     }
   }
 
-  Future<void> _safeShowFriendlyError(dynamic error,
-      [StackTrace? stack]) async {
+  Future<void> _safeShowFriendlyError(dynamic error, [StackTrace? stack]) async {
     final friendly = await ErrorTranslatorService().translate(error, stack);
     if (!mounted) return;
-    if (friendly.severity == ErrorSeverity.error ||
-        friendly.severity == ErrorSeverity.critical) {
+    if (friendly.severity == ErrorSeverity.error || friendly.severity == ErrorSeverity.critical) {
       NotificationService().show(
         friendly.message,
         backgroundColor: kRed,
@@ -43,42 +41,14 @@ mixin _WalletDialogs on State<WalletScreen> {
   ) async {
     final amountCtrl = TextEditingController();
     final session = context.read<SessionProvider>();
-    var sending = false;
-    var message = '';
 
     _self._dialogActive = true;
-    final completer = Completer<void>();
-    _self._pendingTransferCompleter = completer;
     try {
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => StatefulBuilder(
           builder: (context, setDialogState) {
-            if (sending) {
-              return AlertDialog(
-                backgroundColor: kBgCard,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                content: SizedBox(
-                  width: 240,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const AppSpinner(),
-                      const SizedBox(height: 20),
-                      Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: kTextSecondary),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-
             return AlertDialog(
               backgroundColor: kBgCard,
               shape: RoundedRectangleBorder(
@@ -86,15 +56,14 @@ mixin _WalletDialogs on State<WalletScreen> {
               ),
               title: const Text(
                 'Transferir a jugador',
-                style:
-                    TextStyle(color: kTextPrimary, fontWeight: FontWeight.w800),
+                style: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w800),
               ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'El banco retendrá este dinero hasta que el jugador receptor acerque su celular.',
+                    'El banco retendrá este dinero hasta que el operador lo entregue al jugador receptor.',
                     style: TextStyle(color: kTextSecondary, height: 1.35),
                   ),
                   const SizedBox(height: 16),
@@ -120,9 +89,7 @@ mixin _WalletDialogs on State<WalletScreen> {
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: brandColor,
-                    foregroundColor: brandColor.computeLuminance() > 0.5
-                        ? Colors.black
-                        : Colors.white,
+                    foregroundColor: brandColor.computeLuminance() > 0.5 ? Colors.black : Colors.white,
                   ),
                   onPressed: () async {
                     SoundService.playClick();
@@ -132,46 +99,27 @@ mixin _WalletDialogs on State<WalletScreen> {
                       return;
                     }
                     final transportType = P2PService().currentType;
-                    if (transportType == TransportType.ws &&
-                        !P2PService().wsTransport.clientConnectedNotifier.value) {
+                    if (transportType == TransportType.ws && !P2PService().wsTransport.clientConnectedNotifier.value) {
                       _showToast('Conéctate al banco primero.', kRed);
                       return;
                     }
 
-                    setDialogState(() {
-                      sending = true;
-                      message = 'Esperando confirmación del banco...';
-                    });
+                    Navigator.pop(dialogContext);
 
                     try {
-                      final requestId =
-                          'transfer-${session.name}-${DateTime.now().microsecondsSinceEpoch}';
+                      final requestId = 'transfer-${session.name}-${DateTime.now().microsecondsSinceEpoch}';
                       final request = {
                         'type': 'transfer_hold_request',
                         'requestId': requestId,
                         'amount': amount,
                         'fromPlayerId': session.name,
                         'fromName': session.name,
-                        'deviceInstallationId':
-                            DeviceIdentityService.installationId,
+                        'deviceInstallationId': DeviceIdentityService.installationId,
                       };
                       P2PService().setTransport(TransportType.ws);
                       await P2PService().sendPayload(request);
-
-                      final pendingCompleter = _self._pendingTransferCompleter;
-                      if (pendingCompleter != null) {
-                        await pendingCompleter.future
-                            .timeout(const Duration(seconds: 20));
-                      }
-                    } on TimeoutException {
-                      if (mounted) {
-                        _showToast('El banco no confirmó a tiempo.', kRed);
-                      }
                     } catch (e, s) {
                       if (mounted) _safeShowFriendlyError(e, s);
-                    }
-                    if (mounted && dialogContext.mounted) {
-                      Navigator.pop(dialogContext);
                     }
                   },
                   child: const Text('Retener en banco'),
@@ -183,8 +131,11 @@ mixin _WalletDialogs on State<WalletScreen> {
       );
     } finally {
       _self._dialogActive = false;
-      _self._pendingTransferCompleter = null;
-      amountCtrl.dispose();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!amountCtrl.hasListeners) {
+          amountCtrl.dispose();
+        }
+      });
     }
   }
 
@@ -252,31 +203,19 @@ mixin _WalletDialogs on State<WalletScreen> {
                     child: Text(
                       "¡TU TARJETA ESTÁ EVOLUCIONANDO!",
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 4),
+                      style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 4),
                     ),
                   ),
                   const SizedBox(height: 40),
                   ScaleTransition(
-                    scale: Tween<double>(begin: 0.5, end: 1.2).animate(
-                        CurvedAnimation(
-                            parent: anim1, curve: Curves.elasticOut)),
+                    scale: Tween<double>(begin: 0.5, end: 1.2).animate(CurvedAnimation(parent: anim1, curve: Curves.elasticOut)),
                     child: Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                              color: accentColor.withValues(alpha: 0.5),
-                              blurRadius: 50,
-                              spreadRadius: 10)
-                        ],
+                        boxShadow: [BoxShadow(color: accentColor.withValues(alpha: 0.5), blurRadius: 50, spreadRadius: 10)],
                       ),
-                      child: Icon(Icons.auto_awesome_rounded,
-                          size: 120, color: accentColor),
+                      child: Icon(Icons.auto_awesome_rounded, size: 120, color: accentColor),
                     ),
                   ),
                   const SizedBox(height: 40),
@@ -287,21 +226,13 @@ mixin _WalletDialogs on State<WalletScreen> {
                         const Text(
                           "¡FELICIDADES!",
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 2),
+                          style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 2),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           "HAS ALCANZADO EL NIVEL $tierName",
                           textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: accentColor,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1),
+                          style: TextStyle(color: accentColor, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1),
                         ),
                       ],
                     ),
@@ -315,13 +246,10 @@ mixin _WalletDialogs on State<WalletScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accentColor,
                       foregroundColor: Colors.black,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 40, vertical: 15),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30)),
+                      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                     ),
-                    child: const Text("VER MI NUEVA TARJETA",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text("VER MI NUEVA TARJETA", style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),
@@ -354,13 +282,61 @@ mixin _WalletDialogs on State<WalletScreen> {
   }
 
   void _confirmExit(SessionProvider session) {
+    if (session.isBank) {
+      _confirmBankExit(session);
+    } else {
+      _confirmPlayerDisconnect(session);
+    }
+  }
+
+  void _confirmGoHome(SessionProvider session) {
     showPremiumDialog(
       context: context,
       child: AlertDialog(
         backgroundColor: kBgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('¿Cerrar sesión?',
-            style: TextStyle(color: kTextPrimary)),
+        title: const Text('¿Salir al inicio?', style: TextStyle(color: kTextPrimary)),
+        content: const Text(
+          'Volverás a la pantalla de selección de roles.',
+          style: TextStyle(color: kTextSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(context);
+              _self._userRequestedWsDisconnect = true;
+              P2PService().wsTransport.stop().then((_) {
+                _self._userRequestedWsDisconnect = false;
+              });
+              session.clearSession();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kRed,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Salir'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmBankExit(SessionProvider session) {
+    showPremiumDialog(
+      context: context,
+      child: AlertDialog(
+        backgroundColor: kBgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('¿Cerrar sesión?', style: TextStyle(color: kTextPrimary)),
         content: const Text(
           'Se borrarán todos los datos de esta partida y volverás a la selección de roles.',
           style: TextStyle(color: kTextSecondary),
@@ -371,22 +347,69 @@ mixin _WalletDialogs on State<WalletScreen> {
               SoundService.playClick();
               Navigator.pop(context);
             },
-            child:
-                const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
+            child: const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               setState(() => _self._isExiting = true);
               Navigator.pop(context);
-              session.clearSession();
+              try {
+                await P2PService().wsTransport.sendPayload({
+                  'type': 'bank_server_stopping',
+                });
+              } catch (_) {}
+              await P2PService().wsTransport.stop();
+              try {
+                await BankForegroundService().stop();
+              } catch (_) {}
+              await session.clearSession();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: kRed,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text('Cerrar Sesión'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmPlayerDisconnect(SessionProvider session) {
+    showPremiumDialog(
+      context: context,
+      child: AlertDialog(
+        backgroundColor: kBgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('¿Salir al inicio?', style: TextStyle(color: kTextPrimary)),
+        content: const Text(
+          'Volverás a la pantalla de selección de roles.',
+          style: TextStyle(color: kTextSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _self._userRequestedWsDisconnect = true;
+              P2PService().wsTransport.stop().then((_) {
+                _self._userRequestedWsDisconnect = false;
+              });
+              session.clearSession();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Salir'),
           ),
         ],
       ),
@@ -425,21 +448,17 @@ mixin _WalletDialogs on State<WalletScreen> {
 
         return AlertDialog(
           backgroundColor: kBgCard,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Nueva Inversión',
-              style: TextStyle(fontWeight: FontWeight.bold)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Nueva Inversión', style: TextStyle(fontWeight: FontWeight.bold)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                    'Acerca tu dispositivo al banco para enviar la solicitud de inversión.',
+                const Text('Acerca tu dispositivo al banco para enviar la solicitud de inversión.',
                     style: TextStyle(color: kGold, fontSize: 12, height: 1.35)),
                 const SizedBox(height: 16),
-                const Text('Monto a Invertir',
-                    style: TextStyle(color: Colors.white70)),
+                const Text('Monto a Invertir', style: TextStyle(color: Colors.white70)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: amountCtrl,
@@ -449,9 +468,7 @@ mixin _WalletDialogs on State<WalletScreen> {
                     prefixText: '\$ ',
                     filled: true,
                     fillColor: kBgDark,
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
                 ),
                 if (wouldEmptyBalance) ...[
@@ -462,8 +479,7 @@ mixin _WalletDialogs on State<WalletScreen> {
                   ),
                 ],
                 const SizedBox(height: 20),
-                const Text('Plazo (Pases por GO)',
-                    style: TextStyle(color: Colors.white70)),
+                const Text('Plazo (Pases por GO)', style: TextStyle(color: Colors.white70)),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -481,17 +497,12 @@ mixin _WalletDialogs on State<WalletScreen> {
                         decoration: BoxDecoration(
                           color: isSelected ? brandColor : kBgDark,
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                              color: isSelected ? brandColor : Colors.white10),
+                          border: Border.all(color: isSelected ? brandColor : Colors.white10),
                         ),
                         child: Text(
                           '$passes',
                           style: TextStyle(
-                            color: isSelected
-                                ? (brandColor.computeLuminance() > 0.5
-                                    ? Colors.black
-                                    : Colors.white)
-                                : Colors.white54,
+                            color: isSelected ? (brandColor.computeLuminance() > 0.5 ? Colors.black : Colors.white) : Colors.white54,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
@@ -504,19 +515,13 @@ mixin _WalletDialogs on State<WalletScreen> {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                      color: Colors.black26,
-                      borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(12)),
                   child: Column(
                     children: [
-                      Text('Rendimiento por Pase: ${(rate * 100).round()}%',
-                          style: const TextStyle(color: Colors.white70)),
+                      Text('Rendimiento por Pase: ${(rate * 100).round()}%', style: const TextStyle(color: Colors.white70)),
                       const SizedBox(height: 4),
                       Text('Ganancia Estimada: ${formatMoney(expectedTotal)}',
-                          style: const TextStyle(
-                              color: kGreenGlow,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16)),
+                          style: const TextStyle(color: kGreenGlow, fontWeight: FontWeight.bold, fontSize: 16)),
                     ],
                   ),
                 )
@@ -531,22 +536,17 @@ mixin _WalletDialogs on State<WalletScreen> {
                         SoundService.playClick();
                         Navigator.pop(context);
                       },
-                child: const Text('Cancelar',
-                    style: TextStyle(color: Colors.white54))),
+                child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: brandColor,
-                foregroundColor: brandColor.computeLuminance() > 0.5
-                    ? Colors.black
-                    : Colors.white,
+                foregroundColor: brandColor.computeLuminance() > 0.5 ? Colors.black : Colors.white,
               ),
               onPressed: (submitting || wouldEmptyBalance)
                   ? null
                   : () async {
                       SoundService.playClick();
-                      final finalVal = double.tryParse(
-                              amountCtrl.text.replaceAll(',', '')) ??
-                          0;
+                      final finalVal = double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0;
                       if (finalVal > 0) {
                         setStateSB(() => submitting = true);
                         try {
@@ -583,8 +583,7 @@ mixin _WalletDialogs on State<WalletScreen> {
         context: context,
         child: AlertDialog(
           backgroundColor: kBgCard,
-          title: Text('Retiro de Inversión',
-              style: TextStyle(color: brandColor, fontWeight: FontWeight.bold)),
+          title: Text('Retiro de Inversión', style: TextStyle(color: brandColor, fontWeight: FontWeight.bold)),
           content: const Text(
             '¡Enhorabuena! Has cumplido el plazo de tu inversión. Se acreditará tu capital más los intereses generados a tu cuenta principal.',
             style: TextStyle(color: Colors.white70),
@@ -595,11 +594,9 @@ mixin _WalletDialogs on State<WalletScreen> {
                   SoundService.playClick();
                   Navigator.pop(context);
                 },
-                child: const Text('Cancelar',
-                    style: TextStyle(color: Colors.white54))),
+                child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: brandColor, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: brandColor, foregroundColor: Colors.white),
               onPressed: () async {
                 SoundService.playClick();
                 try {
@@ -620,15 +617,12 @@ mixin _WalletDialogs on State<WalletScreen> {
   void _showPlayerInfoDialog(WsPlayer player) {
     final ledger = BankLedgerService();
     final account = ledger.accountFor(player.displayName);
-    final transactions = ledger.transactionHistory
-        .where((tx) => tx['playerId'] == player.displayName)
-        .toList();
+    final transactions = ledger.transactionHistory.where((tx) => tx['playerId'] == player.displayName).toList();
     final volume = transactions.fold<double>(
       0,
       (sum, tx) => sum + (((tx['amount'] as num?)?.toDouble() ?? 0).abs()),
     );
-    final passGoCount =
-        transactions.where((tx) => tx['type'] == 'passGo').length;
+    final passGoCount = transactions.where((tx) => tx['type'] == 'passGo').length;
     final txCount = transactions.length;
     final balance = account?.balance ?? 0;
     final playerColor = _playerColor(player.colorId);
@@ -641,8 +635,7 @@ mixin _WalletDialogs on State<WalletScreen> {
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: kBgCard,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: DefaultTabController(
           length: 2,
           child: ConstrainedBox(
@@ -721,6 +714,46 @@ mixin _WalletDialogs on State<WalletScreen> {
                       ],
                     ),
                   ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final confirm = await _confirmAction(
+                            title: 'Expulsar jugador',
+                            message:
+                                '¿Estás seguro de que deseas expulsar a "${player.displayName}" de la partida? No podrá reconectarse hasta que inicies una nueva sesión.',
+                            confirmLabel: 'Expulsar',
+                          );
+                          if (confirm != true || !ctx.mounted) return;
+                          Navigator.pop(ctx);
+                          final installationId = player.deviceInstallationId;
+                          if (installationId.isNotEmpty) {
+                            await BankLedgerService().banDevice(installationId, player.displayName);
+                          }
+                          await P2PService().sendPayload({
+                            'type': 'kick',
+                            'targetPlayerId': player.displayName,
+                            'playerId': player.displayName,
+                          });
+                        },
+                        icon: const Icon(Icons.gavel_rounded, size: 18),
+                        label: const Text(
+                          'Sacar del juego',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -766,6 +799,14 @@ mixin _WalletDialogs on State<WalletScreen> {
       Color(0xFFFF7043),
       Color(0xFF00ACC1),
       Color(0xFFECEFF1),
+      Color(0xFF8D6E63),
+      Color(0xFF81D4FA),
+      Color(0xFFF48FB1),
+      Color(0xFFFFCC80),
+      Color(0xFFEF9A9A),
+      Color(0xFFFFF176),
+      Color(0xFFA5D6A7),
+      Color(0xFF5C6BC0),
     ];
     final index = int.tryParse(colorId) ?? 0;
     if (index >= 0 && index < colors.length) return colors[index];
@@ -779,21 +820,13 @@ mixin _WalletDialogs on State<WalletScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSectionHeader('Dispositivo'),
-          _detailRow('Dirección IP',
-              player.address.isNotEmpty ? player.address : '-'),
-          _detailRow(
-              'ID Instalaci\u00f3n',
-              player.deviceInstallationId.isNotEmpty
-                  ? player.deviceInstallationId
-                  : '-'),
+          _detailRow('Dirección IP', player.address.isNotEmpty ? player.address : '-'),
+          _detailRow('ID Instalaci\u00f3n', player.deviceInstallationId.isNotEmpty ? player.deviceInstallationId : '-'),
           const SizedBox(height: 12),
           _buildSectionHeader('Estado Conexi\u00f3n'),
-          _detailRow('Handshake',
-              player.connected ? 'Completado' : 'Pendiente'),
+          _detailRow('Handshake', player.connected ? 'Completado' : 'Pendiente'),
           const SizedBox(height: 12),
-          _detailRow(
-              '\u00daltima actividad',
-              _format12h(player.lastSeen)),
+          _detailRow('\u00daltima actividad', _format12h(player.lastSeen)),
         ],
       ),
     );
@@ -870,18 +903,14 @@ mixin _WalletDialogs on State<WalletScreen> {
     );
   }
 
-
-
   String _format12h(DateTime dt) {
-    final h = dt.hour == 0 ? 12 : dt.hour > 12 ? dt.hour - 12 : dt.hour;
+    final h = dt.hour == 0
+        ? 12
+        : dt.hour > 12
+            ? dt.hour - 12
+            : dt.hour;
     final m = dt.minute.toString().padLeft(2, '0');
     final ampm = dt.hour < 12 ? 'AM' : 'PM';
     return '$h:$m $ampm';
   }
 }
-
-
-
-
-
-

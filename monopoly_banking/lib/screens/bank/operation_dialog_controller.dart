@@ -3,7 +3,7 @@ part of '../bank_screen.dart';
 class _BankOperationDialogController {
   _BankOperationDialogController({required this.transportType})
       : title = ValueNotifier<String>('Preparando operación'),
-        message = ValueNotifier<String>('Esperando contacto BLE...'),
+        message = ValueNotifier<String>('Esperando conexión del jugador...'),
         debugInfo = ValueNotifier<String>('');
 
   final TransportType transportType;

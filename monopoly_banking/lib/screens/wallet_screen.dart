@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -15,15 +16,21 @@ import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/providers/stats_provider.dart';
 import 'package:monopoly_banking/providers/wallet_controller.dart';
 import 'package:monopoly_banking/screens/bankruptcy_screen.dart';
+import 'package:monopoly_banking/screens/kicked_screen.dart';
+import 'package:monopoly_banking/screens/onboarding_screen.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 import 'package:monopoly_banking/services/bank_ledger_service.dart';
+import 'package:monopoly_banking/services/bank_settings_service.dart';
 import 'package:monopoly_banking/services/hive_service.dart';
 import 'package:monopoly_banking/services/device_identity_service.dart';
 import 'package:monopoly_banking/services/network_service.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
+import 'package:monopoly_banking/services/foreground_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/services/transports/p2p_transport.dart';
+import 'package:monopoly_banking/services/transports/ws_models.dart';
+
 import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/animated_avatar.dart';
 import 'package:monopoly_banking/widgets/odometer_widget.dart';
@@ -34,6 +41,9 @@ import 'package:monopoly_banking/widgets/player_info_widget.dart';
 import 'package:monopoly_banking/widgets/transaction_tile.dart';
 import 'package:monopoly_banking/widgets/transport_selector.dart';
 import 'package:monopoly_banking/widgets/app_spinner.dart';
+import 'package:qr_code_scanner/qr_code_scanner.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 part 'wallet/premium_card.dart';
 part 'wallet/card_styles.dart';
@@ -46,6 +56,7 @@ part 'wallet/vault_section_widget.dart';
 part 'wallet/ws_bank_panel.dart';
 part 'wallet/connection_panel.dart';
 part 'wallet/ws_connect_button.dart';
+
 part 'wallet/state_mixin_connection.dart';
 part 'wallet/state_mixin_incoming.dart';
 part 'wallet/state_mixin_builders.dart';
@@ -59,7 +70,15 @@ class WalletScreen extends StatefulWidget {
 }
 
 class _WalletScreenState extends State<WalletScreen>
-    with TickerProviderStateMixin, WidgetsBindingObserver, _WalletConnection, _WalletIncoming, _WalletBuilders, _WalletDialogs {
+    with TickerProviderStateMixin, WidgetsBindingObserver, AutomaticKeepAliveClientMixin, _WalletConnection, _WalletIncoming, _WalletBuilders, _WalletDialogs {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    updateKeepAlive();
+  }
   late final AnimationController _pulseCtrl;
   late final AnimationController _welcomeCtrl;
   late final Animation<double> _welcomeScale;
@@ -68,6 +87,8 @@ class _WalletScreenState extends State<WalletScreen>
 
   bool _showWelcome = false;
   bool _bankruptcyScreenOpen = false;
+  bool _inReconnectionGrace = false;
+  Timer? _reconnectionTimer;
   bool _isExiting = false;
   StreamSubscription<Map<String, dynamic>>? _payloadSub;
   StreamSubscription<TxType>? _txSub;
@@ -95,6 +116,9 @@ class _WalletScreenState extends State<WalletScreen>
   int? _lastColorId;
   double? _lastBalance;
   final List<double> _lastHistory = [];
+  String? _walletFilterType;
+  String _walletSortBy = 'date';
+  bool _walletSortAscending = false;
 
   late final VoidCallback _typeListener;
   VoidCallback? _wsConnectionsListener;
@@ -102,11 +126,11 @@ class _WalletScreenState extends State<WalletScreen>
   final Set<String> _announcedWsConnections = {};
   Completer<void>? _pendingBankOperationCompleter;
   String? _pendingBankOperationId;
-  Completer<void>? _pendingTransferCompleter;
 
   @override
   void initState() {
     super.initState();
+    debugPrint('[┊] WALLET_INIT_STATE');
     WidgetsBinding.instance.addObserver(this);
     _pulseCtrl = AnimationController(
       vsync: this,
@@ -126,13 +150,7 @@ class _WalletScreenState extends State<WalletScreen>
 
     _listenForIncoming();
 
-    _typeListener = () {
-      if (P2PService().currentType != TransportType.ws) {
-        final wsConnected =
-            P2PService().wsTransport.clientConnectedNotifier.value;
-        if (_wsScanning || wsConnected) _stopWsClient();
-      }
-    };
+    _typeListener = () {};
     P2PService().typeNotifier.addListener(_typeListener);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -149,6 +167,7 @@ class _WalletScreenState extends State<WalletScreen>
         _listenForBankPlayerConnections();
         _listenForBankServerState();
       } else {
+        await P2PService().startReceiving(null);
         _listenForWsDisconnection();
         _startWsClient();
       }
@@ -157,6 +176,7 @@ class _WalletScreenState extends State<WalletScreen>
 
   @override
   void dispose() {
+    debugPrint('[┊] WALLET_DISPOSE WalletScreen being disposed! isExiting=$_isExiting');
     for (final completer in _bankDeliveryAcks.values) {
       if (!completer.isCompleted) {
         completer.completeError(StateError('Pantalla cerrada'));
@@ -164,7 +184,9 @@ class _WalletScreenState extends State<WalletScreen>
     }
     _bankDeliveryAcks.clear();
     WidgetsBinding.instance.removeObserver(this);
-    _stopWsClient();
+    _wsScanning = false;
+    _wsConnecting = false;
+    P2PService().wsTransport.stop();
     _payloadSub?.cancel();
     _txSub?.cancel();
     _tierSub?.cancel();
@@ -198,6 +220,7 @@ class _WalletScreenState extends State<WalletScreen>
           .removeListener(bankServerListener);
     }
     _announcedWsConnections.clear();
+    _reconnectionTimer?.cancel();
     _pulseCtrl.dispose();
     _welcomeCtrl.dispose();
     _confettiCtrl.dispose();

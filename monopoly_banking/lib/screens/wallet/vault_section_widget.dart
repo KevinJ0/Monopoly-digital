@@ -167,7 +167,7 @@ class VaultSectionWidget extends StatelessWidget {
                                           child: ClipRRect(
                                             borderRadius:
                                                 BorderRadius.circular(4),
-                                            child: LinearProgressIndicator(
+                                            child: _AnimatedProgressFiller(
                                               value: targetPasses > 0
                                                   ? (currentPasses /
                                                           targetPasses)
@@ -204,7 +204,10 @@ class VaultSectionWidget extends StatelessWidget {
                                               'Retirar Ganancias'),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: color,
-                                            foregroundColor: Colors.white,
+                                            foregroundColor:
+                                                color.computeLuminance() > 0.5
+                                                    ? Colors.black
+                                                    : Colors.white,
                                             padding: const EdgeInsets.symmetric(
                                                 horizontal: 18, vertical: 14),
                                             shape: RoundedRectangleBorder(
@@ -256,5 +259,74 @@ class VaultSectionWidget extends StatelessWidget {
                     });
               });
         });
+}
+}
+
+class _AnimatedProgressFiller extends StatefulWidget {
+  final double value;
+  final double minHeight;
+  final Color backgroundColor;
+  final Color color;
+
+  const _AnimatedProgressFiller({
+    required this.value,
+    required this.minHeight,
+    required this.backgroundColor,
+    required this.color,
+  });
+
+  @override
+  State<_AnimatedProgressFiller> createState() => _AnimatedProgressFillerState();
+}
+
+class _AnimatedProgressFillerState extends State<_AnimatedProgressFiller>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+  double? _from;
+  double? _to;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
+    _to = widget.value;
+    _ctrl.addListener(() => setState(() {}));
+  }
+
+  @override
+  void didUpdateWidget(_AnimatedProgressFiller old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value) {
+      _from = _current;
+      _to = widget.value;
+      _ctrl.forward(from: 0.0);
+    }
+  }
+
+  double get _current {
+    if (!_ctrl.isAnimating || _from == null) return widget.value;
+    return _from! + (_to! - _from!) * _anim.value;
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LinearProgressIndicator(
+      value: _current.clamp(0.0, 1.0),
+      minHeight: widget.minHeight,
+      backgroundColor: widget.backgroundColor,
+      color: widget.color,
+    );
   }
 }
+

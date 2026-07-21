@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 enum TransferState { idle, listening, waitingSender, holding, waitingReceiver }
@@ -13,6 +14,7 @@ class BancoServer {
   ServerSocket? _server;
   final List<Socket> _clients = [];
   final Map<Socket, Map<String, dynamic>> _clientUsers = {};
+  final Map<Socket, List<int>> _clientBuffers = {};
   Map<String, dynamic> _db = {};
   TransferState state = TransferState.idle;
 
@@ -55,17 +57,21 @@ class BancoServer {
 
   void _handleConnection(Socket client) {
     _clients.add(client);
+    _clientBuffers[client] = [];
     client.listen(
       (data) => _handleSyncMessage(client, data),
       onDone: () {
         _clients.remove(client);
         _clientUsers.remove(client);
+        _clientBuffers.remove(client);
         _broadcastConnectedPlayers();
         _broadcastPlayers();
       },
-      onError: (_) {
+      onError: (e) {
+        debugPrint('BancoServer client error: $e');
         _clients.remove(client);
         _clientUsers.remove(client);
+        _clientBuffers.remove(client);
         _broadcastConnectedPlayers();
         _broadcastPlayers();
       },
@@ -73,24 +79,64 @@ class BancoServer {
   }
 
   void _handleSyncMessage(Socket client, List<int> data) {
-    final msg = jsonDecode(utf8.decode(data));
+    final buffer = _clientBuffers[client];
+    if (buffer == null) return;
+
+    buffer.addAll(data);
+
+    while (buffer.length >= 4) {
+      final length = (buffer[0] << 24) |
+          (buffer[1] << 16) |
+          (buffer[2] << 8) |
+          buffer[3];
+
+      if (buffer.length < 4 + length) break;
+
+      final messageBytes = buffer.sublist(4, 4 + length);
+      buffer.removeRange(0, 4 + length);
+
+      try {
+        final msg = jsonDecode(utf8.decode(messageBytes));
+        if (msg is Map<String, dynamic>) {
+          _processMessage(client, msg);
+        }
+      } catch (e) {
+        debugPrint('BancoServer json decode error: $e');
+      }
+    }
+  }
+
+  void _processMessage(Socket client, Map<String, dynamic> msg) {
     final type = msg['type'];
 
     if (type == 'register') {
-      _updateUserInDb(msg['user']);
-      _clientUsers[client] = Map<String, dynamic>.from(msg['user']);
-      _broadcastConnectedPlayers();
-      _broadcastPlayers();
+      final user = msg['user'];
+      if (user is Map<String, dynamic>) {
+        _updateUserInDb(user);
+        _clientUsers[client] = Map<String, dynamic>.from(user);
+        _broadcastConnectedPlayers();
+        _broadcastPlayers();
+      }
     } else if (type == 'request_transfer') {
-      _initiateManualTransfer(msg['from'], msg['to'], msg['amount']);
+      final from = msg['from'] as String?;
+      final to = msg['to'] as String?;
+      final amount = (msg['amount'] as num?)?.toDouble();
+      if (from != null && to != null && amount != null) {
+        _initiateManualTransfer(from, to, amount);
+      }
     } else if (type == 'confirm_phase') {
-      _processConfirmation(msg['userId']);
+      final userId = msg['userId'] as String?;
+      if (userId != null) {
+        _processConfirmation(userId);
+      }
     }
   }
 
   void _updateUserInDb(Map<String, dynamic> user) {
-    List users = _db['users'];
-    int idx = users.indexWhere((u) => u['USUARIOID'] == user['USUARIOID']);
+    final users = _db['users'];
+    if (users is! List) return;
+    final userId = user['USUARIOID'];
+    int idx = users.indexWhere((u) => u['USUARIOID'] == userId);
     if (idx != -1) {
       users[idx] = user;
     } else {
@@ -113,17 +159,28 @@ class BancoServer {
 
   void _broadcastPlayers() {
     final players = _db['users'];
-    final data = jsonEncode({'type': 'player_list', 'players': players});
+    if (players is! List) return;
+    final msgBytes = _encodeWithLength({'type': 'player_list', 'players': players});
     for (var c in _clients) {
-      c.write(data);
+      try {
+        c.add(msgBytes);
+      } catch (e) {
+        debugPrint('BancoServer broadcast write error: $e');
+      }
     }
   }
 
   void _initiateManualTransfer(String fromId, String toId, double amount) {
     if (state != TransferState.listening && state != TransferState.idle) return;
 
-    List users = _db['users'];
-    final sender = users.firstWhere((u) => u['USUARIOID'] == fromId);
+    final users = _db['users'];
+    if (users is! List) return;
+    final senderIdx = users.indexWhere((u) => u['USUARIOID'] == fromId);
+    if (senderIdx == -1) {
+      _sendToAll({'type': 'error', 'msg': 'Remitente no encontrado'});
+      return;
+    }
+    final sender = users[senderIdx];
 
     if ((sender['TREVNOT'] ?? 0) < amount) {
       _sendToAll({'type': 'error', 'msg': 'Saldo insuficiente'});
@@ -145,9 +202,11 @@ class BancoServer {
   }
 
   void _debitSender() {
-    List users = _db['users'];
+    final users = _db['users'];
+    if (users is! List) return;
     int idx =
         users.indexWhere((u) => u['USUARIOID'] == _transactionTemp?['from']);
+    if (idx == -1) return;
     users[idx]['TREVNOT'] -= _transactionTemp?['amount'];
     _saveDatabase();
     _broadcastPlayers();
@@ -159,9 +218,11 @@ class BancoServer {
   }
 
   void _creditReceiver() {
-    List users = _db['users'];
+    final users = _db['users'];
+    if (users is! List) return;
     int idx =
         users.indexWhere((u) => u['USUARIOID'] == _transactionTemp?['to']);
+    if (idx == -1) return;
     users[idx]['TREVNOT'] += _transactionTemp?['amount'];
     _saveDatabase();
     _broadcastPlayers();
@@ -176,10 +237,25 @@ class BancoServer {
   }
 
   void _sendToAll(Map<String, dynamic> msg) {
-    final data = jsonEncode(msg);
+    final data = _encodeWithLength(msg);
     for (var c in _clients) {
-      c.write(data);
+      try {
+        c.add(data);
+      } catch (e) {
+        debugPrint('BancoServer _sendToAll write error: $e');
+      }
     }
+  }
+
+  static List<int> _encodeWithLength(Map<String, dynamic> msg) {
+    final jsonBytes = utf8.encode(jsonEncode(msg));
+    return [
+      (jsonBytes.length >> 24) & 0xFF,
+      (jsonBytes.length >> 16) & 0xFF,
+      (jsonBytes.length >> 8) & 0xFF,
+      jsonBytes.length & 0xFF,
+      ...jsonBytes,
+    ];
   }
 }
 
@@ -189,6 +265,7 @@ class JugadorClient {
   JugadorClient._();
 
   Socket? _socket;
+  final List<int> _buffer = [];
   final _playersController = StreamController<List<dynamic>>.broadcast();
   Stream<List<dynamic>> get playersStream => _playersController.stream;
 
@@ -210,7 +287,9 @@ class JugadorClient {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('JugadorClient network scan error: $e');
+    }
 
     // Limitar a máximo 5 intentos para evitar timeouts largos
     final ips = potentialGws.take(5).toList();
@@ -220,9 +299,19 @@ class JugadorClient {
       try {
         _socket =
             await Socket.connect(ip, 8080, timeout: const Duration(seconds: 1));
-        _socket!.write(jsonEncode({'type': 'register', 'user': userData}));
+        final registerMsg = _encodeWithLength({'type': 'register', 'user': userData});
+        _socket!.add(registerMsg);
+        await _socket!.flush();
         _socket!.listen(_handleMessage,
-            onDone: () => _socket = null, onError: (_) => _socket = null);
+            onDone: () {
+              _socket = null;
+              _buffer.clear();
+            },
+            onError: (e) {
+              debugPrint('JugadorClient socket error: $e');
+              _socket = null;
+              _buffer.clear();
+            });
         return;
       } catch (e) {
         lastError = e.toString();
@@ -233,27 +322,68 @@ class JugadorClient {
   }
 
   void _handleMessage(List<int> data) {
-    final msg = jsonDecode(utf8.decode(data));
-    if (msg['type'] == 'player_list') {
-      _playersController.add(msg['players']);
-    } else {
-      _messageController.add(msg);
+    _buffer.addAll(data);
+
+    while (_buffer.length >= 4) {
+      final length = (_buffer[0] << 24) |
+          (_buffer[1] << 16) |
+          (_buffer[2] << 8) |
+          _buffer[3];
+
+      if (_buffer.length < 4 + length) break;
+
+      final messageBytes = _buffer.sublist(4, 4 + length);
+      _buffer.removeRange(0, 4 + length);
+
+      try {
+        final msg = jsonDecode(utf8.decode(messageBytes));
+        if (msg is Map<String, dynamic>) {
+          if (msg['type'] == 'player_list') {
+            _playersController.add(msg['players']);
+          } else {
+            _messageController.add(msg);
+          }
+        }
+      } catch (e) {
+        debugPrint('JugadorClient json decode error: $e');
+      }
     }
   }
 
   void requestTransfer(String toId, double amount, String myId) {
-    _socket?.write(jsonEncode({
+    if (_socket == null) {
+      debugPrint('JugadorClient: no socket connected');
+      return;
+    }
+    final data = _encodeWithLength({
       'type': 'request_transfer',
       'from': myId,
       'to': toId,
       'amount': amount,
-    }));
+    });
+    _socket!.add(data);
   }
 
   void confirmAction(String myId) {
-    _socket?.write(jsonEncode({
+    if (_socket == null) {
+      debugPrint('JugadorClient: no socket connected');
+      return;
+    }
+    final data = _encodeWithLength({
       'type': 'confirm_phase',
       'userId': myId,
-    }));
+    });
+    _socket!.add(data);
+  }
+
+  static List<int> _encodeWithLength(Map<String, dynamic> msg) {
+    final jsonBytes = utf8.encode(jsonEncode(msg));
+    return [
+      (jsonBytes.length >> 24) & 0xFF,
+      (jsonBytes.length >> 16) & 0xFF,
+      (jsonBytes.length >> 8) & 0xFF,
+      jsonBytes.length & 0xFF,
+      ...jsonBytes,
+    ];
   }
 }

@@ -210,6 +210,14 @@ class PlayerInfoView extends StatelessWidget {
       Color(0xFFFF7043),
       Color(0xFF00ACC1),
       Color(0xFFECEFF1),
+      Color(0xFF8D6E63),
+      Color(0xFF81D4FA),
+      Color(0xFFF48FB1),
+      Color(0xFFFFCC80),
+      Color(0xFFEF9A9A),
+      Color(0xFFFFF176),
+      Color(0xFFA5D6A7),
+      Color(0xFF5C6BC0),
     ];
     if (index >= 0 && index < colors.length) return colors[index];
     return colors[0];

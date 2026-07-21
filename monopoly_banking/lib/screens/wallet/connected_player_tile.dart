@@ -20,7 +20,7 @@ class _ConnectedPlayerTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 6),
       child: Row(
         children: [
           Container(

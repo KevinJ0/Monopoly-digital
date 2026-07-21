@@ -24,6 +24,7 @@ class WifiTransport extends P2PTransport {
   final _tcp = TcpChannel();
 
   RawDatagramSocket? _udpSocket;
+  StreamSubscription<RawSocketEvent>? _udpSub;
   bool _isReceiving = false;
 
   Timer? _announceTimer;
@@ -39,16 +40,19 @@ class WifiTransport extends P2PTransport {
     if (_isReceiving) return;
     _isReceiving = true;
 
-    _tcp.onData.listen(onData);
+    _tcpDataSub = _tcp.onData.listen(
+      onData,
+      onError: (e) => debugPrint('WifiTransport tcp onData error: $e'),
+    );
 
     try {
       _udpSocket =
           await RawDatagramSocket.bind(InternetAddress.anyIPv4, _discoveryPort);
       _udpSocket!.broadcastEnabled = true;
 
-      _udpSocket!.listen((event) {
+      _udpSub = _udpSocket!.listen((event) {
         if (event != RawSocketEvent.read) return;
-        final datagram = _udpSocket!.receive();
+        final datagram = _udpSocket?.receive();
         if (datagram == null) return;
         try {
           final msg = utf8.decode(datagram.data);
@@ -63,9 +67,13 @@ class WifiTransport extends P2PTransport {
               }
             }
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('WifiTransport discovery parse error: $e');
+        }
       });
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('WifiTransport UDP bind error: $e');
+    }
 
     _announceTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!_isReceiving || _tcp.localIp == null) return;
@@ -76,17 +84,26 @@ class WifiTransport extends P2PTransport {
           InternetAddress('255.255.255.255'),
           _discoveryPort,
         );
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('WifiTransport announce error: $e');
+      }
     });
   }
+
+  StreamSubscription<Map<String, dynamic>>? _tcpDataSub;
 
   @override
   Future<void> sendPayload(Map<String, dynamic> payload) async {
     final localIp = _tcp.localIp;
-    if (localIp == null) return;
+    if (localIp == null) {
+      debugPrint('WifiTransport sendPayload: localIp is null');
+      return;
+    }
 
+    RawDatagramSocket? udp;
+    StreamSubscription<RawSocketEvent>? sub;
     try {
-      final udp = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      udp = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
       udp.broadcastEnabled = true;
 
       final msg = '$_discoveryMagic|${_tcp.port}|$localIp';
@@ -98,9 +115,9 @@ class WifiTransport extends P2PTransport {
         if (!completer.isCompleted) completer.complete();
       });
 
-      udp.listen((event) {
+      sub = udp.listen((event) {
         if (event != RawSocketEvent.read) return;
-        final datagram = udp.receive();
+        final datagram = udp?.receive();
         if (datagram == null) return;
         try {
           final response = utf8.decode(datagram.data);
@@ -117,12 +134,18 @@ class WifiTransport extends P2PTransport {
               }
             }
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('WifiTransport sendPayload parse error: $e');
+        }
       });
 
       await completer.future;
-      udp.close();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('WifiTransport sendPayload error: $e');
+    } finally {
+      sub?.cancel();
+      udp?.close();
+    }
   }
 
   @override
@@ -130,6 +153,10 @@ class WifiTransport extends P2PTransport {
     _isReceiving = false;
     _announceTimer?.cancel();
     _announceTimer = null;
+    _tcpDataSub?.cancel();
+    _tcpDataSub = null;
+    _udpSub?.cancel();
+    _udpSub = null;
     try {
       _udpSocket?.close();
     } catch (_) {}
@@ -140,6 +167,8 @@ class WifiTransport extends P2PTransport {
   @override
   void dispose() {
     _announceTimer?.cancel();
+    _tcpDataSub?.cancel();
+    _udpSub?.cancel();
     _udpSocket?.close();
     _tcp.dispose();
   }

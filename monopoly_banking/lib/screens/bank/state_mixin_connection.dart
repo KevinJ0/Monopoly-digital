@@ -3,54 +3,6 @@ part of '../bank_screen.dart';
 mixin _BankConnection on State<BankScreen> {
   _BankScreenState get _self => this as _BankScreenState;
 
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // no-op
-  }
-
-  Future<bool> _waitForPlayerReady(
-      _BankOperationDialogController dialog) async {
-    final transport = P2PService().wsTransport;
-    final notifier = transport.connectedPlayersNotifier;
-
-    bool hasReadyPlayer() => notifier.value.any(
-          (player) =>
-              player.connected &&
-              player.name.trim().isNotEmpty &&
-              player.deviceInstallationId.trim().isNotEmpty,
-        );
-
-    if (hasReadyPlayer()) return true;
-
-    dialog.update(
-      title: 'Preparando conexión',
-      message: 'Esperando que el jugador se conecte...',
-    );
-    final completer = Completer<bool>();
-
-    void finish(bool value) {
-      if (!completer.isCompleted) completer.complete(value);
-    }
-
-    void playerListener() {
-      if (hasReadyPlayer()) finish(true);
-    }
-
-    void cancelListener() {
-      if (dialog.cancelled.value) finish(false);
-    }
-
-    notifier.addListener(playerListener);
-    dialog.cancelled.addListener(cancelListener);
-    final timeout = Timer(const Duration(seconds: 8), () => finish(false));
-    playerListener();
-
-    final result = await completer.future;
-    timeout.cancel();
-    notifier.removeListener(playerListener);
-    dialog.cancelled.removeListener(cancelListener);
-    return result;
-  }
-
   Future<WsPlayer?> _selectTargetPlayer({
     required String title,
     String? excludePlayerId,
@@ -61,23 +13,9 @@ mixin _BankConnection on State<BankScreen> {
         .value
         .where((p) =>
             p.connected &&
-            p.playing &&
             p.name.isNotEmpty &&
-            p.deviceInstallationId.isNotEmpty &&
             (excludePlayerId == null || p.name != excludePlayerId))
         .toList();
-
-    if (players.isEmpty) {
-      NotificationService().show(
-        'No hay jugadores conectados disponibles',
-        backgroundColor: kRed,
-      );
-      return null;
-    }
-
-    if (players.length == 1) {
-      return players.first;
-    }
 
     final result = await showDialog<WsPlayer>(
       context: context,
@@ -96,59 +34,76 @@ mixin _BankConnection on State<BankScreen> {
           width: 300,
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final player in players) ...[
-                GestureDetector(
-                  onTap: () => Navigator.pop(ctx, player),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: kBgCard,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: kBorder),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: _playerColor(player.colorId)
-                                .withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
+            children: players.isEmpty
+                ? [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Column(
+                        children: [
+                          Icon(Icons.person_off_rounded,
+                              color: kTextSecondary, size: 48),
+                          SizedBox(height: 12),
+                          Text(
+                            'No hay jugadores disponibles para entregar el dinero.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: kTextSecondary,
+                              fontSize: 13,
+                            ),
                           ),
-                          child: Center(
-                            child: Text(
-                              player.avatarId.isNotEmpty
-                                  ? player.avatarId
-                                  : '\u{1F464}',
-                              style: TextStyle(
-                                fontSize: 20,
-                                color: _playerColor(player.colorId),
+                        ],
+                      ),
+                    ),
+                  ]
+                : players.map((player) => GestureDetector(
+                      onTap: () => Navigator.pop(ctx, player),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: kBgCard,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: kBorder),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: _self._playerColor(player.colorId)
+                                    .withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  player.avatarId.isNotEmpty
+                                      ? player.avatarId
+                                      : '\u{1F464}',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    color: _self._playerColor(player.colorId),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            player.displayName,
-                            style: const TextStyle(
-                              color: kTextPrimary,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                player.displayName,
+                                style: const TextStyle(
+                                  color: kTextPrimary,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
                             ),
-                          ),
+                            Icon(Icons.chevron_right_rounded,
+                                color: kTextSecondary, size: 20),
+                          ],
                         ),
-                        Icon(Icons.chevron_right_rounded,
-                            color: kTextSecondary, size: 20),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ],
+                      ),
+                    )).toList(),
           ),
         ),
         actions: [
@@ -222,29 +177,6 @@ mixin _BankConnection on State<BankScreen> {
   Future<WsPlayer?> _selectTransferReceiver({
     required String excludePlayerId,
   }) async {
-    final players = P2PService()
-        .wsTransport
-        .connectedPlayersNotifier
-        .value
-        .where((p) =>
-            p.connected &&
-            p.playing &&
-            p.name.isNotEmpty &&
-            p.name != excludePlayerId)
-        .toList();
-
-    if (players.isEmpty) {
-      players.addAll(P2PService()
-          .wsTransport
-          .connectedPlayersNotifier
-          .value
-          .where((p) => p.connected && p.name.isNotEmpty));
-      players.removeWhere((p) => p.name == excludePlayerId);
-    }
-
-    if (players.isEmpty) return null;
-    if (players.length == 1) return players.first;
-
     return _selectTargetPlayer(
       title: 'Seleccionar receptor',
       excludePlayerId: excludePlayerId,
