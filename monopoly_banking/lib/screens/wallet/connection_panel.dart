@@ -1,4 +1,9 @@
-part of '../wallet_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:monopoly_banking/core/constants.dart';
+import 'package:monopoly_banking/services/p2p_service.dart';
+import 'package:monopoly_banking/services/transports/ws_models.dart';
+import 'package:monopoly_banking/screens/wallet/ws_connect_button.dart';
+import 'package:monopoly_banking/screens/wallet/connected_player_tile.dart';
 
 class ConnectionPanel extends StatelessWidget {
   final Color color;
@@ -30,8 +35,7 @@ class ConnectionPanel extends StatelessWidget {
           key: const ValueKey('wsConnect'),
           color: color,
           scanning: wsScanning,
-          clientConnected: P2PService().wsTransport.clientConnectedNotifier.value,
-          connecting: false,
+          clientConnected: currentTransport == TransportType.ws,
           onStartWsClient: onStartWsClient,
           onStopWsClient: onStopWsClient,
           onConnectToBank: onConnectToWsBank,
@@ -53,94 +57,56 @@ class ConnectedPlayersPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final transport = P2PService().wsTransport;
+    final connectedPlayers = P2PService().wsTransport.connectedPlayersNotifier;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: ValueListenableBuilder<List<WsPlayer>>(
-        valueListenable: transport.connectedPlayersNotifier,
-        builder: (context, wsPlayers, _) {
-          final total = wsPlayers.where((p) => p.connected).length;
+    return ValueListenableBuilder<List<WsPlayer>>(
+      valueListenable: connectedPlayers,
+      builder: (context, players, _) {
+        final connected = players.where((p) => p.connected).toList();
+        if (connected.isEmpty) return const SizedBox.shrink();
 
-          return Container(
-            padding: const EdgeInsets.all(14),
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Container(
             decoration: BoxDecoration(
-              color: kBgCard.withValues(alpha: 0.82),
+              color: kBgCard,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: kBorder),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.groups_rounded, color: color, size: 18),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Jugadores conectados',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: kTextPrimary,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.people_rounded, color: kGreen, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'JUGADORES CONECTADOS (${connected.length})',
+                        style: const TextStyle(
+                          color: kTextSecondary,
+                          fontSize: 11,
+                          letterSpacing: 1.2,
                           fontWeight: FontWeight.w800,
-                          fontSize: 13,
                         ),
                       ),
-                    ),
-                    Text(
-                      '$total',
-                      style: const TextStyle(
-                        color: kTextSecondary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-                if (total == 0) ...[
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Sin jugadores activos',
-                    style: TextStyle(color: kTextSecondary, fontSize: 12),
+                    ],
                   ),
-                ] else ...[
-                  const SizedBox(height: 10),
-                  ...wsPlayers.where((p) => p.connected).map((player) {
-                    final detail =
-                        '${player.connected ? 'Conectado' : 'Desconectado'}';
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => onPlayerTap?.call(player),
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        decoration: BoxDecoration(
-                          color: kBgCard,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: kBorder),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: _ConnectedPlayerTile(
-                                name: player.displayName,
-                                deviceName: '',
-                                transport: 'WS',
-                                detail: detail,
-                                color: player.connected ? kGreen : Colors.grey,
-                                icon: Icons.wifi_rounded,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                ],
+                ),
+                const SizedBox(height: 4),
+                ...connected.map((player) => ConnectedPlayerTile(
+                      displayName: player.displayName,
+                      avatar: player.avatarId,
+                      role: 'WS',
+                      roleColor: color,
+                      onTap: onPlayerTap != null ? () => onPlayerTap!(player) : null,
+                    )),
               ],
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }

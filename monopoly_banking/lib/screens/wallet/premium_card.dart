@@ -1,6 +1,15 @@
-part of '../wallet_screen.dart';
+import 'dart:async';
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:sensors_plus/sensors_plus.dart';
+import 'package:monopoly_banking/providers/wallet_controller.dart';
+import 'package:monopoly_banking/widgets/odometer_widget.dart';
+import 'package:monopoly_banking/screens/wallet/card_styles.dart';
+import 'package:monopoly_banking/screens/wallet/shimmer_card.dart';
+import 'package:monopoly_banking/screens/wallet/carbon_fiber_painter.dart';
 
-class _PremiumCreditCard extends StatefulWidget {
+class PremiumCreditCard extends StatefulWidget {
   final double balance;
   final String name;
   final Color color;
@@ -9,7 +18,8 @@ class _PremiumCreditCard extends StatefulWidget {
   final bool isBank;
   final CardTier? tier;
 
-  const _PremiumCreditCard({
+  const PremiumCreditCard({
+    super.key,
     required this.balance,
     required this.name,
     required this.color,
@@ -20,11 +30,11 @@ class _PremiumCreditCard extends StatefulWidget {
   });
 
   @override
-  State<_PremiumCreditCard> createState() => _PremiumCreditCardState();
+  State<PremiumCreditCard> createState() => _PremiumCreditCardState();
 }
 
-class _PremiumCreditCardState extends State<_PremiumCreditCard> {
-  static const double _tiltFactor = 24.0;
+class _PremiumCreditCardState extends State<PremiumCreditCard> {
+  static const double _tiltFactor = 17.0;
   double _gyroX = 0.0;
   double _gyroY = 0.0;
   StreamSubscription<GyroscopeEvent>? _gyroSub;
@@ -89,12 +99,12 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
           ..setEntry(3, 2, 0.001)
           ..rotateX(_gyroY / _tiltFactor)
           ..rotateY(_gyroX / _tiltFactor),
-        child: _ShimmerCard(child: cardContent),
+        child: ShimmerCard(child: cardContent),
       );
     });
   }
 
-  Widget _buildStandardCard(_CardStyles styles, {required double cardHeight}) {
+  Widget _buildStandardCard(CardStyles styles, {required double cardHeight}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       height: cardHeight,
@@ -222,7 +232,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
     );
   }
 
-  Widget _buildGoldCard(_CardStyles styles, {required double cardHeight}) {
+  Widget _buildGoldCard(CardStyles styles, {required double cardHeight}) {
     const goldLight = Color(0xFFFCF6BA);
     const goldDeep = Color(0xFFBF953F);
     return Container(
@@ -358,7 +368,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
     );
   }
 
-  Widget _buildPlatinumCard(_CardStyles styles, {required double cardHeight}) {
+  Widget _buildPlatinumCard(CardStyles styles, {required double cardHeight}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       height: cardHeight,
@@ -493,7 +503,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
     );
   }
 
-  Widget _buildBlackCard(_CardStyles styles, {required double cardHeight}) {
+  Widget _buildBlackCard(CardStyles styles, {required double cardHeight}) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       height: cardHeight,
@@ -511,7 +521,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
       ),
       child: Stack(
         children: [
-          Positioned.fill(child: CustomPaint(painter: _CarbonFiberPainter())),
+          Positioned.fill(child: CustomPaint(painter: CarbonFiberPainter())),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 14),
             child: Column(
@@ -796,10 +806,10 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
     );
   }
 
-  _CardStyles _getStyles(CardTier tier, Color playerColor) {
+  CardStyles _getStyles(CardTier tier, Color playerColor) {
     switch (tier) {
       case CardTier.standard:
-        return _CardStyles(
+        return CardStyles(
           gradient: LinearGradient(
             colors: [
               playerColor,
@@ -813,7 +823,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
           tierName: 'CLASSIC EDITION',
         );
       case CardTier.gold:
-        return _CardStyles(
+        return CardStyles(
           gradient: const LinearGradient(
             colors: [
               Color(0xFFBF953F),
@@ -825,11 +835,11 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          accent: const Color(0xFF2D2410),
+          accent: Color(0xFF2D2410),
           tierName: 'GOLD MEMBERSHIP',
         );
       case CardTier.platinum:
-        return _CardStyles(
+        return CardStyles(
           gradient: const LinearGradient(
             colors: [Color(0xFFE0E0E0), Color(0xFFBDBDBD), Color(0xFF757575)],
             begin: Alignment.topLeft,
@@ -839,7 +849,7 @@ class _PremiumCreditCardState extends State<_PremiumCreditCard> {
           tierName: 'PLATINUM PRESTIGE',
         );
       case CardTier.black:
-        return _CardStyles(
+        return CardStyles(
           gradient: const LinearGradient(
             colors: [Color(0xFF141E30), Color(0xFF000000)],
             begin: Alignment.topLeft,

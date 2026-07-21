@@ -1,4 +1,12 @@
-part of '../wallet_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:qr_code_scanner/qr_code_scanner.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:monopoly_banking/core/constants.dart';
+import 'package:monopoly_banking/core/game_transitions.dart';
+import 'package:monopoly_banking/services/p2p_service.dart';
+import 'package:monopoly_banking/services/sound_service.dart';
+import 'package:monopoly_banking/services/transports/ws_models.dart';
+import 'package:monopoly_banking/widgets/app_spinner.dart';
 
 class WsConnectButton extends StatefulWidget {
   final Color color;
@@ -276,7 +284,7 @@ class _WsConnectButtonState extends State<WsConnectButton>
                 onPressed: _scanQr,
                 icon: const Icon(Icons.qr_code_rounded, size: 16),
                 label: const Text(
-                  'Escanear QR (v1)',
+                  'Escanear QR',
                   style: TextStyle(color: kTextSecondary, fontSize: 12),
                 ),
               ),
@@ -284,7 +292,7 @@ class _WsConnectButtonState extends State<WsConnectButton>
                 onPressed: _scanMobile,
                 icon: const Icon(Icons.qr_code_scanner_rounded, size: 16),
                 label: const Text(
-                  'Escanear QR (v2 mobile)',
+                  'Escanear QR (v2)',
                   style: TextStyle(color: kTextSecondary, fontSize: 12),
                 ),
               ),
@@ -574,4 +582,3 @@ class _MobileScannerPageState extends State<_MobileScannerPage> {
     );
   }
 }
-

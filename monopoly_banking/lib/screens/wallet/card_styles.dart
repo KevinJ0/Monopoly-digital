@@ -1,9 +1,8 @@
-part of '../wallet_screen.dart';
+import 'package:flutter/material.dart';
 
-class _CardStyles {
+class CardStyles {
   final LinearGradient gradient;
   final Color accent;
   final String tierName;
-  _CardStyles(
-      {required this.gradient, required this.accent, required this.tierName});
+  CardStyles({required this.gradient, required this.accent, required this.tierName});
 }

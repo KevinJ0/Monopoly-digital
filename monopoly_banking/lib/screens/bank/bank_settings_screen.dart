@@ -227,80 +227,128 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
           final iconData =
               BankSettingsService.availableIcons[op.iconKey] ?? Icons.payments_rounded;
           return Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: kBgCard,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: kBorder),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Dismissible(
+              key: ValueKey(op.id),
+              direction: DismissDirection.endToStart,
+              confirmDismiss: (_) async {
+                return await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: kBgCard,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    title: const Text('Eliminar operación',
+                        style: TextStyle(color: kTextPrimary)),
+                    content: Text(
+                      '¿Eliminar "${op.name}"?',
+                      style: const TextStyle(color: kTextSecondary),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Eliminar', style: TextStyle(color: kRed)),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              onDismissed: (_) {
+                setState(() => _settings.customOps.removeAt(i));
+                _settings.save();
+              },
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: kRed.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(16),
-                  onTap: () => _editCustomOp(i),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: kGold.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.delete_rounded, color: kRed, size: 24),
+              ),
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: kBgCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: kBorder),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => _editCustomOp(i),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: kGold.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(iconData, color: kGold, size: 20),
                           ),
-                          child: Icon(iconData, color: kGold, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(op.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      color: kTextPrimary,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14)),
-                              const SizedBox(height: 2),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: (op.isGive ? kGreen : kRed)
-                                          .withValues(alpha: 0.15),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      op.isGive
-                                          ? '+${formatMoney(op.amount)}'
-                                          : '-${formatMoney(op.amount)}',
-                                      style: TextStyle(
-                                        color: op.isGive ? kGreen : kRed,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w800,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(op.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        color: kTextPrimary,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14)),
+                                const SizedBox(height: 2),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: (op.isGive ? kGreen : kRed)
+                                            .withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        op.isGive
+                                            ? '+${formatMoney(op.amount)}'
+                                            : '-${formatMoney(op.amount)}',
+                                        style: TextStyle(
+                                          color: op.isGive ? kGreen : kRed,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    op.isGive ? 'Dar' : 'Quitar',
-                                    style: const TextStyle(
-                                        color: kTextSecondary, fontSize: 11),
-                                  ),
-                                ],
-                              ),
-                            ],
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      op.isGive ? 'Dar' : 'Quitar',
+                                      style: const TextStyle(
+                                          color: kTextSecondary, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const Icon(Icons.chevron_right_rounded,
-                            color: kTextSecondary, size: 20),
-                      ],
+                          IconButton(
+                            onPressed: () => _deleteCustomOp(i),
+                            icon: const Icon(Icons.delete_outline_rounded,
+                                color: kRed, size: 20),
+                            splashRadius: 20,
+                            tooltip: 'Eliminar',
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -342,6 +390,37 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
     final result = await _showCustomOpDialog(existing: op);
     if (result != null) {
       setState(() => _settings.customOps[index] = result);
+      await _settings.save();
+    }
+  }
+
+  Future<void> _deleteCustomOp(int index) async {
+    final op = _settings.customOps[index];
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kBgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Eliminar operación',
+            style: TextStyle(color: kTextPrimary)),
+        content: Text(
+          '¿Eliminar "${op.name}"?',
+          style: const TextStyle(color: kTextSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar', style: TextStyle(color: kRed)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      setState(() => _settings.customOps.removeAt(index));
       await _settings.save();
     }
   }

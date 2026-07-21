@@ -1,6 +1,6 @@
-part of '../wallet_screen.dart';
+import 'package:flutter/material.dart';
 
-class _CarbonFiberPainter extends CustomPainter {
+class CarbonFiberPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()

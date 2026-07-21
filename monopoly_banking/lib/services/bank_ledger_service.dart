@@ -124,6 +124,7 @@ class BankLedgerResult {
   Map<String, dynamic> toClientPayload() => {
         'type': 'bank_state',
         'targetPlayerId': account.playerId,
+        'targetInstallationId': account.deviceInstallationId,
         'bankTxId': transactionId,
         'eventType': eventType,
         'amount': amount,
@@ -563,8 +564,18 @@ class BankLedgerService {
       'passGo' => 'bank_pass_go_sent',
       'handshake_initial' => 'bank_player_joined',
       'handshake_reconnect' => 'bank_player_reconnected',
+      'handshake_restore' => 'bank_player_reconnected',
       'bankruptcy' => 'bank_bankruptcy',
-      _ => 'bank_$type',
+      'transfer_received' => 'bank_transfer_received',
+      'transfer_held' => 'bank_transfer_held',
+      'transfer_cancelled' => 'bank_transfer_cancelled',
+      'transfer_delivered' => 'bank_transfer_delivered',
+      'investment_opened' => 'bank_investment_opened',
+      'investment_completed' => 'bank_investment_completed',
+      'investment_early_withdrawal' => 'bank_investment_early_withdrawal',
+      'sync_credit' => 'bank_sync_credit',
+      'sync_debit' => 'bank_sync_debit',
+      _ => type,
     };
   }
 

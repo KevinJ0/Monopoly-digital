@@ -1,4 +1,8 @@
-part of '../wallet_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
+import 'package:monopoly_banking/providers/wallet_controller.dart';
+import 'package:monopoly_banking/screens/wallet/premium_card.dart';
 
 class BalanceCardSection extends StatelessWidget {
   final double balance;
@@ -26,7 +30,7 @@ class BalanceCardSection extends StatelessWidget {
     return ValueListenableBuilder<int>(
       valueListenable: wallet.balanceDecreaseShake,
       builder: (context, shakeCount, _) {
-        return _PremiumCreditCard(
+        return PremiumCreditCard(
           balance: balance,
           name: name,
           color: color,

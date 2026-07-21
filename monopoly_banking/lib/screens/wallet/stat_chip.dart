@@ -1,12 +1,14 @@
-part of '../wallet_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:monopoly_banking/core/constants.dart';
 
-class _StatChip extends StatelessWidget {
+class StatChip extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
   final Color color;
 
-  const _StatChip({
+  const StatChip({
+    super.key,
     required this.label,
     required this.value,
     required this.icon,
@@ -20,23 +22,12 @@ class _StatChip extends StatelessWidget {
       children: [
         Icon(icon, color: color, size: 18),
         const SizedBox(height: 4),
-        SizedBox(
-          width: double.infinity,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(value,
-                style: const TextStyle(
-                    color: kTextPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13)),
-          ),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(value, style: TextStyle(color: kTextPrimary, fontSize: 14, fontWeight: FontWeight.bold)),
         ),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: kTextSecondary, fontSize: 10),
-        ),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(color: kTextSecondary, fontSize: 9, letterSpacing: 0.8)),
       ],
     );
   }

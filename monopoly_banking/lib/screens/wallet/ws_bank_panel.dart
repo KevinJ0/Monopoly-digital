@@ -1,4 +1,10 @@
-part of '../wallet_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:monopoly_banking/core/constants.dart';
+import 'package:monopoly_banking/services/p2p_service.dart';
+import 'package:monopoly_banking/services/sound_service.dart';
+import 'package:monopoly_banking/services/notification_service.dart';
 
 class WsBankPanel extends StatefulWidget {
   final VoidCallback? onReiniciarWs;
@@ -79,10 +85,7 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                   ),
                                   Text(
                                     subtitle,
-                                    style: const TextStyle(
-                                      color: kTextSecondary,
-                                      fontSize: 12,
-                                    ),
+                                    style: const TextStyle(color: kTextSecondary, fontSize: 12),
                                   ),
                                 ],
                               ),
@@ -94,13 +97,7 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                 shape: BoxShape.circle,
                                 color: active ? accent : kBorder,
                                 boxShadow: active
-                                    ? [
-                                        BoxShadow(
-                                          color: accent.withValues(alpha: 0.6),
-                                          blurRadius: 8,
-                                          spreadRadius: 2,
-                                        )
-                                      ]
+                                    ? [BoxShadow(color: accent.withValues(alpha: 0.6), blurRadius: 8, spreadRadius: 2)]
                                     : null,
                               ),
                             ),
@@ -117,28 +114,19 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                       decoration: BoxDecoration(
                                         color: accent.withValues(alpha: 0.12),
                                         borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: accent.withValues(alpha: 0.35),
-                                        ),
+                                        border: Border.all(color: accent.withValues(alpha: 0.35)),
                                       ),
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
-                                          Icon(
-                                            connected ? Icons.link_rounded : Icons.sensors_rounded,
-                                            color: accent,
-                                            size: 16,
-                                          ),
+                                          Icon(connected ? Icons.link_rounded : Icons.sensors_rounded, color: accent, size: 16),
                                           const SizedBox(width: 8),
                                           Flexible(
                                             child: Text(
                                               connected ? 'Listo para operar con el jugador' : 'Activo autom\u00e1ticamente',
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: accent,
-                                                fontWeight: FontWeight.w800,
-                                              ),
+                                              style: TextStyle(color: accent, fontWeight: FontWeight.w800),
                                             ),
                                           ),
                                         ],
@@ -155,25 +143,18 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                               final confirm = await _confirm(
                                                 context: context,
                                                 title: 'Detener servidor',
-                                                message:
-                                                    '\u00bfEst\u00e1s seguro de que deseas detener el servidor WS? Se desconectar\u00e1n todos los jugadores.',
+                                                message: '\u00bfEst\u00e1s seguro de que deseas detener el servidor WS? Se desconectar\u00e1n todos los jugadores.',
                                                 confirmLabel: 'Detener',
                                               );
                                               if (confirm != true) return;
                                               widget.onStopWs?.call();
                                             },
                                             icon: const Icon(Icons.stop_circle_outlined, size: 16),
-                                            label: const Text(
-                                              'Detener',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
+                                            label: const Text('Detener', maxLines: 1, overflow: TextOverflow.ellipsis),
                                             style: OutlinedButton.styleFrom(
                                               foregroundColor: kRed,
                                               side: const BorderSide(color: kRed),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                             ),
                                           ),
                                         ),
@@ -186,25 +167,18 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                               final confirm = await _confirm(
                                                 context: context,
                                                 title: 'Reiniciar servidor',
-                                                message:
-                                                    '\u00bfEst\u00e1s seguro de que deseas reiniciar el servidor WS? Se desconectar\u00e1n todos los jugadores temporalmente.',
+                                                message: '\u00bfEst\u00e1s seguro de que deseas reiniciar el servidor WS? Se desconectar\u00e1n todos los jugadores temporalmente.',
                                                 confirmLabel: 'Reiniciar',
                                               );
                                               if (confirm != true) return;
                                               widget.onReiniciarWs?.call();
                                             },
                                             icon: const Icon(Icons.restart_alt_rounded, size: 16),
-                                            label: const Text(
-                                              'Reiniciar',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
+                                            label: const Text('Reiniciar', maxLines: 1, overflow: TextOverflow.ellipsis),
                                             style: OutlinedButton.styleFrom(
                                               foregroundColor: kGold,
                                               side: const BorderSide(color: kGold),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(10),
-                                              ),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                             ),
                                           ),
                                         ),
@@ -214,10 +188,7 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                       const SizedBox(height: 12),
                                       Container(
                                         padding: const EdgeInsets.all(10),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black26,
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
+                                        decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(10)),
                                         child: Column(
                                           children: [
                                             Row(
@@ -229,9 +200,7 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                                     onTap: () {
                                                       SoundService.playClick();
                                                       Clipboard.setData(
-                                                        ClipboardData(
-                                                          text: '${transport.localIp}:${transport.port}',
-                                                        ),
+                                                        ClipboardData(text: '${transport.localIp}:${transport.port}'),
                                                       );
                                                       NotificationService().show(
                                                         'IP copiada: ${transport.localIp}:${transport.port}',
@@ -240,11 +209,7 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                                     },
                                                     child: Text(
                                                       'IP: ${transport.localIp}:${transport.port}',
-                                                      style: const TextStyle(
-                                                        color: kGold,
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w700,
-                                                      ),
+                                                      style: const TextStyle(color: kGold, fontSize: 12, fontWeight: FontWeight.w700),
                                                     ),
                                                   ),
                                                 ),
@@ -265,10 +230,7 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                             const Text(
                                               'Escanea con la app del jugador o comparte la IP',
                                               textAlign: TextAlign.center,
-                                              style: TextStyle(
-                                                color: kTextSecondary,
-                                                fontSize: 10,
-                                              ),
+                                              style: TextStyle(color: kTextSecondary, fontSize: 10),
                                             ),
                                           ],
                                         ),
@@ -280,9 +242,7 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                   onPressed: () async {
                                     SoundService.playClick();
                                     final ready = await widget.onEnsureWsReady?.call();
-                                    if (ready != true || !context.mounted) {
-                                      return;
-                                    }
+                                    if (ready != true || !context.mounted) return;
                                     await P2PService().startWsServer();
                                     P2PService().setTransport(TransportType.ws);
                                   },
@@ -291,9 +251,7 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.blue,
                                     foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                   ),
                                 ),
                         ),

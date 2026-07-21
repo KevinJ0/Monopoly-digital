@@ -2,6 +2,9 @@ part of '../wallet_screen.dart';
 
 mixin _WalletIncoming on State<WalletScreen> {
   _WalletScreenState get _self => this as _WalletScreenState;
+
+  final Set<String> _seenBankTxIds = {};
+
   void _listenForIncoming() {
     final wallet = context.read<WalletController>();
     final session = context.read<SessionProvider>();
@@ -10,36 +13,15 @@ mixin _WalletIncoming on State<WalletScreen> {
       if (!mounted) return;
       final txId = payload['txId'] as String?;
       if (txId != null) {
-        if (_self._seenTxIds.contains(txId)) return;
-        _self._seenTxIds.add(txId);
-        _self._seenTxIdOrder.add(txId);
-        if (_self._seenTxIdOrder.length > 80) {
-          final removed = _self._seenTxIdOrder.removeAt(0);
-          _self._seenTxIds.remove(removed);
+        if (_seenBankTxIds.contains(txId)) return;
+        _seenBankTxIds.add(txId);
+        if (_seenBankTxIds.length > 80) {
+          _seenBankTxIds.remove(_seenBankTxIds.first);
         }
       }
       final type = payload['type'] as String?;
 
-      if (!session.isBank && type == 'bank_server_stopping') {
-        _self._userRequestedWsDisconnect = true;
-        try {
-          await P2PService().wsTransport.stop();
-        } finally {
-          _self._userRequestedWsDisconnect = false;
-        }
-        if (mounted) {
-          _self._safeSetState(() {});
-          NotificationService().show(
-            'El banco apag\u00f3 el servidor. Has sido desconectado.',
-            backgroundColor: kRed,
-            duration: const Duration(seconds: 5),
-            dedupeKey: 'ws-bank-disconnected',
-          );
-        }
-        return;
-      }
-
-      if (session.isBank && type == 'bank_state_ack') {
+      if (type == 'bank_state_ack') {
         final bankTxId = payload['bankTxId'] as String?;
         debugPrint('[BANK] bank_state_ack received bankTxId=$bankTxId hasCompleter=${_self._bankDeliveryAcks.containsKey(bankTxId)}');
         if (bankTxId != null) {
@@ -52,182 +34,173 @@ mixin _WalletIncoming on State<WalletScreen> {
         return;
       }
 
-      if (!session.isBank &&
-          (type == 'bank_session_status' ||
-              type == 'handshake' ||
-              type == 'bank_state' ||
-              type == 'bank_operation_error' ||
-              type == 'bank_access_denied')) {
-        if (!_isPayloadForPlayer(payload, session.name)) return;
-        final changed = await session.adoptBankSession(
-          payload['bankSessionId'] as String?,
+      final deviceInstallationId =
+          (payload['deviceInstallationId'] as String?)?.trim();
+      if (deviceInstallationId != null &&
+          deviceInstallationId.isNotEmpty &&
+          BankLedgerService().isDeviceBanned(deviceInstallationId)) {
+        final playerId = ((payload['playerId'] as String?) ??
+                (payload['name'] as String?) ??
+                'Jugador')
+            .trim();
+        await _sendBlockedDeviceState(
+          playerId,
+          transportType: TransportType.ws,
+          targetInstallationId: deviceInstallationId,
         );
-        if (changed) {
-          _self._setClientIdentity();
-          NotificationService().show(
-            'El banco terminó la partida anterior. Se inició una nueva partida.',
-            backgroundColor: kGold,
-            duration: const Duration(seconds: 5),
-          );
-          if (type != 'handshake') return;
-        }
-        if (type == 'bank_session_status') return;
+        return;
       }
 
-      if (session.isBank) {
-        final deviceInstallationId =
-            (payload['deviceInstallationId'] as String?)?.trim();
-        if (deviceInstallationId != null &&
-            deviceInstallationId.isNotEmpty &&
-            BankLedgerService().isDeviceBanned(deviceInstallationId)) {
-          final playerId = ((payload['playerId'] as String?) ??
-                  (payload['name'] as String?) ??
-                  'Jugador')
-              .trim();
-          await _sendBlockedDeviceState(
-            playerId,
-            transportType: TransportType.ws,
-          );
-          return;
-        }
+      if (type == 'ws_identity') {
+        debugPrint('[BANK_WS] ws_identity received deviceId=$deviceInstallationId name=${payload['name']}');
+      }
+      if (type == 'ws_identity' &&
+          deviceInstallationId != null &&
+          deviceInstallationId.isNotEmpty) {
+        debugPrint('[BANK_WS] Processing ws_identity');
+        final playerId = ((payload['playerId'] as String?) ??
+                (payload['name'] as String?) ??
+                '')
+            .trim();
 
-        if (type == 'ws_identity') {
-          debugPrint('[BANK_WS] ws_identity received deviceId=$deviceInstallationId name=${payload['name']}');
-        }
-        if (type == 'ws_identity' &&
-            deviceInstallationId != null &&
-            deviceInstallationId.isNotEmpty) {
-          debugPrint('[BANK_WS] Processing ws_identity');
-          final playerId = ((payload['playerId'] as String?) ??
-                  (payload['name'] as String?) ??
-                  '')
-              .trim();
-
-          if (playerId.isEmpty) {
-            // No name yet — check if device is known
-            final deviceAccount =
-                BankLedgerService().accountForDeviceId(deviceInstallationId);
-            if (deviceAccount != null && !deviceAccount.bankrupt) {
-              // Returning player whose local data was cleared
-              debugPrint('[BANK_WS] Returning device with cleared local data: ${deviceAccount.playerId}');
-              final restorePayload = <String, dynamic>{
-                'type': 'handshake',
-                'targetPlayerId': deviceAccount.playerId,
-                'avatarId': deviceAccount.avatarId.isNotEmpty
+        if (playerId.isEmpty) {
+          final deviceAccount =
+              BankLedgerService().accountForDeviceId(deviceInstallationId);
+          if (deviceAccount != null && !deviceAccount.bankrupt) {
+            debugPrint('[BANK_WS] Returning device with cleared local data: ${deviceAccount.playerId}');
+            final storedName = deviceAccount.playerId;
+            if (storedName.isNotEmpty) {
+              P2PService().wsTransport.updatePlayerIdentity(
+                deviceInstallationId: deviceInstallationId,
+                name: storedName,
+                avatarId: deviceAccount.avatarId.isNotEmpty
                     ? deviceAccount.avatarId
                     : (payload['avatarId'] ?? '👤'),
-                'colorId': deviceAccount.colorId.isNotEmpty
+                colorId: deviceAccount.colorId.isNotEmpty
                     ? deviceAccount.colorId
                     : (payload['colorId'] ?? '0'),
-                'gameId': 'monopoly',
-                'name': deviceAccount.playerId,
-                'eventType': 'handshake_restore',
-                'amount': 0,
-                'bankSessionId': BankLedgerService().currentBankSessionId,
-                'bankDeviceId': DeviceIdentityService.installationId,
-                ...deviceAccount.toClientState(),
-              };
-              P2PService().setTransport(TransportType.ws);
-              try {
-                await P2PService().sendPayload(restorePayload);
-              } on TransportUnavailableException {
-                // Se reintenta en la próxima identidad.
-              }
-            } else {
-              // Truly new device — tell wallet to show onboarding
-              debugPrint('[BANK_WS] New device, sending new_player');
-              P2PService().setTransport(TransportType.ws);
-              await P2PService().sendPayload({
-                'type': 'new_player',
-                'deviceInstallationId': deviceInstallationId,
-              });
+              );
             }
-            return;
-          }
-
-          final existingAccount = BankLedgerService().accountFor(playerId);
-          final nameBelongsToAnotherDevice = playerId.isNotEmpty &&
-              existingAccount != null &&
-              existingAccount.deviceInstallationId.isNotEmpty &&
-              existingAccount.deviceInstallationId != deviceInstallationId;
-          if (nameBelongsToAnotherDevice) {
-            await _sendBankError(
-              playerId,
-              'El nombre "$playerId" ya pertenece a otro jugador de esta partida. Elige un nombre diferente.',
-              transportType: TransportType.ws,
-            );
-            return;
-          }
-          final isReturningPlayer = existingAccount != null &&
-              !existingAccount.bankrupt &&
-              existingAccount.deviceInstallationId == deviceInstallationId;
-          final playerNeedsHandshake =
-              (payload['isHandshakeDone'] as bool?) != true;
-          if (isReturningPlayer && playerNeedsHandshake) {
             final restorePayload = <String, dynamic>{
               'type': 'handshake',
-              'targetPlayerId': playerId,
-              'avatarId': payload['avatarId'] ?? session.avatarId,
-              'colorId': payload['colorId'] ?? session.colorId,
+              'targetPlayerId': deviceAccount.playerId,
+              'targetInstallationId': deviceInstallationId,
+              'avatarId': deviceAccount.avatarId.isNotEmpty
+                  ? deviceAccount.avatarId
+                  : (payload['avatarId'] ?? '👤'),
+              'colorId': deviceAccount.colorId.isNotEmpty
+                  ? deviceAccount.colorId
+                  : (payload['colorId'] ?? '0'),
               'gameId': 'monopoly',
-              'name': payload['name'] ?? session.name,
+              'name': deviceAccount.playerId,
               'eventType': 'handshake_restore',
               'amount': 0,
               'bankSessionId': BankLedgerService().currentBankSessionId,
               'bankDeviceId': DeviceIdentityService.installationId,
-              ...existingAccount.toClientState(),
+              ...deviceAccount.toClientState(),
             };
             P2PService().setTransport(TransportType.ws);
             try {
               await P2PService().sendPayload(restorePayload);
             } on TransportUnavailableException {
-              // Se reintenta en la próxima identidad.
+              // se reintenta en la próxima identidad
             }
-          } else if (isReturningPlayer) {
-            final syncResult = BankLedgerResult(
-              account: existingAccount,
-              transactionId: 'sync-${DateTime.now().microsecondsSinceEpoch}',
-              eventType: 'bank_sync',
-              amount: 0,
-              bankSessionId: BankLedgerService().currentBankSessionId,
-            );
-            await _sendBankResult(
-              syncResult,
-              transportType: TransportType.ws,
-            );
           } else {
-            final result = await BankLedgerService().ensurePlayer(
-              playerId,
-              BankSettingsService().initialBalance,
-              deviceInstallationId: deviceInstallationId,
-            );
-            final handshake = <String, dynamic>{
-              'type': 'handshake',
-              'targetPlayerId': playerId,
-              'avatarId': payload['avatarId'] ?? session.avatarId,
-              'colorId': payload['colorId'] ?? session.colorId,
-              'gameId': 'monopoly',
-              'name': payload['name'] ?? session.name,
-              'bankTxId': result.transactionId,
-              'eventType': result.eventType,
-              'amount': result.amount,
-              'bankSessionId': BankLedgerService().currentBankSessionId,
-              'bankDeviceId': DeviceIdentityService.installationId,
-              ...result.account.toClientState(),
-            };
+            debugPrint('[BANK_WS] New device, sending new_player');
             P2PService().setTransport(TransportType.ws);
-            debugPrint('[BANK_WS] Sending handshake to $playerId balance=${handshake['balance']}');
-            try {
-              await P2PService().sendPayload(handshake);
-              debugPrint('[BANK_WS] Handshake sent successfully');
-            } on TransportUnavailableException {
-              debugPrint('[BANK_WS] TransportUnavailableException sending handshake');
-            }
+            await P2PService().sendPayload({
+              'type': 'new_player',
+              'deviceInstallationId': deviceInstallationId,
+            });
+          }
+          return;
+        }
+
+        final existingAccount = BankLedgerService().accountFor(playerId);
+        final nameBelongsToAnotherDevice = playerId.isNotEmpty &&
+            existingAccount != null &&
+            existingAccount.deviceInstallationId.isNotEmpty &&
+            existingAccount.deviceInstallationId != deviceInstallationId;
+        if (nameBelongsToAnotherDevice) {
+          await _sendBankError(
+            playerId,
+            'El nombre "$playerId" ya pertenece a otro jugador de esta partida. Elige un nombre diferente.',
+            transportType: TransportType.ws,
+          );
+          return;
+        }
+        final isReturningPlayer = existingAccount != null &&
+            !existingAccount.bankrupt &&
+            existingAccount.deviceInstallationId == deviceInstallationId;
+        final playerNeedsHandshake =
+            (payload['isHandshakeDone'] as bool?) != true;
+        if (isReturningPlayer && playerNeedsHandshake) {
+          final restorePayload = <String, dynamic>{
+            'type': 'handshake',
+            'targetPlayerId': playerId,
+            'targetInstallationId': existingAccount.deviceInstallationId,
+            'avatarId': payload['avatarId'] ?? session.avatarId,
+            'colorId': payload['colorId'] ?? session.colorId,
+            'gameId': 'monopoly',
+            'name': payload['name'] ?? session.name,
+            'eventType': 'handshake_restore',
+            'amount': 0,
+            'bankSessionId': BankLedgerService().currentBankSessionId,
+            'bankDeviceId': DeviceIdentityService.installationId,
+            ...existingAccount.toClientState(),
+          };
+          P2PService().setTransport(TransportType.ws);
+          try {
+            await P2PService().sendPayload(restorePayload);
+          } on TransportUnavailableException {
+            // se reintenta en la próxima identidad
+          }
+        } else if (isReturningPlayer) {
+          final syncResult = BankLedgerResult(
+            account: existingAccount,
+            transactionId: 'sync-${DateTime.now().microsecondsSinceEpoch}',
+            eventType: 'bank_sync',
+            amount: 0,
+            bankSessionId: BankLedgerService().currentBankSessionId,
+          );
+          await _sendBankResult(
+            syncResult,
+            transportType: TransportType.ws,
+          );
+        } else {
+          final result = await BankLedgerService().ensurePlayer(
+            playerId,
+            BankSettingsService().initialBalance,
+            deviceInstallationId: deviceInstallationId,
+          );
+          final handshake = <String, dynamic>{
+            'type': 'handshake',
+            'targetPlayerId': playerId,
+            'targetInstallationId': deviceInstallationId,
+            'avatarId': payload['avatarId'] ?? session.avatarId,
+            'colorId': payload['colorId'] ?? session.colorId,
+            'gameId': 'monopoly',
+            'name': payload['name'] ?? session.name,
+            'bankTxId': result.transactionId,
+            'eventType': result.eventType,
+            'amount': result.amount,
+            'bankSessionId': BankLedgerService().currentBankSessionId,
+            'bankDeviceId': DeviceIdentityService.installationId,
+            ...result.account.toClientState(),
+          };
+          P2PService().setTransport(TransportType.ws);
+          debugPrint('[BANK_WS] Sending handshake to $playerId balance=${handshake['balance']}');
+          try {
+            await P2PService().sendPayload(handshake);
+            debugPrint('[BANK_WS] Handshake sent successfully');
+          } on TransportUnavailableException {
+            debugPrint('[BANK_WS] TransportUnavailableException sending handshake');
           }
         }
+        return;
       }
 
-      if (session.isBank && type == 'player_profile') {
+      if (type == 'player_profile') {
         final name = payload['name'] as String?;
         final avatarId = payload['avatarId'] as String? ?? '';
         final colorId = payload['colorId'] as String? ?? '0';
@@ -250,6 +223,7 @@ mixin _WalletIncoming on State<WalletScreen> {
           final handshake = <String, dynamic>{
             'type': 'handshake',
             'targetPlayerId': name,
+            'targetInstallationId': deviceId,
             'avatarId': avatarId,
             'colorId': colorId,
             'gameId': 'monopoly',
@@ -262,7 +236,7 @@ mixin _WalletIncoming on State<WalletScreen> {
             ...result.account.toClientState(),
           };
           P2PService().setTransport(TransportType.ws);
-            debugPrint('[BANK_WS] player_profile handshake to $name balance=${handshake['balance']}');
+          debugPrint('[BANK_WS] player_profile handshake to $name balance=${handshake['balance']}');
           try {
             await P2PService().sendPayload(handshake);
             debugPrint('[BANK_WS] player_profile handshake sent to $name');
@@ -273,169 +247,16 @@ mixin _WalletIncoming on State<WalletScreen> {
         return;
       }
 
-      if (session.isBank && type == 'bank_operation_request') {
+      if (type == 'bank_operation_request') {
         await _handleBankOperationRequest(payload);
         wallet.refreshHistory();
         return;
       }
 
-      if (session.isBank && type == 'transfer_hold_request') {
+      if (type == 'transfer_hold_request') {
         await _handleBankTransferHoldRequest(payload);
         wallet.refreshHistory();
         return;
-      }
-
-      if (type == 'handshake') {
-        debugPrint('[┊] Handshake received target=${payload['targetPlayerId']} myName=${session.name} balance=${payload['balance']} isHandshakeDone=${session.isHandshakeDone}');
-        if (!_isPayloadForPlayer(payload, session.name)) {
-          debugPrint('[┊] Handshake NOT for me, skipping');
-          return;
-        }
-        try {
-          if (!session.isHandshakeDone) {
-            await session.applyHandshake(payload);
-            _self._setClientIdentity();
-            _self._triggerWelcomeAnimation(payload['name'] as String?);
-          }
-          await wallet.applyBankState(payload);
-          debugPrint('[┊] after applyBankState wallet.balance=${wallet.balance} rawBalance=${wallet.rawBalance.value}');
-        } catch (e) {
-          debugPrint('[┊] HANDSHAKE ERROR: $e');
-        }
-        try {
-          await WidgetsBinding.instance.endOfFrame
-              .timeout(const Duration(seconds: 1));
-        } on TimeoutException {
-        }
-        try {
-          await P2PService().sendPayload({
-            'type': 'handshake_confirm',
-            if (payload['bankTxId'] != null) 'bankTxId': payload['bankTxId'],
-            'playerId': session.name,
-            'name': session.name,
-            'appliedBalance': wallet.balance,
-            'deviceInstallationId': DeviceIdentityService.installationId,
-          });
-        } on TransportUnavailableException {
-        }
-      } else if (type == 'handshake_confirm') {
-        return;
-      } else if (type == 'bank_state') {
-        debugPrint('[PLAYER] bank_state received isHandshakeDone=${session.isHandshakeDone} targetPlayerId=${payload['targetPlayerId']} myName=${session.name} balance=${payload['balance']}');
-        if (!session.isHandshakeDone) {
-          debugPrint('[PLAYER] bank_state SKIPPED: isHandshakeDone=false');
-          return;
-        }
-        if (!_isPayloadForPlayer(payload, session.name)) {
-          debugPrint('[PLAYER] bank_state SKIPPED: not for me');
-          return;
-        }
-        await wallet.applyBankState(payload);
-        debugPrint('[PLAYER] applyBankState done balance=${wallet.balance} rawBalance=${wallet.rawBalance.value}');
-        final bankTxId = payload['bankTxId'] as String?;
-        if (bankTxId != null && bankTxId.isNotEmpty) {
-          try {
-            await WidgetsBinding.instance.endOfFrame
-                .timeout(const Duration(seconds: 1));
-          } on TimeoutException {
-          }
-          try {
-            await P2PService().sendPayload({
-              'type': 'bank_state_ack',
-              'bankTxId': bankTxId,
-              'playerId': session.name,
-              'name': session.name,
-              'appliedBalance': wallet.balance,
-              'deviceInstallationId': DeviceIdentityService.installationId,
-            });
-            debugPrint('[PLAYER] bank_state_ack sent for bankTxId=$bankTxId');
-          } on TransportUnavailableException {
-            debugPrint('[PLAYER] bank_state_ack failed: transport unavailable');
-          }
-        }
-        final requestId = payload['requestId'] as String?;
-        if (requestId == _self._pendingBankOperationId) {
-          final completer = _self._pendingBankOperationCompleter;
-          if (completer != null && !completer.isCompleted) {
-            completer.complete();
-          }
-        }
-        if (requestId != null &&
-            requestId.startsWith('transfer-')) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              NotificationService().show(
-                'Transferencia enviada al banco.',
-                backgroundColor: kGreen,
-                duration: const Duration(seconds: 3),
-              );
-            }
-          });
-        }
-      } else if (type == 'bank_operation_error') {
-        if (!_isPayloadForPlayer(payload, session.name)) return;
-        final message =
-            (payload['message'] as String?) ?? 'El banco rechazó la operación.';
-        final requestId = payload['requestId'] as String?;
-        if (requestId == _self._pendingBankOperationId) {
-          final completer = _self._pendingBankOperationCompleter;
-          if (completer != null && !completer.isCompleted) {
-            completer.completeError(BankLedgerException(message));
-          }
-        } else if (requestId != null &&
-            requestId.startsWith('transfer-')) {
-          if (mounted) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              NotificationService().show(
-                message,
-                backgroundColor: kRed,
-                duration: const Duration(seconds: 4),
-              );
-            });
-          }
-        } else {
-          await _showBankOperationError(message);
-        }
-      } else if (type == 'bank_access_denied') {
-        if (!_isPayloadForPlayer(payload, session.name)) return;
-        _self._stopWsClient();
-        await wallet.applyBankState(payload);
-      } else if (type == 'kick') {
-        if (!_isPayloadForPlayer(payload, session.name)) return;
-        _self._userRequestedWsDisconnect = true;
-        await P2PService().wsTransport.stop();
-        if (!mounted) return;
-        _self._safeSetState(() {});
-        Navigator.of(context).push(
-          GameFadeRoute(
-            page: KickedScreen(playerName: session.name),
-          ),
-        );
-      } else if (!session.isBank && type == 'new_player') {
-        debugPrint('[┊] new_player received, showing onboarding');
-        final result = await Navigator.of(context).push<Map<String, dynamic>>(
-          MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-        );
-        if (result == null || !mounted) {
-          debugPrint('[┊] new_player onboarding cancelled, disconnecting');
-          _self._stopWsClient();
-          return;
-        }
-        final newName = result['name'] as String;
-        final newAvatarId = result['avatarEmoji'] as String;
-        final newColorId = (result['colorIndex'] as int).toString();
-        await session.updateProfile(
-          name: newName,
-          avatarId: newAvatarId,
-          colorId: newColorId,
-        );
-        await P2PService().sendPayload({
-          'type': 'player_profile',
-          'name': newName,
-          'avatarId': newAvatarId,
-          'colorId': newColorId,
-          'deviceInstallationId': DeviceIdentityService.installationId,
-        });
       }
     }, onError: (e, s) {
       if (mounted) _self._safeShowFriendlyError(e, s);
@@ -443,7 +264,6 @@ mixin _WalletIncoming on State<WalletScreen> {
   }
 
   bool _isPayloadForPlayer(Map<String, dynamic> payload, String playerId) {
-    // If we don't know our own name yet, accept any message.
     if (playerId.isEmpty) return true;
     final target = payload['targetPlayerId'] as String?;
     return target == null || target == playerId;
@@ -475,7 +295,6 @@ mixin _WalletIncoming on State<WalletScreen> {
   Future<void> _handleBankOperationRequest(Map<String, dynamic> payload) async {
     final playerId = _connectedPlayerIdForPayload(payload);
     if (playerId == null) return;
-    final sourceTransport = _transportForIncomingPayload(payload);
     final requestId = payload['requestId'] as String?;
 
     try {
@@ -487,7 +306,7 @@ mixin _WalletIncoming on State<WalletScreen> {
         final passes = (payload['passes'] as num?)?.toInt() ?? 0;
         result = await ledger.invest(playerId, amount, passes);
         NotificationService().show(
-          '$playerId invirtió ${formatMoney(amount)} a $passes pases por GO',
+          '$playerId invirti\u00f3 ${formatMoney(amount)} a $passes pases por GO',
           backgroundColor: kGold,
           duration: const Duration(seconds: 4),
           dedupeKey: 'invest-$playerId',
@@ -495,24 +314,24 @@ mixin _WalletIncoming on State<WalletScreen> {
       } else if (operation == 'withdraw_investment') {
         result = await ledger.withdrawInvestment(playerId);
         NotificationService().show(
-          '$playerId retiró su inversión',
+          '$playerId retir\u00f3 su inversi\u00f3n',
           backgroundColor: kGreen,
           duration: const Duration(seconds: 4),
           dedupeKey: 'withdraw-$playerId',
         );
       } else {
-        throw const BankLedgerException('Operación bancaria desconocida.');
+        throw const BankLedgerException('Operaci\u00f3n bancaria desconocida.');
       }
       await _sendBankResult(
         result,
-        transportType: sourceTransport,
+        transportType: TransportType.ws,
         requestId: requestId,
       );
     } on BankLedgerException catch (error) {
       await _sendBankError(
         playerId,
         error.message,
-        transportType: sourceTransport,
+        transportType: TransportType.ws,
         requestId: requestId,
       );
     }
@@ -543,12 +362,12 @@ mixin _WalletIncoming on State<WalletScreen> {
           confirmedBalance == null ||
           (confirmedBalance - result.account.balance).abs() >= 0.001) {
         throw TransportUnavailableException(
-          'El jugador respondió, pero no confirmó el saldo esperado.',
+          'El jugador respondi\u00f3, pero no confirm\u00f3 el saldo esperado.',
         );
       }
     } on TimeoutException {
       throw TransportUnavailableException(
-        'El jugador no confirmó que recibió y mostró la operación.',
+        'El jugador no confirm\u00f3 que recibi\u00f3 y mostr\u00f3 la operaci\u00f3n.',
       );
     } finally {
       _self._bankDeliveryAcks.remove(result.transactionId);
@@ -560,11 +379,13 @@ mixin _WalletIncoming on State<WalletScreen> {
     String message, {
     TransportType transportType = TransportType.ws,
     String? requestId,
+    String? targetInstallationId,
   }) async {
     final payload = {
       'type': 'bank_operation_error',
       'bankSessionId': BankLedgerService().currentBankSessionId,
       'targetPlayerId': playerId,
+      if (targetInstallationId != null) 'targetInstallationId': targetInstallationId,
       'message': message,
       if (requestId != null) 'requestId': requestId,
     };
@@ -575,10 +396,12 @@ mixin _WalletIncoming on State<WalletScreen> {
   Future<void> _sendBlockedDeviceState(
     String playerId, {
     required TransportType transportType,
+    String? targetInstallationId,
   }) async {
     final payload = <String, dynamic>{
       'type': 'kick',
       'targetPlayerId': playerId,
+      if (targetInstallationId != null) 'targetInstallationId': targetInstallationId,
       'playerId': playerId,
       'eventType': 'device_banned',
     };
@@ -591,7 +414,7 @@ mixin _WalletIncoming on State<WalletScreen> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Operación rechazada'),
+        title: const Text('Operaci\u00f3n rechazada'),
         content: Text(message),
         actions: [
           ElevatedButton(
@@ -603,58 +426,16 @@ mixin _WalletIncoming on State<WalletScreen> {
     );
   }
 
-  Future<void> _requestBankOperation(Map<String, dynamic> request) async {
-    final session = context.read<SessionProvider>();
-    if (!session.isHandshakeDone) {
-      throw TransportUnavailableException(
-        'Debes estar conectado al banco y completar el handshake.',
-      );
-    }
-    if (_self._pendingBankOperationCompleter != null) {
-      throw const BankLedgerException(
-        'Ya hay una operación bancaria en proceso.',
-      );
-    }
-
-    final requestId =
-        '${session.name}-${DateTime.now().microsecondsSinceEpoch}';
-    final completer = Completer<void>();
-    _self._pendingBankOperationId = requestId;
-    _self._pendingBankOperationCompleter = completer;
-    P2PService().setTransport(TransportType.ws);
-    try {
-      await P2PService().sendPayload({
-        'type': 'bank_operation_request',
-        'requestId': requestId,
-        'playerId': session.name,
-        'deviceInstallationId': DeviceIdentityService.installationId,
-        ...request,
-      });
-      await completer.future.timeout(
-        const Duration(seconds: 15),
-        onTimeout: () => throw TimeoutException(
-          'El banco no confirmó la operación. Intenta nuevamente.',
-        ),
-      );
-    } finally {
-      if (identical(_self._pendingBankOperationCompleter, completer)) {
-        _self._pendingBankOperationCompleter = null;
-        _self._pendingBankOperationId = null;
-      }
-    }
-  }
-
   Future<void> _handleBankTransferHoldRequest(
       Map<String, dynamic> payload) async {
-    final sourceTransport = _transportForIncomingPayload(payload);
     final sourcePlayerId = _connectedPlayerIdForPayload(payload);
     if (sourcePlayerId == null || !mounted) return;
     final requestId = payload['requestId'] as String?;
     if (_self._bankTransferHoldDialogOpen) {
       await _sendBankError(
         sourcePlayerId,
-        'El banco ya está procesando otra transferencia.',
-        transportType: sourceTransport,
+        'El banco ya est\u00e1 procesando otra transferencia.',
+        transportType: TransportType.ws,
         requestId: requestId,
       );
       return;
@@ -672,18 +453,16 @@ mixin _WalletIncoming on State<WalletScreen> {
         counterpartyId: 'Banco',
       );
       await _sendBankResult(held,
-          transportType: sourceTransport, requestId: requestId);
+          transportType: TransportType.ws, requestId: requestId);
     } on BankLedgerException catch (error) {
       await _sendBankError(
         sourcePlayerId,
         error.message,
-        transportType: sourceTransport,
+        transportType: TransportType.ws,
         requestId: requestId,
       );
       return;
     } on TransportUnavailableException catch (_) {
-      // El débito ya se realizó pero el jugador no confirmó.
-      // El estado se sincronizará en el próximo handshake o reconexión.
       if (!mounted) return;
       await BankLedgerService().registerHeldTransfer(
         id: held.transactionId,
@@ -754,7 +533,7 @@ mixin _WalletIncoming on State<WalletScreen> {
                 );
                 await _sendBankResult(
                   delivered,
-                  transportType: sourceTransport,
+                  transportType: TransportType.ws,
                 );
                 await BankLedgerService().removeHeldTransfer(held.transactionId);
                 if (!ctx.mounted) return;
@@ -868,7 +647,7 @@ mixin _WalletIncoming on State<WalletScreen> {
                                 );
                                 await _sendBankResult(
                                   refunded,
-                                  transportType: sourceTransport,
+                                  transportType: TransportType.ws,
                                 );
                               } catch (_) {
                                 // El crédito al ledger ya se realizó.
@@ -934,7 +713,7 @@ mixin _WalletIncoming on State<WalletScreen> {
           side: BorderSide(color: Colors.orange.withValues(alpha: 0.35)),
         ),
         title: const Text(
-          'Transferencia pendiente de confirmación',
+          'Transferencia pendiente de confirmaci\u00f3n',
           textAlign: TextAlign.center,
           style: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w800),
         ),
@@ -961,9 +740,9 @@ mixin _WalletIncoming on State<WalletScreen> {
               ),
               const SizedBox(height: 16),
               const Text(
-                'El jugador no confirmó la recepción del débito. '
+                'El jugador no confirm\u00f3 la recepci\u00f3n del d\u00e9bito. '
                 'El dinero ya fue retenido en el banco. '
-                'El estado se sincronizará en la próxima reconexión.',
+                'El estado se sincronizar\u00e1 en la pr\u00f3xima reconexi\u00f3n.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: kTextSecondary, height: 1.4),
               ),
@@ -994,9 +773,3 @@ mixin _WalletIncoming on State<WalletScreen> {
     });
   }
 }
-
-
-
-
-
-

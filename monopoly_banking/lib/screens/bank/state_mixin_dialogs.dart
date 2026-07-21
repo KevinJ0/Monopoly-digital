@@ -594,6 +594,7 @@ mixin _BankDialogs on State<BankScreen> {
                   'type': 'payment',
                   'amount': amount,
                   'targetPlayerId': receiver.displayName,
+                  'targetInstallationId': receiver.deviceInstallationId,
                   'transferFrom': fromName,
                 });
                 if (!ctx.mounted) return;
@@ -861,6 +862,7 @@ mixin _BankDialogs on State<BankScreen> {
                           await P2PService().sendPayload({
                             'type': 'kick',
                             'targetPlayerId': player.displayName,
+                            'targetInstallationId': installationId,
                             'playerId': player.displayName,
                           });
                         } on TransportUnavailableException {

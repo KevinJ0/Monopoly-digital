@@ -1,14 +1,14 @@
-part of '../wallet_screen.dart';
+import 'package:flutter/material.dart';
 
-class _ShimmerCard extends StatefulWidget {
+class ShimmerCard extends StatefulWidget {
   final Widget child;
-  const _ShimmerCard({required this.child});
+  const ShimmerCard({super.key, required this.child});
 
   @override
-  State<_ShimmerCard> createState() => _ShimmerCardState();
+  State<ShimmerCard> createState() => _ShimmerCardState();
 }
 
-class _ShimmerCardState extends State<_ShimmerCard>
+class _ShimmerCardState extends State<ShimmerCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 

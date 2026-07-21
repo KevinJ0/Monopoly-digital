@@ -77,9 +77,16 @@ class TransactionTile extends StatelessWidget {
       'sync_credit' ||
       'investment_completed' ||
       'investment_early_withdrawal' ||
+      'bank_payment_sent' ||
+      'bank_pass_go_sent' ||
       'bank_charge_received' ||
       'bank_transfer_received' ||
-      'bank_transfer_cancelled' =>
+      'bank_transfer_cancelled' ||
+      'bank_transfer_delivered' ||
+      'bank_sync_credit' ||
+      'bank_sync_debit' ||
+      'bank_investment_completed' ||
+      'bank_investment_early_withdrawal' =>
         _TransactionDirection.received,
       'handshake_initial' ||
       'handshake_reconnect' ||
@@ -94,14 +101,17 @@ class TransactionTile extends StatelessWidget {
   IconData _iconFor(String type) {
     switch (type) {
       case 'passGo':
+      case 'bank_pass_go_sent':
         return Icons.flag_rounded;
       case 'received':
       case 'payment':
+      case 'bank_payment_sent':
       case 'transfer_received':
       case 'transfer_cancelled':
       case 'transfer_delivered':
       case 'bank_transfer_received':
       case 'bank_transfer_cancelled':
+      case 'bank_transfer_delivered':
         return Icons.arrow_downward_rounded;
       case 'charge':
       case 'transfer_held':
@@ -115,8 +125,21 @@ class TransactionTile extends StatelessWidget {
       case 'handshake_reconnect':
       case 'handshake_restore':
         return Icons.person_add_alt_1_rounded;
+      case 'investment_opened':
+      case 'bank_investment_opened':
+        return Icons.trending_up_rounded;
+      case 'investment_completed':
+      case 'investment_early_withdrawal':
+      case 'bank_investment_completed':
+      case 'bank_investment_early_withdrawal':
+        return Icons.trending_up_rounded;
       case 'bank_bankruptcy':
         return Icons.gavel_rounded;
+      case 'sync_credit':
+      case 'sync_debit':
+      case 'bank_sync_credit':
+      case 'bank_sync_debit':
+        return Icons.sync_rounded;
       default:
         return Icons.arrow_upward_rounded;
     }
@@ -125,55 +148,52 @@ class TransactionTile extends StatelessWidget {
   String _labelFor(String type) {
     switch (type) {
       case 'passGo':
+      case 'bank_pass_go_sent':
         return 'Pasar por GO';
       case 'received':
         return 'Cobro recibido';
       case 'payment':
-        return 'Pago recibido del banco';
+      case 'bank_payment_sent':
+        return 'Pago del banco';
       case 'charge':
-        return 'Cobro realizado por el banco';
+      case 'bank_charge_received':
+        return 'Cobro del banco';
       case 'transfer_received':
+      case 'bank_transfer_received':
         return 'Transferencia recibida';
       case 'transfer_held':
       case 'bank_transfer_held':
-        return 'Dinero retenido por el banco';
+        return 'Dinero retenido';
       case 'transfer_cancelled':
-        return 'Transferencia devuelta';
-      case 'transfer_delivered':
-        return 'Transferencia entregada';
-      case 'bank_transfer_received':
-        return 'Transferencia recibida';
       case 'bank_transfer_cancelled':
         return 'Transferencia devuelta';
+      case 'transfer_delivered':
+      case 'bank_transfer_delivered':
+        return 'Transferencia entregada';
       case 'investment_opened':
-        return 'Dinero invertido';
+      case 'bank_investment_opened':
+        return 'Inversión iniciada';
       case 'investment_completed':
+      case 'bank_investment_completed':
         return 'Inversión completada';
       case 'investment_early_withdrawal':
-        return 'Retiro anticipado';
+      case 'bank_investment_early_withdrawal':
+        return 'Retiro de inversión';
       case 'handshake_initial':
         return 'Vinculación inicial';
       case 'handshake_reconnect':
       case 'handshake_restore':
-        return 'Sesión restaurada';
-      case 'bankruptcy':
-        return 'Bancarrota';
-      case 'bank_payment_sent':
-        return 'Pago al jugador';
-      case 'bank_charge_received':
-        return 'Cobro al jugador';
-      case 'bank_pass_go_sent':
-        return 'Pago por pasar GO';
       case 'bank_player_joined':
-        return 'Jugador vinculado';
       case 'bank_player_reconnected':
-        return 'Jugador reconectado';
+        return 'Conexión con el banco';
+      case 'bankruptcy':
       case 'bank_bankruptcy':
-        return 'Jugador en bancarrota';
+        return 'Bancarrota';
       case 'sync_credit':
-        return 'Ajuste por sincronización';
       case 'sync_debit':
-        return 'Ajuste por sincronización';
+      case 'bank_sync_credit':
+      case 'bank_sync_debit':
+        return 'Sincronización con el banco';
       default:
         return type;
     }

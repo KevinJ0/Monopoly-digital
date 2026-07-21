@@ -1076,18 +1076,19 @@ mixin _BankBuilders on State<BankScreen> {
       return match?.name ?? type;
     }
     return switch (type) {
-      'payment' => 'Pago del banco',
-      'charge' => 'Cobro del banco',
-      'passGo' => 'Pas\u00f3 por GO',
-      'handshake_initial' => 'Handshake inicial',
-      'handshake_reconnect' => 'Reconexi\u00f3n',
-      'bankruptcy' => 'Bancarrota',
-      'investment_opened' => 'Inversi\u00f3n abierta',
-      'investment_completed' => 'Inversi\u00f3n completada',
-      'investment_early_withdrawal' => 'Retiro anticipado',
-      'transfer_held' => 'Retenci\u00f3n de transferencia',
-      'transfer_received' => 'Transferencia recibida',
-      'transfer_cancelled' => 'Transferencia devuelta',
+      'payment' || 'bank_payment_sent' => 'Pago al jugador',
+      'charge' || 'bank_charge_received' => 'Cobro al jugador',
+      'passGo' || 'bank_pass_go_sent' => 'Pas\u00f3 por GO',
+      'handshake_initial' || 'bank_player_joined' => 'Jugador vinculado',
+      'handshake_reconnect' || 'handshake_restore' || 'bank_player_reconnected' => 'Jugador reconectado',
+      'bankruptcy' || 'bank_bankruptcy' => 'Bancarrota',
+      'investment_opened' || 'bank_investment_opened' => 'Inversi\u00f3n iniciada',
+      'investment_completed' || 'bank_investment_completed' => 'Inversi\u00f3n completada',
+      'investment_early_withdrawal' || 'bank_investment_early_withdrawal' => 'Retiro de inversi\u00f3n',
+      'transfer_held' || 'bank_transfer_held' => 'Transferencia retenida',
+      'transfer_received' || 'bank_transfer_received' || 'bank_transfer_delivered' => 'Transferencia recibida',
+      'transfer_cancelled' || 'bank_transfer_cancelled' => 'Transferencia devuelta',
+      'sync_credit' || 'sync_debit' || 'bank_sync_credit' || 'bank_sync_debit' => 'Sincronizaci\u00f3n',
       _ => type,
     };
   }
@@ -1105,18 +1106,19 @@ mixin _BankBuilders on State<BankScreen> {
       }
     }
     return switch (type) {
-      'payment' => Icons.arrow_downward_rounded,
-      'charge' => Icons.arrow_upward_rounded,
-      'passGo' => Icons.flag_rounded,
-      'handshake_initial' => Icons.handshake_rounded,
-      'handshake_reconnect' => Icons.handshake_rounded,
-      'bankruptcy' => Icons.gavel_rounded,
-      'investment_opened' => Icons.trending_up_rounded,
-      'investment_completed' => Icons.trending_up_rounded,
-      'investment_early_withdrawal' => Icons.trending_up_rounded,
-      'transfer_held' => Icons.lock_outline_rounded,
-      'transfer_received' => Icons.arrow_downward_rounded,
-      'transfer_cancelled' => Icons.replay_rounded,
+      'payment' || 'bank_payment_sent' => Icons.arrow_downward_rounded,
+      'charge' || 'bank_charge_received' => Icons.arrow_upward_rounded,
+      'passGo' || 'bank_pass_go_sent' => Icons.flag_rounded,
+      'handshake_initial' || 'bank_player_joined' => Icons.handshake_rounded,
+      'handshake_reconnect' || 'handshake_restore' || 'bank_player_reconnected' => Icons.handshake_rounded,
+      'bankruptcy' || 'bank_bankruptcy' => Icons.gavel_rounded,
+      'investment_opened' || 'bank_investment_opened' => Icons.trending_up_rounded,
+      'investment_completed' || 'bank_investment_completed' => Icons.trending_up_rounded,
+      'investment_early_withdrawal' || 'bank_investment_early_withdrawal' => Icons.trending_up_rounded,
+      'transfer_held' || 'bank_transfer_held' => Icons.lock_outline_rounded,
+      'transfer_received' || 'bank_transfer_received' || 'bank_transfer_delivered' => Icons.arrow_downward_rounded,
+      'transfer_cancelled' || 'bank_transfer_cancelled' => Icons.replay_rounded,
+      'sync_credit' || 'sync_debit' || 'bank_sync_credit' || 'bank_sync_debit' => Icons.sync_rounded,
       _ => Icons.swap_horiz_rounded,
     };
   }
@@ -1131,10 +1133,10 @@ mixin _BankBuilders on State<BankScreen> {
       return match?.isGive == true ? kGreen : kRed;
     }
     return switch (type) {
-      'payment' || 'passGo' || 'transfer_received' => kGreen,
-      'charge' || 'bankruptcy' => kRed,
-      'transfer_held' => kGold,
-      'transfer_cancelled' || 'transfer_delivered' => Colors.orange,
+      'payment' || 'bank_payment_sent' || 'passGo' || 'bank_pass_go_sent' || 'transfer_received' || 'bank_transfer_received' || 'bank_transfer_delivered' => kGreen,
+      'charge' || 'bank_charge_received' || 'bankruptcy' || 'bank_bankruptcy' => kRed,
+      'transfer_held' || 'bank_transfer_held' => kGold,
+      'transfer_cancelled' || 'bank_transfer_cancelled' || 'transfer_delivered' => Colors.orange,
       _ => kGold,
     };
   }

@@ -72,6 +72,9 @@ class WsTransport extends P2PTransport {
   String? get localIp => _localIp;
   int get port => _port;
 
+  String? lastKnownIp;
+  int lastKnownPort = defaultPort;
+
   void Function(Map<String, dynamic>)? _onData;
   StreamSubscription<dynamic>? _serverSub;
   StreamSubscription<dynamic>? _clientSub;
@@ -171,7 +174,23 @@ class WsTransport extends P2PTransport {
             bool isReconnection = false;
 
             if (installationId.isNotEmpty) {
-              // Buscar si hay un jugador desconectado con el mismo installationId
+              // Si ya hay una conexión ACTIVA para este dispositivo (race condition:
+              // el onDone del socket anterior aún no se ha procesado), reemplazarla
+              final activeId = _connectionsByInstallationId[installationId];
+              if (activeId != null && activeId != playerId) {
+                debugPrint(
+                  'WsTransport: Reemplazando conexión activa para $installationId ($activeId)',
+                );
+                _pendingReconnectionTimers[activeId]?.cancel();
+                _pendingReconnectionTimers.remove(activeId);
+                _disconnectedPlayers.remove(activeId);
+                _connections.remove(activeId);
+                final list = List<WsPlayer>.from(_connectedPlayersCtrl.value);
+                list.removeWhere((p) => p.id == activeId);
+                _connectedPlayersCtrl.value = list;
+              }
+
+              // Buscar si hay un jugador desconectado con el mismo installationId (período de gracia)
               final disconnectedPlayer = _disconnectedPlayers.values
                   .where((p) => p.deviceInstallationId == installationId)
                   .firstOrNull;
@@ -415,8 +434,25 @@ class WsTransport extends P2PTransport {
   }
 
   Future<void> _sendAsBank(Map<String, dynamic> payload) async {
-    final targetPlayerId = payload['targetPlayerId'] as String?;
+    final targetInstallationId = payload['targetInstallationId'] as String?;
 
+    if (targetInstallationId != null && targetInstallationId.isNotEmpty) {
+      final playerId = _connectionsByInstallationId[targetInstallationId];
+      if (playerId != null) {
+        final socket = _connections[playerId];
+        if (socket != null) {
+          socket.add(jsonEncode(payload));
+          return;
+        }
+      }
+      final playerName = payload['targetPlayerId'] as String? ?? targetInstallationId;
+      throw TransportUnavailableException(
+        'Jugador $playerName no está conectado',
+      );
+    }
+
+    // Fallback: lookup por nombre (legacy)
+    final targetPlayerId = payload['targetPlayerId'] as String?;
     if (targetPlayerId != null && targetPlayerId.isNotEmpty) {
       final player = _connectedPlayersCtrl.value.where(
         (p) => p.name == targetPlayerId,
