@@ -36,7 +36,7 @@ mixin _PlayerDialogs on State<PlayerScreen> {
 
     _self._dialogActive = true;
     try {
-      await showDialog<void>(
+      await showGameDialog<void>(
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => StatefulBuilder(

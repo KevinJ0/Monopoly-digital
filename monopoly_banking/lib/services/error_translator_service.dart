@@ -7,6 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/services/app_audit_logger.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
+import 'package:monopoly_banking/core/game_transitions.dart';
 
 // ─── Modelo ────────────────────────────────────────────────────────────
 
@@ -293,7 +294,7 @@ extension FriendlyErrorDisplay on BuildContext {
         final title = friendly.severity == ErrorSeverity.critical
             ? '¡Error Crítico!'
             : 'Algo salió mal';
-        showDialog(
+        showGameDialog(
           context: this,
           builder: (ctx) => AlertDialog(
             backgroundColor: kBgCard,

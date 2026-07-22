@@ -23,7 +23,7 @@ mixin _BankDialogs on State<BankScreen> {
     required double availableBalance,
     required double chargeAmount,
   }) {
-    return showDialog<bool>(
+    return showGameDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
@@ -64,7 +64,7 @@ mixin _BankDialogs on State<BankScreen> {
   }
 
   Future<void> _showOperationDialog(_BankOperationDialogController controller) {
-    return showDialog<void>(
+    return showGameDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -265,7 +265,7 @@ mixin _BankDialogs on State<BankScreen> {
     required String message,
     required VoidCallback onCancel,
   }) {
-    return showDialog<void>(
+    return showGameDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => PopScope(
@@ -561,7 +561,7 @@ mixin _BankDialogs on State<BankScreen> {
         .trim();
 
     _self._transferHoldDialogOpen = true;
-    await showDialog<void>(
+    await showGameDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -759,7 +759,7 @@ mixin _BankDialogs on State<BankScreen> {
     final tierLabel = _self._tierLabel(tier);
     final tierColor = _self._tierColor(tier);
 
-    showDialog(
+    showGameDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: kBgCard,
@@ -901,7 +901,7 @@ mixin _BankDialogs on State<BankScreen> {
     BuildContext outerContext,
     String playerName,
   ) {
-    return showDialog<bool>(
+    return showGameDialog<bool>(
       context: outerContext,
       builder: (ctx) => AlertDialog(
         backgroundColor: kBgCard,

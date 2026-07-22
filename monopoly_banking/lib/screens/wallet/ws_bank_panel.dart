@@ -5,6 +5,7 @@ import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
+import 'package:monopoly_banking/core/game_transitions.dart';
 
 class WsBankPanel extends StatefulWidget {
   final VoidCallback? onReiniciarWs;
@@ -275,7 +276,7 @@ class _WsBankPanelState extends State<WsBankPanel> {
     required String message,
     required String confirmLabel,
   }) {
-    return showDialog<bool>(
+    return showGameDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),

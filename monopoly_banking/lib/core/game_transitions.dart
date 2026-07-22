@@ -64,3 +64,54 @@ class GameFadeRoute extends PageRouteBuilder {
           opaque: barrierColor == null,
         );
 }
+
+class GameDialogRoute<T> extends PageRouteBuilder<T> {
+  GameDialogRoute({
+    required WidgetBuilder builder,
+    RouteSettings? settings,
+    bool barrierDismissible = true,
+    Color? barrierColor,
+  }) : super(
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              builder(context),
+          transitionsBuilder:
+              (context, animation, secondaryAnimation, child) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutBack,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return ScaleTransition(
+              scale: Tween<double>(begin: 0.7, end: 1.0).animate(curved),
+              child: FadeTransition(
+                opacity:
+                    Tween<double>(begin: 0.0, end: 1.0).animate(curved),
+                child: child,
+              ),
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 350),
+          reverseTransitionDuration: const Duration(milliseconds: 250),
+          opaque: false,
+          barrierDismissible: barrierDismissible,
+          barrierColor: barrierColor ?? Colors.black54,
+          barrierLabel: 'Cerrar diálogo',
+          settings: settings,
+        );
+}
+
+Future<T?> showGameDialog<T>({
+  required BuildContext context,
+  required WidgetBuilder builder,
+  bool barrierDismissible = true,
+  Color? barrierColor,
+  bool useRootNavigator = true,
+}) {
+  return Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
+    GameDialogRoute<T>(
+      builder: builder,
+      barrierDismissible: barrierDismissible,
+      barrierColor: barrierColor,
+    ),
+  );
+}

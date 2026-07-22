@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/services/bank_settings_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
+import 'package:monopoly_banking/core/game_transitions.dart';
 
 class BankSettingsScreen extends StatefulWidget {
   const BankSettingsScreen({super.key});
@@ -231,7 +232,7 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
               key: ValueKey(op.id),
               direction: DismissDirection.endToStart,
               confirmDismiss: (_) async {
-                return await showDialog<bool>(
+                return await showGameDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
                     backgroundColor: kBgCard,
@@ -395,7 +396,7 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
 
   Future<void> _deleteCustomOp(int index) async {
     final op = _settings.customOps[index];
-    final confirm = await showDialog<bool>(
+    final confirm = await showGameDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: kBgCard,
@@ -432,7 +433,7 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
     final isGive = ValueNotifier<bool>(existing?.isGive ?? true);
     final selectedIcon = ValueNotifier<String>(existing?.iconKey ?? 'payments_rounded');
 
-    final saved = await showDialog<bool>(
+    final saved = await showGameDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(

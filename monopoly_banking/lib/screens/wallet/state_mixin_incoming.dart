@@ -411,7 +411,7 @@ mixin _WalletIncoming on State<WalletScreen> {
 
   Future<void> _showBankOperationError(String message) async {
     if (!mounted) return;
-    await showDialog<void>(
+    await showGameDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Operaci\u00f3n rechazada'),
@@ -483,7 +483,7 @@ mixin _WalletIncoming on State<WalletScreen> {
     _self._bankTransferHoldDialogOpen = true;
     _self._dialogActive = true;
 
-    await showDialog<void>(
+    await showGameDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -703,7 +703,7 @@ mixin _WalletIncoming on State<WalletScreen> {
     String playerId,
     double amount,
   ) async {
-    await showDialog<void>(
+    await showGameDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(

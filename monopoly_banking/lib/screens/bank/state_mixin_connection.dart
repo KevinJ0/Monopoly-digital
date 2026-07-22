@@ -17,7 +17,7 @@ mixin _BankConnection on State<BankScreen> {
             (excludePlayerId == null || p.name != excludePlayerId))
         .toList();
 
-    final result = await showDialog<WsPlayer>(
+    final result = await showGameDialog<WsPlayer>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: kBgCard,

@@ -117,7 +117,7 @@ mixin _WalletDialogs on State<WalletScreen> {
     final tierLabel = _tierLabel(tier);
     final tierColor = _tierColor(tier);
 
-    showDialog(
+    showGameDialog(
       context: context,
       builder: (ctx) => Dialog(
         backgroundColor: kBgCard,
@@ -347,7 +347,7 @@ mixin _WalletDialogs on State<WalletScreen> {
     required String message,
     required String confirmLabel,
   }) {
-    return showDialog<bool>(
+    return showGameDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(title),

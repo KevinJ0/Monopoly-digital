@@ -1312,7 +1312,7 @@ mixin _BankBuilders on State<BankScreen> {
     required bool returnToSender,
   }) async {
     if (returnToSender) {
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showGameDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: kBgCard,
@@ -1382,7 +1382,7 @@ mixin _BankBuilders on State<BankScreen> {
         return;
       }
       final receiverName = receiver.displayName;
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showGameDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: kBgCard,

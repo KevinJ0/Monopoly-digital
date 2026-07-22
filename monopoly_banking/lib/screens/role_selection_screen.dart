@@ -10,6 +10,7 @@ import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
+import 'package:monopoly_banking/core/game_transitions.dart';
 
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
@@ -113,7 +114,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
   }
 
   Future<void> _confirmExitApp() async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGameDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: kBgCard,

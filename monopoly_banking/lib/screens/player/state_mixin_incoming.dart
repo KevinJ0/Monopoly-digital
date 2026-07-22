@@ -275,7 +275,7 @@ mixin _PlayerIncoming on State<PlayerScreen> {
 
   Future<void> _showBankOperationError(String message) async {
     if (!mounted) return;
-    await showDialog<void>(
+    await showGameDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Operaci\u00f3n rechazada'),
