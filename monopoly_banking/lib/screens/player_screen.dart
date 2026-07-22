@@ -68,6 +68,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   bool _evolutionDialogOpen = false;
   bool _wsScanning = false;
   bool _userRequestedWsDisconnect = false;
+  bool _reconnecting = false;
   bool _dialogActive = false;
   VoidCallback? _wsClientConnectionListener;
   ValueNotifier<bool>? _bankruptNotifierRef;

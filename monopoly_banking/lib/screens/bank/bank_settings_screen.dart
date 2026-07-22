@@ -47,7 +47,6 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBgDark,
       appBar: AppBar(
         backgroundColor: kBgDark,
         title: const Text('Configuración',

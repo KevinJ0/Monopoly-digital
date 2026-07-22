@@ -44,6 +44,15 @@ mixin _PlayerConnection on State<PlayerScreen> {
         if (_self._wsConnecting) {
           _self._wsConnecting = false;
         }
+        if (mounted && _self._reconnecting) {
+          _self._reconnecting = false;
+          NotificationService().show(
+            'Reconectado correctamente',
+            backgroundColor: kGreen,
+            duration: const Duration(seconds: 3),
+            dedupeKey: 'ws-reconnected',
+          );
+        }
         if (mounted && !_self._dialogActive) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) setState(() {});
@@ -52,12 +61,16 @@ mixin _PlayerConnection on State<PlayerScreen> {
       } else if (!_self._userRequestedWsDisconnect) {
         if (_self._inReconnectionGrace) return;
         _self._inReconnectionGrace = true;
+        _self._reconnecting = true;
         _self._reconnectionTimer?.cancel();
         _self._reconnectionTimer = Timer(const Duration(seconds: 6), () {
           _self._inReconnectionGrace = false;
           _self._reconnectionTimer = null;
           _self._wsConnecting = false;
           _startWsClient();
+          if (_wsBankIp != null) {
+            _connectToWsBank(_wsBankIp!, _wsBankPort);
+          }
           if (mounted) {
             NotificationService().show(
               'Se perdi\u00f3 la conexi\u00f3n con el banco. Intentando reconectar...',

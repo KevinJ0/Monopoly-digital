@@ -51,12 +51,7 @@ mixin _PlayerBuilders on State<PlayerScreen> {
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeIn,
               transitionBuilder: (child, animation) {
-                final scale = Tween<double>(begin: 0.85, end: 1.0)
-                    .transform(animation.value.clamp(0.0, 1.0));
-                return Transform.scale(
-                  scale: scale,
-                  child: FadeTransition(opacity: animation, child: child),
-                );
+                return FadeTransition(opacity: animation, child: child);
               },
               child: !playerReady
                   ? _buildWsConnectScreen(displayColor)

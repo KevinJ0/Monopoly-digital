@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -6,7 +8,6 @@ import 'package:monopoly_banking/core/game_transitions.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/services/transports/ws_models.dart';
-import 'package:monopoly_banking/widgets/app_spinner.dart';
 
 class WsConnectButton extends StatefulWidget {
   final Color color;
@@ -36,6 +37,7 @@ class _WsConnectButtonState extends State<WsConnectButton>
     with TickerProviderStateMixin {
   late final AnimationController _scaleCtrl;
   late final Animation<double> _scaleAnim;
+  late final AnimationController _orbitCtrl;
   final _ipCtrl = TextEditingController();
   final _portCtrl = TextEditingController(text: '8080');
   bool _showManual = false;
@@ -50,6 +52,10 @@ class _WsConnectButtonState extends State<WsConnectButton>
     _scaleAnim = Tween<double>(begin: 0.94, end: 1.0).animate(
       CurvedAnimation(parent: _scaleCtrl, curve: Curves.easeInOut),
     );
+    _orbitCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 4200),
+    )..repeat();
     _ipCtrl.addListener(_onIpChanged);
   }
 
@@ -60,6 +66,7 @@ class _WsConnectButtonState extends State<WsConnectButton>
   @override
   void dispose() {
     _scaleCtrl.dispose();
+    _orbitCtrl.dispose();
     _ipCtrl.dispose();
     _portCtrl.dispose();
     super.dispose();
@@ -163,9 +170,44 @@ class _WsConnectButtonState extends State<WsConnectButton>
                         ),
                         child: Center(
                           child: widget.connecting || widget.scanning || widget.clientConnected
-                                  ? AppSpinner(
-                                      size: clampedDiameter * 0.2,
-                                      color: widget.color,
+                                  ? AnimatedBuilder(
+                                      animation: _orbitCtrl,
+                                      builder: (context, _) {
+                                        final iconColor = widget.color.computeLuminance() > 0.5
+                                            ? Colors.black87
+                                            : Colors.white;
+                                        final t = _orbitCtrl.value;
+                                        final radius = clampedDiameter * 0.12;
+                                        final pulse = math.sin(t * math.pi);
+                                        final dx = math.sin(t * 4 * math.pi) * radius * pulse;
+                                        final dy = math.sin(t * 2 * math.pi + 0.5) * radius * 0.5 * pulse;
+                                        return Transform.translate(
+                                          offset: Offset(dx, dy),
+                                          child: Stack(
+                                            alignment: Alignment.center,
+                                            children: [
+                                              Container(
+                                                width: clampedDiameter * 0.36,
+                                                height: clampedDiameter * 0.36,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  gradient: RadialGradient(
+                                                    colors: [
+                                                      widget.color.withValues(alpha: 0.35),
+                                                      widget.color.withValues(alpha: 0.0),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                              Icon(
+                                                Icons.search,
+                                                size: clampedDiameter * 0.40,
+                                                color: iconColor,
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
                                     )
                                   : Icon(
                                       Icons.wifi_find_rounded,
