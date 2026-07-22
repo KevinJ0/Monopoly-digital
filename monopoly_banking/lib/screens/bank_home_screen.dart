@@ -4,6 +4,7 @@ import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/screens/wallet_screen.dart';
 import 'package:monopoly_banking/screens/bank_screen.dart';
 import 'package:monopoly_banking/services/bank_ledger_service.dart';
+import 'package:monopoly_banking/services/bank_settings_service.dart';
 
 class BankHomeScreen extends StatefulWidget {
   const BankHomeScreen({super.key});
@@ -27,6 +28,8 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
     kBankTabsActive = true;
     _pageCtrl = PageController();
     BankLedgerService().initHeldTransfersCount();
+    BankSettingsService().load();
+    BankLedgerService().transactionHistory;
   }
 
   @override

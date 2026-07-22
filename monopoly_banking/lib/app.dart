@@ -12,6 +12,9 @@ import 'package:monopoly_banking/screens/player_screen.dart';
 import 'package:monopoly_banking/screens/bank_home_screen.dart';
 import 'package:monopoly_banking/screens/splash_screen.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
+import 'package:monopoly_banking/services/bank_settings_service.dart';
+import 'package:monopoly_banking/services/bank_ledger_service.dart';
+import 'package:monopoly_banking/services/hive_service.dart';
 
 class MonopolyApp extends StatefulWidget {
   const MonopolyApp({super.key});
@@ -86,7 +89,16 @@ class _RootRouterState extends State<_RootRouter> {
   }
 
   Future<void> _takeHome() async {
-    await Future.delayed(const Duration(seconds: 3));
+    await Future.delayed(const Duration(seconds: 2));
+
+    // Pre-warm bank caches while splash is still visible
+    final session = HiveService.sessionBox.get('current');
+    if (session != null && session.role == 'banco') {
+      BankSettingsService().load();
+      BankLedgerService().transactionHistory;
+    }
+
+    await Future.delayed(const Duration(seconds: 1));
     if (mounted) {
       setState(() => _showSplash = false);
     }

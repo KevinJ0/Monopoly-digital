@@ -172,6 +172,9 @@ class BankLedgerService {
   final ValueNotifier<int> heldTransfersCount = ValueNotifier<int>(0);
   String? _cachedBankSessionId;
   List<Map<String, dynamic>>? _cachedTransactions;
+  List<String> _cachedPlayerNames = [];
+  List<String> _cachedTypeValues = [];
+  Map<String, dynamic>? _cachedAccounts;
 
   static const _accountsKey = 'bank_ledger_accounts_v1';
   static const _transactionsKey = 'bank_ledger_transactions_v1';
@@ -182,9 +185,15 @@ class BankLedgerService {
   int _transactionCounter = 0;
 
   Map<String, dynamic> _readAccounts() {
+    if (_cachedAccounts != null) return _cachedAccounts!;
     final stored = HiveService.settingsBox.get(_accountsKey);
     if (stored is! Map) return <String, dynamic>{};
-    return stored.map((key, value) => MapEntry(key.toString(), value));
+    _cachedAccounts = stored.map((key, value) => MapEntry(key.toString(), value));
+    return _cachedAccounts!;
+  }
+
+  void _invalidateAccountCache() {
+    _cachedAccounts = null;
   }
 
   List<Map<String, dynamic>> _readTransactions() {
@@ -193,6 +202,10 @@ class BankLedgerService {
     return stored.whereType<Map>().map((entry) {
       return entry.map((key, value) => MapEntry(key.toString(), value));
     }).toList();
+  }
+
+  void _invalidateTxCache() {
+    _cachedTransactions = null;
   }
 
   BankPlayerAccount? accountFor(String playerId) {
@@ -219,8 +232,21 @@ class BankLedgerService {
   List<Map<String, dynamic>> get transactionHistory {
     if (_cachedTransactions != null) return _cachedTransactions!;
     _cachedTransactions = _readTransactions();
+    _cachedPlayerNames = _cachedTransactions!
+        .map((tx) => tx['playerId'] as String? ?? '')
+        .where((n) => n.isNotEmpty)
+        .toSet()
+        .toList()..sort();
+    _cachedTypeValues = _cachedTransactions!
+        .map((tx) => tx['type'] as String? ?? '')
+        .where((t) => t.isNotEmpty)
+        .toSet()
+        .toList()..sort();
     return _cachedTransactions!;
   }
+
+  List<String> get playerNamesFromHistory => _cachedPlayerNames;
+  List<String> get typeValuesFromHistory => _cachedTypeValues;
 
   Future<BankLedgerResult> ensurePlayer(
     String playerId,
@@ -475,7 +501,7 @@ class BankLedgerService {
   Future<void> closeBankSession() async {
     await HiveService.settingsBox.delete(_accountsKey);
     await HiveService.settingsBox.delete(_transactionsKey);
-    _cachedTransactions = null;
+    _invalidateTxCache();
     await HiveService.settingsBox.delete(_bannedDevicesKey);
     await HiveService.settingsBox.delete(_bankSessionIdKey);
     await HiveService.settingsBox.delete(_heldTransfersKey);
@@ -499,6 +525,7 @@ class BankLedgerService {
   }
 
   Future<void> _saveAccount(BankPlayerAccount account) async {
+    _invalidateAccountCache();
     final accounts = _readAccounts();
     accounts[account.playerId] = account.toMap();
     await HiveService.settingsBox.put(_accountsKey, accounts);
@@ -526,7 +553,7 @@ class BankLedgerService {
       'metadata': metadata ?? <String, dynamic>{},
     });
     await HiveService.settingsBox.put(_transactionsKey, transactions);
-    _cachedTransactions = null;
+    _invalidateTxCache();
     await HiveService.txBox.put(
       id,
       TransactionModel(

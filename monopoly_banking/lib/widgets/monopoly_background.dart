@@ -35,9 +35,11 @@ class _MonopolyBackgroundState extends State<MonopolyBackground>
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (context, _) {
-        return CustomPaint(
-          painter: _MonopolyGridPainter(animationValue: _ctrl.value),
-          child: widget.child,
+        return RepaintBoundary(
+          child: CustomPaint(
+            painter: _MonopolyGridPainter(animationValue: _ctrl.value),
+            child: widget.child,
+          ),
         );
       },
     );
@@ -167,6 +169,6 @@ class _MonopolyGridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MonopolyGridPainter oldDelegate) {
-    return oldDelegate.animationValue != animationValue;
+    return (oldDelegate.animationValue - animationValue).abs() > 0.002;
   }
 }

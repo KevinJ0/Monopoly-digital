@@ -65,10 +65,12 @@ class _BankScreenState extends State<BankScreen>
   String? _historyFilterType;
   bool _historySortAscending = false;
   String _historySortBy = 'date';
+  List<_OpOption>? _cachedOps;
 
   List<_OpOption> get _operations {
+    if (_cachedOps != null) return _cachedOps!;
     final settings = BankSettingsService();
-    final built = <_OpOption>[
+    _cachedOps = <_OpOption>[
       const _OpOption(
           id: 'payment',
           label: 'Cobrar al jugador',
@@ -93,7 +95,7 @@ class _BankScreenState extends State<BankScreen>
           color: c.isGive ? kGreen : kRed,
         ),
     ];
-    return built;
+    return _cachedOps!;
   }
 
   @override
@@ -208,6 +210,7 @@ class _BankScreenState extends State<BankScreen>
       GameFadeRoute(page: BankSettingsScreen()),
     );
     if (changed == true && mounted) {
+      _cachedOps = null;
       setState(() {});
     }
   }

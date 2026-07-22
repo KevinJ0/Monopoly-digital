@@ -339,18 +339,8 @@ mixin _BankBuilders on State<BankScreen> {
   Widget _buildTransactionHistory() {
     final ledger = BankLedgerService();
     final all = ledger.transactionHistory;
-    final playerNames = all
-        .map((tx) => tx['playerId'] as String? ?? '')
-        .where((n) => n.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-    final typeValues = all
-        .map((tx) => tx['type'] as String? ?? '')
-        .where((t) => t.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final playerNames = ledger.playerNamesFromHistory;
+    final typeValues = ledger.typeValuesFromHistory;
     var filtered = all.where((tx) {
       if (_self._historyFilterPlayer != null &&
           tx['playerId'] != _self._historyFilterPlayer) {
