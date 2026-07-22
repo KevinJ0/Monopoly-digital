@@ -144,7 +144,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               opacity: _opacityAnimation,
               child: const Center(
                 child: Text(
-                  'v$kAppVersion',
+                  'BETA v$kAppVersion',
                   style: TextStyle(
                     color: Colors.white24,
                     fontSize: 12,

@@ -66,9 +66,7 @@ class WalletController extends ChangeNotifier {
     final bankTxId = payload['bankTxId'] as String?;
     if (bankTxId != null && HiveService.txBox.containsKey(bankTxId)) {
       debugPrint('[┊] APPLY_BANK EARLY: bankTxId=$bankTxId already processed — syncing notifiers from session');
-      if (session != null) {
-        _updateVaultNotifiers(session);
-      }
+      _updateVaultNotifiers(session);
       notifyListeners();
       return;
     }

@@ -159,15 +159,4 @@ mixin _PlayerConnection on State<PlayerScreen> {
       }
     }
   }
-
-  Future<void> _disconnectFromBank() async {
-    _self._userRequestedWsDisconnect = true;
-    _self._wsConnecting = false;
-    try {
-      await P2PService().wsTransport.stop();
-      if (mounted) _self._safeSetState(() {});
-    } finally {
-      _self._userRequestedWsDisconnect = false;
-    }
-  }
 }

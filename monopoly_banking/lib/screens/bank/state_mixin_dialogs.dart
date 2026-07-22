@@ -260,55 +260,6 @@ mixin _BankDialogs on State<BankScreen> {
     });
   }
 
-  Future<void> _showOperationWaitDialog({
-    required String title,
-    required String message,
-    required VoidCallback onCancel,
-  }) {
-    return showGameDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          title: Text(title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const AppSpinner(size: 22),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      message,
-                      style: const TextStyle(height: 1.35),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Esperando confirmación del jugador.',
-                style: TextStyle(color: kTextSecondary, fontSize: 12),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                SoundService.playClick();
-                onCancel();
-                Navigator.of(ctx).pop();
-              },
-              child: const Text('Cancelar'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Future<void> _send() async {
     SoundService.playClick();

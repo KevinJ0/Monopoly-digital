@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/services/bank_settings_service.dart';
-import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/core/game_transitions.dart';
 
 class BankSettingsScreen extends StatefulWidget {

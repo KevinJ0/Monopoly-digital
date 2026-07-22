@@ -21,8 +21,7 @@ mixin _WalletBuilders on State<WalletScreen> {
     final displayAvatar = _self._lastAvatarId ?? '';
     final displayBalance = _self._lastBalance ?? 0.0;
 
-    debugPrint(
-        '[┊] BANK_BUILD displayName=$displayName lastBalance=$displayBalance history=${history.length}');
+    debugPrint('[┊] BANK_BUILD displayName=$displayName lastBalance=$displayBalance history=${history.length}');
 
     return PopScope(
       canPop: false,
@@ -77,17 +76,17 @@ mixin _WalletBuilders on State<WalletScreen> {
                 SliverToBoxAdapter(
                   child: AnimatedEntry(
                     delay: const Duration(milliseconds: 300),
-                    child: _buildStatsRow(stats, displayColor),
-                  ),
-                ),
-                SliverToBoxAdapter(
-                  child: AnimatedEntry(
-                    delay: const Duration(milliseconds: 350),
                     child: WsBankPanel(
                       onReiniciarWs: () => _self._reiniciarWsServer(),
                       onStopWs: () => _self._detenerWsServer(),
                       onEnsureWsReady: _self._ensureWsReady,
                     ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: AnimatedEntry(
+                    delay: const Duration(milliseconds: 350),
+                    child: _buildStatsRow(stats, displayColor),
                   ),
                 ),
                 SliverToBoxAdapter(

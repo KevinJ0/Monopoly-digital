@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 
-import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/models/transaction_model.dart';
 import 'package:monopoly_banking/services/bank_settings_service.dart';
 import 'package:monopoly_banking/services/hive_service.dart';

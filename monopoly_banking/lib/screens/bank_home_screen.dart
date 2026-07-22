@@ -57,19 +57,11 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
 
   Widget _buildBottomNav() {
     return Container(
-      margin: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).padding.bottom + 12),
+      margin: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(context).padding.bottom),
       height: 66,
       decoration: BoxDecoration(
-        color: kBgCard.withValues(alpha: 0.9),
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: kBorder.withValues(alpha: 0.6)),
-        boxShadow: [
-          BoxShadow(
-            color: kGold.withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
-          ),
-        ],
       ),
       child: Row(
         children: List.generate(_tabs.length, (index) {
@@ -92,13 +84,9 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
                 curve: Curves.easeInOutCubic,
                 margin: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: selected
-                      ? kGold.withValues(alpha: 0.15)
-                      : Colors.transparent,
+                  color: selected ? kGold.withValues(alpha: 0.15) : Colors.transparent,
                   borderRadius: BorderRadius.circular(14),
-                  border: selected
-                      ? Border.all(color: kGold.withValues(alpha: 0.3))
-                      : null,
+                  border: selected ? Border.all(color: kGold.withValues(alpha: 0.3)) : null,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -109,17 +97,14 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
                       curve: Curves.easeOutBack,
                       child: index == 1
                           ? ValueListenableBuilder<int>(
-                              valueListenable:
-                                  BankLedgerService().heldTransfersCount,
+                              valueListenable: BankLedgerService().heldTransfersCount,
                               builder: (context, count, _) {
                                 return Stack(
                                   clipBehavior: Clip.none,
                                   children: [
                                     Icon(
                                       tab.icon,
-                                      color: selected
-                                          ? kGold
-                                          : kTextSecondary,
+                                      color: selected ? kGold : kTextSecondary,
                                       size: selected ? 22 : 20,
                                     ),
                                     if (count > 0)
@@ -130,15 +115,12 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
                                           tween: Tween(begin: 0, end: 1),
                                           duration: 300.ms,
                                           curve: Curves.elasticOut,
-                                          builder:
-                                              (context, scale, _) {
+                                          builder: (context, scale, _) {
                                             return Transform.scale(
                                               scale: scale,
                                               child: Container(
-                                                padding:
-                                                    const EdgeInsets.all(4),
-                                                decoration:
-                                                    const BoxDecoration(
+                                                padding: const EdgeInsets.all(4),
+                                                decoration: const BoxDecoration(
                                                   color: Colors.orange,
                                                   shape: BoxShape.circle,
                                                 ),
@@ -147,8 +129,7 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
                                                   style: const TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 9,
-                                                    fontWeight:
-                                                        FontWeight.w800,
+                                                    fontWeight: FontWeight.w800,
                                                   ),
                                                 ),
                                               ),
