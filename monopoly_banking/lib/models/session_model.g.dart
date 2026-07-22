@@ -31,6 +31,7 @@ class SessionModelAdapter extends TypeAdapter<SessionModel> {
       vaultGeneratedAmount: fields[12] == null ? 0.0 : fields[12] as double,
       vaultTargetPasses: fields[13] == null ? 0 : fields[13] as int,
       vaultCurrentPasses: fields[14] == null ? 0 : fields[14] as int,
+      maxTier: fields[15] == null ? 0 : fields[15] as int,
       balanceHistory: (fields[11] as List?)?.cast<double>(),
     );
   }
@@ -38,7 +39,7 @@ class SessionModelAdapter extends TypeAdapter<SessionModel> {
   @override
   void write(BinaryWriter writer, SessionModel obj) {
     writer
-      ..writeByte(15)
+      ..writeByte(16)
       ..writeByte(0)
       ..write(obj.role)
       ..writeByte(1)
@@ -68,7 +69,9 @@ class SessionModelAdapter extends TypeAdapter<SessionModel> {
       ..writeByte(13)
       ..write(obj.vaultTargetPasses)
       ..writeByte(14)
-      ..write(obj.vaultCurrentPasses);
+      ..write(obj.vaultCurrentPasses)
+      ..writeByte(15)
+      ..write(obj.maxTier);
   }
 
   @override

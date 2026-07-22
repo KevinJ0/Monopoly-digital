@@ -34,7 +34,7 @@ class PremiumCreditCard extends StatefulWidget {
 }
 
 class _PremiumCreditCardState extends State<PremiumCreditCard> {
-  static const double _tiltFactor = 17.0;
+  static const double _tiltFactor = 12.0;
   double _gyroX = 0.0;
   double _gyroY = 0.0;
   StreamSubscription<GyroscopeEvent>? _gyroSub;

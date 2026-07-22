@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/models/transaction_model.dart';
+import 'package:monopoly_banking/services/bank_settings_service.dart';
 
 class TransactionTile extends StatelessWidget {
   final TransactionModel tx;
@@ -41,7 +42,7 @@ class TransactionTile extends StatelessWidget {
           child: Icon(icon, color: color, size: 22),
         ),
         title: Text(
-          _labelFor(tx.type),
+          tx.label ?? _labelFor(tx.type),
           style: const TextStyle(
             color: kTextPrimary,
             fontWeight: FontWeight.w600,
@@ -67,6 +68,19 @@ class TransactionTile extends StatelessWidget {
   }
 
   _TransactionDirection _directionFor(String type) {
+    if (type.startsWith('custom_')) {
+      final customId = type.substring('custom_'.length);
+      final match = BankSettingsService()
+          .customOps
+          .where((c) => c.id == customId)
+          .firstOrNull;
+      if (match != null) {
+        return match.isGive
+            ? _TransactionDirection.received
+            : _TransactionDirection.sent;
+      }
+      return _TransactionDirection.neutral;
+    }
     return switch (type) {
       'received' ||
       'payment' ||
@@ -99,6 +113,18 @@ class TransactionTile extends StatelessWidget {
   }
 
   IconData _iconFor(String type) {
+    if (type.startsWith('custom_')) {
+      final customId = type.substring('custom_'.length);
+      final match = BankSettingsService()
+          .customOps
+          .where((c) => c.id == customId)
+          .firstOrNull;
+      if (match != null) {
+        return BankSettingsService.availableIcons[match.iconKey] ??
+            Icons.payments_rounded;
+      }
+      return Icons.payments_rounded;
+    }
     switch (type) {
       case 'passGo':
       case 'bank_pass_go_sent':
@@ -146,6 +172,14 @@ class TransactionTile extends StatelessWidget {
   }
 
   String _labelFor(String type) {
+    if (type.startsWith('custom_')) {
+      final customId = type.substring('custom_'.length);
+      final match = BankSettingsService()
+          .customOps
+          .where((c) => c.id == customId)
+          .firstOrNull;
+      return match?.name ?? 'Operación personalizada';
+    }
     switch (type) {
       case 'passGo':
       case 'bank_pass_go_sent':

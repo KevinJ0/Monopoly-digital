@@ -608,6 +608,14 @@ mixin _PlayerBuilders on State<PlayerScreen> {
   }
 
   String _walletTypeLabel(String type) {
+    if (type.startsWith('custom_')) {
+      final customId = type.substring('custom_'.length);
+      final match = BankSettingsService()
+          .customOps
+          .where((c) => c.id == customId)
+          .firstOrNull;
+      return match?.name ?? 'Operación personalizada';
+    }
     return switch (type) {
       'passGo' || 'bank_pass_go_sent' => 'Pasar por GO',
       'received' || 'bank_payment_sent' => 'Recibido',

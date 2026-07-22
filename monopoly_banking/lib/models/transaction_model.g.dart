@@ -23,13 +23,14 @@ class TransactionModelAdapter extends TypeAdapter<TransactionModel> {
       timestamp: fields[3] as DateTime,
       counterpartyId: fields[4] as String?,
       balanceAfter: fields[5] as double,
+      label: fields[6] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, TransactionModel obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(7)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +42,9 @@ class TransactionModelAdapter extends TypeAdapter<TransactionModel> {
       ..writeByte(4)
       ..write(obj.counterpartyId)
       ..writeByte(5)
-      ..write(obj.balanceAfter);
+      ..write(obj.balanceAfter)
+      ..writeByte(6)
+      ..write(obj.label);
   }
 
   @override

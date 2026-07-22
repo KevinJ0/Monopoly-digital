@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:monopoly_banking/core/constants.dart';
+import 'package:monopoly_banking/services/bank_settings_service.dart';
 import 'package:monopoly_banking/services/transports/ws_models.dart';
 
 class PlayerInfoView extends StatelessWidget {
@@ -126,6 +127,18 @@ class PlayerInfoView extends StatelessWidget {
   }
 
   IconData _txIcon(String type) {
+    if (type.startsWith('custom_')) {
+      final customId = type.substring('custom_'.length);
+      final match = BankSettingsService()
+          .customOps
+          .where((c) => c.id == customId)
+          .firstOrNull;
+      if (match != null) {
+        return BankSettingsService.availableIcons[match.iconKey] ??
+            Icons.payments_rounded;
+      }
+      return Icons.payments_rounded;
+    }
     if (type.contains('passGo')) return Icons.flag_rounded;
     if (type.contains('invest')) return Icons.trending_up_rounded;
     if (type.contains('withdraw')) return Icons.account_balance_wallet_rounded;
@@ -136,6 +149,17 @@ class PlayerInfoView extends StatelessWidget {
   }
 
   Color _txColor(String type) {
+    if (type.startsWith('custom_')) {
+      final customId = type.substring('custom_'.length);
+      final match = BankSettingsService()
+          .customOps
+          .where((c) => c.id == customId)
+          .firstOrNull;
+      if (match != null) {
+        return match.isGive ? kGreen : kRed;
+      }
+      return kGold;
+    }
     if (type.contains('charge')) return kRed;
     if (type.contains('withdraw')) return kRed;
     if (type.contains('passGo')) return kGold;
@@ -145,6 +169,14 @@ class PlayerInfoView extends StatelessWidget {
   }
 
   String _txLabel(String type) {
+    if (type.startsWith('custom_')) {
+      final customId = type.substring('custom_'.length);
+      final match = BankSettingsService()
+          .customOps
+          .where((c) => c.id == customId)
+          .firstOrNull;
+      return match?.name ?? 'Operación personalizada';
+    }
     if (type.contains('passGo')) return 'Paso por GO';
     if (type.contains('invest')) return 'Inversión';
     if (type.contains('withdraw')) return 'Retiro de inversión';

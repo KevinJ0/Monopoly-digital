@@ -119,6 +119,7 @@ class WalletController extends ChangeNotifier {
           amount: amount,
           balanceAfter: session.balance,
           counterpartyId: payload['counterpartyId'] as String?,
+          label: payload['customOpName'] as String?,
         );
       }
     }
@@ -198,6 +199,7 @@ class WalletController extends ChangeNotifier {
     required double amount,
     required double balanceAfter,
     String? counterpartyId,
+    String? label,
   }) {
     final tx = TransactionModel(
       id: id ?? _uuid.v4(),
@@ -206,6 +208,7 @@ class WalletController extends ChangeNotifier {
       timestamp: DateTime.now(),
       counterpartyId: counterpartyId,
       balanceAfter: balanceAfter,
+      label: label,
     );
     HiveService.txBox.put(tx.id, tx);
   }

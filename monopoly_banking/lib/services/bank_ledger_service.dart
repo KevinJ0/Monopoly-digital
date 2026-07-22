@@ -171,6 +171,7 @@ class BankLedgerService {
   final ValueNotifier<int> statsRevision = ValueNotifier<int>(0);
   final ValueNotifier<int> heldTransfersCount = ValueNotifier<int>(0);
   String? _cachedBankSessionId;
+  List<Map<String, dynamic>>? _cachedTransactions;
 
   static const _accountsKey = 'bank_ledger_accounts_v1';
   static const _transactionsKey = 'bank_ledger_transactions_v1';
@@ -215,7 +216,11 @@ class BankLedgerService {
     return null;
   }
 
-  List<Map<String, dynamic>> get transactionHistory => _readTransactions();
+  List<Map<String, dynamic>> get transactionHistory {
+    if (_cachedTransactions != null) return _cachedTransactions!;
+    _cachedTransactions = _readTransactions();
+    return _cachedTransactions!;
+  }
 
   Future<BankLedgerResult> ensurePlayer(
     String playerId,
@@ -470,6 +475,7 @@ class BankLedgerService {
   Future<void> closeBankSession() async {
     await HiveService.settingsBox.delete(_accountsKey);
     await HiveService.settingsBox.delete(_transactionsKey);
+    _cachedTransactions = null;
     await HiveService.settingsBox.delete(_bannedDevicesKey);
     await HiveService.settingsBox.delete(_bankSessionIdKey);
     await HiveService.settingsBox.delete(_heldTransfersKey);
@@ -520,6 +526,7 @@ class BankLedgerService {
       'metadata': metadata ?? <String, dynamic>{},
     });
     await HiveService.settingsBox.put(_transactionsKey, transactions);
+    _cachedTransactions = null;
     await HiveService.txBox.put(
       id,
       TransactionModel(

@@ -9,8 +9,7 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
   late Animation<double> _opacityAnimation;
@@ -28,9 +27,7 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     _opacityAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-          parent: _controller,
-          curve: const Interval(0.0, 0.5, curve: Curves.easeIn)),
+      CurvedAnimation(parent: _controller, curve: const Interval(0.0, 0.5, curve: Curves.easeIn)),
     );
 
     _controller.forward();
@@ -96,10 +93,15 @@ class _SplashScreenState extends State<SplashScreen>
                                 ],
                               ),
                             ),
-                            Image.asset(
-                              'assets/icon/app_icon.png',
-                              height: 80,
-                              fit: BoxFit.contain,
+                            Container(
+                              child: ClipOval(
+                                child: Image.asset(
+                                  'assets/icon/app_icon.png',
+                                  height: 80,
+                                  width: 80,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
                             ),
                           ],
                         ),

@@ -15,6 +15,7 @@ import 'package:monopoly_banking/screens/kicked_screen.dart';
 import 'package:monopoly_banking/screens/onboarding_screen.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 import 'package:monopoly_banking/services/bank_ledger_service.dart';
+import 'package:monopoly_banking/services/bank_settings_service.dart';
 import 'package:monopoly_banking/services/device_identity_service.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';

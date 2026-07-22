@@ -393,7 +393,9 @@ mixin _BankDialogs on State<BankScreen> {
             fixedAmount,
             type: 'custom_$customId',
           );
-          await _self._sendToConnectedPlayer(result.toClientPayload());
+          final payload = result.toClientPayload();
+          if (opName != null) payload['customOpName'] = opName;
+          await _self._sendToConnectedPlayer(payload);
           SoundService.playSuccess();
           HapticFeedback.mediumImpact();
           NotificationService().show(
@@ -443,7 +445,9 @@ mixin _BankDialogs on State<BankScreen> {
             fixedAmount,
             type: 'custom_$customId',
           );
-          await _self._sendToConnectedPlayer(result.toClientPayload());
+          final payload = result.toClientPayload();
+          if (opName != null) payload['customOpName'] = opName;
+          await _self._sendToConnectedPlayer(payload);
           SoundService.playSadTrombone();
           HapticFeedback.heavyImpact();
           NotificationService().show(

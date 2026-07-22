@@ -22,6 +22,9 @@ class TransactionModel extends HiveObject {
   @HiveField(5)
   final double balanceAfter;
 
+  @HiveField(6)
+  final String? label;
+
   TransactionModel({
     required this.id,
     required this.type,
@@ -29,5 +32,6 @@ class TransactionModel extends HiveObject {
     required this.timestamp,
     this.counterpartyId,
     required this.balanceAfter,
+    this.label,
   });
 }

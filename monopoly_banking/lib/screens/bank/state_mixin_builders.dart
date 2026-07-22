@@ -1104,6 +1104,7 @@ mixin _BankBuilders on State<BankScreen> {
         return BankSettingsService.availableIcons[match.iconKey] ??
             Icons.payments_rounded;
       }
+      return Icons.payments_rounded;
     }
     return switch (type) {
       'payment' || 'bank_payment_sent' => Icons.arrow_downward_rounded,
@@ -1130,7 +1131,10 @@ mixin _BankBuilders on State<BankScreen> {
           .customOps
           .where((c) => c.id == customId)
           .firstOrNull;
-      return match?.isGive == true ? kGreen : kRed;
+      if (match != null) {
+        return match.isGive ? kGreen : kRed;
+      }
+      return kGold;
     }
     return switch (type) {
       'payment' || 'bank_payment_sent' || 'passGo' || 'bank_pass_go_sent' || 'transfer_received' || 'bank_transfer_received' || 'bank_transfer_delivered' => kGreen,
