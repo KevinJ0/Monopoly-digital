@@ -263,33 +263,12 @@ mixin _WalletIncoming on State<WalletScreen> {
     });
   }
 
-  bool _isPayloadForPlayer(Map<String, dynamic> payload, String playerId) {
-    if (playerId.isEmpty) return true;
-    final target = payload['targetPlayerId'] as String?;
-    return target == null || target == playerId;
-  }
-
-  void _setClientIdentity() {
-    final session = context.read<SessionProvider>();
-    P2PService().wsTransport.sendIdentity(
-      name: session.name,
-      avatarId: session.avatarId,
-      colorId: session.colorId,
-      deviceInstallationId: DeviceIdentityService.installationId,
-      isHandshakeDone: session.isHandshakeDone,
-    );
-  }
-
   String? _connectedPlayerIdForPayload(Map<String, dynamic> payload) {
     final claimed = payload['playerId'] as String?;
     if (claimed?.trim().isNotEmpty == true) return claimed!.trim();
     final fromPlayer = payload['fromPlayerId'] as String?;
     if (fromPlayer?.trim().isNotEmpty == true) return fromPlayer!.trim();
     return null;
-  }
-
-  TransportType _transportForIncomingPayload(Map<String, dynamic> payload) {
-    return TransportType.ws;
   }
 
   Future<void> _handleBankOperationRequest(Map<String, dynamic> payload) async {
@@ -407,23 +386,6 @@ mixin _WalletIncoming on State<WalletScreen> {
     };
     P2PService().setTransport(transportType);
     await P2PService().sendPayload(payload);
-  }
-
-  Future<void> _showBankOperationError(String message) async {
-    if (!mounted) return;
-    await showGameDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Operaci\u00f3n rechazada'),
-        content: Text(message),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Entendido'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _handleBankTransferHoldRequest(

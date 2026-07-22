@@ -393,12 +393,6 @@ mixin _WalletBuilders on State<WalletScreen> {
     );
   }
 
-  Future<void> _triggerWelcomeAnimation(String? name) async {
-    _self._showWelcome = true;
-    if (mounted) setState(() {});
-    _self._welcomeCtrl.forward(from: 0);
-  }
-
   Future<void> _hideWelcome() async {
     await _self._welcomeCtrl.reverse();
     if (mounted) setState(() => _self._showWelcome = false);

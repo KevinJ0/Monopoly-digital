@@ -54,9 +54,7 @@ class _BankScreenState extends State<BankScreen>
   final _amountCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _sending = false;
-  bool _transferHoldDialogOpen = false;
   String _selectedOp = 'payment';
-  String _connectedPlayerName = 'Jugador';
   StreamSubscription<Map<String, dynamic>>? _payloadSub;
   final Map<String, Completer<Map<String, dynamic>>> _pendingDeliveryAcks = {};
   late final AnimationController _slideCtrl;
@@ -160,7 +158,6 @@ class _BankScreenState extends State<BankScreen>
             dedupeKey: 'ws-connected:$name',
           );
         }
-        _connectedPlayerName = name;
       }
     }, onError: (e, s) {
       if (mounted) context.showFriendlyError(e, s);

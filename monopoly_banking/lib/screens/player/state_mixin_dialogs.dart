@@ -103,7 +103,7 @@ mixin _PlayerDialogs on State<PlayerScreen> {
     } finally {
       _self._dialogActive = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!amountCtrl.hasListeners) amountCtrl.dispose();
+        amountCtrl.dispose();
       });
     }
   }

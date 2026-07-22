@@ -182,13 +182,6 @@ mixin _BankConnection on State<BankScreen> {
       excludePlayerId: excludePlayerId,
     );
   }
-
-  String _playerNameLabel() {
-    final knownName = _self._connectedPlayerName.trim();
-    if (knownName.isNotEmpty && knownName != 'Jugador') return knownName;
-    return 'Jugador';
-  }
-
   String _operationWaitTitle() {
     return switch (_self._selectedOp) {
       'passGo' => 'Esperando Pass GO',

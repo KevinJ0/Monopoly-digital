@@ -2,21 +2,6 @@ part of '../wallet_screen.dart';
 
 mixin _WalletDialogs on State<WalletScreen> {
   _WalletScreenState get _self => this as _WalletScreenState;
-  void _showToast(String msg, Color color) {
-    NotificationService().show(msg, backgroundColor: color);
-  }
-
-  void _safeSetState(VoidCallback fn) {
-    if (!mounted) return;
-    if (_self._dialogActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(fn);
-      });
-    } else {
-      setState(fn);
-    }
-  }
-
   Future<void> _safeShowFriendlyError(dynamic error, [StackTrace? stack]) async {
     final friendly = await ErrorTranslatorService().translate(error, stack);
     if (!mounted) return;
