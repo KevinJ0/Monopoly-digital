@@ -97,9 +97,7 @@ class _WsBankPanelState extends State<WsBankPanel> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: active ? accent : kBorder,
-                                boxShadow: active
-                                    ? [BoxShadow(color: accent.withValues(alpha: 0.6), blurRadius: 8, spreadRadius: 2)]
-                                    : null,
+                                boxShadow: active ? [BoxShadow(color: accent.withValues(alpha: 0.6), blurRadius: 8, spreadRadius: 2)] : null,
                               ),
                             ),
                           ],
@@ -110,30 +108,6 @@ class _WsBankPanelState extends State<WsBankPanel> {
                           child: active
                               ? Column(
                                   children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 12),
-                                      decoration: BoxDecoration(
-                                        color: accent.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: accent.withValues(alpha: 0.35)),
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(connected ? Icons.link_rounded : Icons.sensors_rounded, color: accent, size: 16),
-                                          const SizedBox(width: 8),
-                                          Flexible(
-                                            child: Text(
-                                              connected ? 'Listo para operar con el jugador' : 'Activo autom\u00e1ticamente',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(color: accent, fontWeight: FontWeight.w800),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
                                     Row(
                                       children: [
                                         Expanded(
@@ -144,7 +118,8 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                               final confirm = await _confirm(
                                                 context: context,
                                                 title: 'Detener servidor',
-                                                message: '\u00bfEst\u00e1s seguro de que deseas detener el servidor WS? Se desconectar\u00e1n todos los jugadores.',
+                                                message:
+                                                    '\u00bfEst\u00e1s seguro de que deseas detener el servidor WS? Se desconectar\u00e1n todos los jugadores.',
                                                 confirmLabel: 'Detener',
                                               );
                                               if (confirm != true) return;
@@ -168,7 +143,8 @@ class _WsBankPanelState extends State<WsBankPanel> {
                                               final confirm = await _confirm(
                                                 context: context,
                                                 title: 'Reiniciar servidor',
-                                                message: '\u00bfEst\u00e1s seguro de que deseas reiniciar el servidor WS? Se desconectar\u00e1n todos los jugadores temporalmente.',
+                                                message:
+                                                    '\u00bfEst\u00e1s seguro de que deseas reiniciar el servidor WS? Se desconectar\u00e1n todos los jugadores temporalmente.',
                                                 confirmLabel: 'Reiniciar',
                                               );
                                               if (confirm != true) return;

@@ -86,7 +86,6 @@ class _AnimatedPlayersBackdropState extends State<AnimatedPlayersBackdrop>
           .toList();
 
       if (colors.isEmpty) colors.add(widget.bankColor);
-      colors.add(const Color(0xFFE53935)); // rojo de prueba
       _palette = colors;
 
       debugPrint('[AnimatedPlayersBackdrop] palette=${colors.length} colors, starting cycle');
@@ -96,7 +95,7 @@ class _AnimatedPlayersBackdropState extends State<AnimatedPlayersBackdrop>
         ..repeat();
     } catch (e) {
       debugPrint('[AnimatedPlayersBackdrop] error: $e');
-      _palette = [widget.bankColor, const Color(0xFFE53935)];
+      _palette = [widget.bankColor];
       _cycleCtrl
         ..stop()
         ..duration = Duration(milliseconds: _palette.length * (_crossfadeMs + _holdMs))
