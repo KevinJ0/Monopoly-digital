@@ -1,9 +1,9 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/services/bank_settings_service.dart';
 import 'package:monopoly_banking/core/game_transitions.dart';
+import 'package:monopoly_banking/screens/bank/custom_op_screen.dart';
 
 class BankSettingsScreen extends StatefulWidget {
   const BankSettingsScreen({super.key});
@@ -377,7 +377,9 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
   }
 
   Future<void> _addCustomOp() async {
-    final result = await _showCustomOpDialog();
+    final result = await Navigator.of(context).push<dynamic>(
+      GameFadeRoute(page: const CustomOpScreen()),
+    ) as CustomOperation?;
     if (result != null) {
       setState(() => _settings.customOps.add(result));
       await _settings.save();
@@ -386,7 +388,9 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
 
   Future<void> _editCustomOp(int index) async {
     final op = _settings.customOps[index];
-    final result = await _showCustomOpDialog(existing: op);
+    final result = await Navigator.of(context).push<dynamic>(
+      GameFadeRoute(page: CustomOpScreen(existing: op)),
+    ) as CustomOperation?;
     if (result != null) {
       setState(() => _settings.customOps[index] = result);
       await _settings.save();
@@ -424,268 +428,4 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
     }
   }
 
-  Future<CustomOperation?> _showCustomOpDialog({CustomOperation? existing}) async {
-    final nameCtrl =
-        TextEditingController(text: existing?.name ?? '');
-    final amountCtrl = TextEditingController(
-        text: existing != null ? existing.amount.round().toString() : '');
-    final isGive = ValueNotifier<bool>(existing?.isGive ?? true);
-    final selectedIcon = ValueNotifier<String>(existing?.iconKey ?? 'payments_rounded');
-
-    final saved = await showGameDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          backgroundColor: kBgCard,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(existing != null ? 'Editar operación' : 'Nueva operación',
-              style: const TextStyle(
-                  color: kTextPrimary,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 17)),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Nombre',
-                      style:
-                          TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: nameCtrl,
-                    style: const TextStyle(color: kTextPrimary, fontSize: 15),
-                    decoration: InputDecoration(
-                      hintText: 'Ej: Compra de propiedad',
-                      hintStyle: const TextStyle(color: kBorder),
-                      filled: true,
-                      fillColor: Colors.black26,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: kBorder),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: kBorder),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: kGold, width: 1.5),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('MONTO',
-                      style:
-                          TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: amountCtrl,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    style: const TextStyle(
-                        color: kGold, fontSize: 22, fontWeight: FontWeight.w800),
-                    decoration: InputDecoration(
-                      prefixText: '\$ ',
-                      prefixStyle: const TextStyle(
-                          color: kGold,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800),
-                      filled: true,
-                      fillColor: Colors.black26,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 14),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: kBorder),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: kBorder),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: kGold, width: 1.5),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('TIPO',
-                      style:
-                          TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2)),
-                  const SizedBox(height: 8),
-                  ValueListenableBuilder<bool>(
-                    valueListenable: isGive,
-                    builder: (_, give, __) => Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => isGive.value = true,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                color: give
-                                    ? kGreen.withValues(alpha: 0.15)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: give ? kGreen : kBorder,
-                                  width: give ? 1.5 : 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.add_circle_outline_rounded,
-                                      color: give ? kGreen : kTextSecondary,
-                                      size: 20),
-                                  const SizedBox(width: 8),
-                                  Text('Dar',
-                                      style: TextStyle(
-                                          color: give ? kGreen : kTextSecondary,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => isGive.value = false,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              decoration: BoxDecoration(
-                                color: !give
-                                    ? kRed.withValues(alpha: 0.15)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                  color: !give ? kRed : kBorder,
-                                  width: !give ? 1.5 : 1,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.remove_circle_outline_rounded,
-                                      color: !give ? kRed : kTextSecondary,
-                                      size: 20),
-                                  const SizedBox(width: 8),
-                                  Text('Quitar',
-                                      style: TextStyle(
-                                          color: !give ? kRed : kTextSecondary,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 14)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text('ICONO',
-                      style:
-                          TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2)),
-                  const SizedBox(height: 8),
-                  ValueListenableBuilder<String>(
-                    valueListenable: selectedIcon,
-                    builder: (_, iconKey, __) {
-                      final entries = BankSettingsService.availableIcons.entries.toList();
-                      final itemsPerRow = 6;
-                      final rows = <List<MapEntry<String, IconData>>>[];
-                      for (var i = 0; i < entries.length; i += itemsPerRow) {
-                        rows.add(
-                            entries.sublist(i, min(i + itemsPerRow, entries.length)));
-                      }
-                      return Column(
-                        children: rows.map((row) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Row(
-                              children: row.map((entry) {
-                                final selected = entry.key == iconKey;
-                                return Expanded(
-                                  child: GestureDetector(
-                                    onTap: () => selectedIcon.value = entry.key,
-                                    child: Container(
-                                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                                      padding: const EdgeInsets.symmetric(vertical: 10),
-                                      decoration: BoxDecoration(
-                                        color: selected
-                                            ? kGold.withValues(alpha: 0.15)
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: selected ? kGold : kBorder,
-                                          width: selected ? 1.5 : 1,
-                                        ),
-                                      ),
-                                      child: Icon(entry.value,
-                                          color: selected ? kGold : kTextSecondary,
-                                          size: 22),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancelar',
-                  style: TextStyle(color: kTextSecondary)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final name = nameCtrl.text.trim();
-                final amountText = amountCtrl.text.trim();
-                if (name.isEmpty || amountText.isEmpty) return;
-                final amount = double.tryParse(amountText) ?? 0;
-                if (amount <= 0) return;
-                Navigator.of(ctx).pop(true);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kGold,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-              ),
-              child: const Text('Guardar',
-                  style: TextStyle(fontWeight: FontWeight.w800)),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (saved != true) return null;
-
-    final id = existing?.id ?? 'custom_${DateTime.now().millisecondsSinceEpoch}';
-    final amount = double.tryParse(amountCtrl.text.trim()) ?? 0;
-    return CustomOperation(
-      id: id,
-      name: nameCtrl.text.trim(),
-      amount: amount,
-      isGive: isGive.value,
-      iconKey: selectedIcon.value,
-    );
-  }
 }
