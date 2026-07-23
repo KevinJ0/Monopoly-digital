@@ -79,7 +79,9 @@ mixin _PlayerIncoming on State<PlayerScreen> {
         try {
           await WidgetsBinding.instance.endOfFrame
               .timeout(const Duration(seconds: 1));
-        } on TimeoutException {}
+        } on TimeoutException {
+          // Ignorado intencionalmente
+        }
         try {
           await P2PService().sendPayload({
             'type': 'handshake_confirm',
@@ -89,7 +91,9 @@ mixin _PlayerIncoming on State<PlayerScreen> {
             'appliedBalance': wallet.balance,
             'deviceInstallationId': DeviceIdentityService.installationId,
           });
-        } on TransportUnavailableException {}
+        } on TransportUnavailableException {
+          // Ignorado intencionalmente
+        }
       } else if (type == 'bank_state') {
         debugPrint('[PLAYER] bank_state received isHandshakeDone=${session.isHandshakeDone} targetPlayerId=${payload['targetPlayerId']} myName=${session.name} balance=${payload['balance']}');
         if (!session.isHandshakeDone) {
@@ -107,7 +111,9 @@ mixin _PlayerIncoming on State<PlayerScreen> {
           try {
             await WidgetsBinding.instance.endOfFrame
                 .timeout(const Duration(seconds: 1));
-          } on TimeoutException {}
+          } on TimeoutException {
+            // Ignorado intencionalmente
+          }
           try {
             await P2PService().sendPayload({
               'type': 'bank_state_ack',
@@ -185,8 +191,14 @@ mixin _PlayerIncoming on State<PlayerScreen> {
           ),
         );
       } else if (type == 'new_player') {
+        if (session.isHandshakeDone) {
+          debugPrint('[PLAYER] new_player SKIPPED: already in a session');
+          return;
+        }
         debugPrint('[PLAYER] new_player received, showing onboarding');
-        final result = await Navigator.of(context).push<Map<String, dynamic>>(
+        if (!mounted) return;
+        final nav = Navigator.of(context);
+        final result = await nav.push<Map<String, dynamic>>(
           MaterialPageRoute(builder: (_) => const OnboardingScreen()),
         );
         if (result == null || !mounted) {

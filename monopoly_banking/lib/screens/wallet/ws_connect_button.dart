@@ -489,6 +489,7 @@ class _QrScannerPageState extends State<_QrScannerPage> {
             key: _qrKey,
             onQRViewCreated: (controller) {
               _qrController = controller;
+              final nav = Navigator.of(context);
               controller.scannedDataStream.firstWhere(
                 (barcode) =>
                     barcode.code != null &&
@@ -501,7 +502,7 @@ class _QrScannerPageState extends State<_QrScannerPage> {
                 final ip = parts[0];
                 final port =
                     parts.length > 1 ? int.tryParse(parts[1]) ?? 8080 : 8080;
-                Navigator.of(context).pop();
+                nav.pop();
                 widget.onScan(ip, port);
               });
             },

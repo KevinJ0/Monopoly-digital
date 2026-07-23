@@ -110,6 +110,7 @@ mixin _WalletIncoming on State<WalletScreen> {
             P2PService().setTransport(TransportType.ws);
             await P2PService().sendPayload({
               'type': 'new_player',
+              'targetInstallationId': deviceInstallationId,
               'deviceInstallationId': deviceInstallationId,
             });
           }

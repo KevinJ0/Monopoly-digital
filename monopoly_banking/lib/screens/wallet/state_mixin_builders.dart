@@ -30,22 +30,17 @@ mixin _WalletBuilders on State<WalletScreen> {
         _self._confirmExit(session);
       },
       child: Scaffold(
-        backgroundColor: kBgDark,
+        backgroundColor: Colors.transparent,
         body: SafeArea(
-          child: MonopolyBackground(
-            child: PlayerColorBackdrop(
-              color: displayColor,
-              child: _buildGameView(
-                wallet: wallet,
-                session: session,
-                stats: stats,
-                history: history,
-                displayColor: displayColor,
-                displayName: displayName,
-                displayAvatar: displayAvatar,
-                displayBalance: displayBalance,
-              ),
-            ),
+          child: _buildGameView(
+            wallet: wallet,
+            session: session,
+            stats: stats,
+            history: history,
+            displayColor: displayColor,
+            displayName: displayName,
+            displayAvatar: displayAvatar,
+            displayBalance: displayBalance,
           ),
         ),
       ),
@@ -63,6 +58,20 @@ mixin _WalletBuilders on State<WalletScreen> {
     required double displayBalance,
   }) {
     debugPrint('[┊] BANK_GAME_VIEW BUILDING displayName=$displayName history=${history.length}');
+
+    final filteredHistory = (() {
+      var result = _self._walletFilterType != null ? history.where((tx) => tx.type == _self._walletFilterType).toList() : history.toList();
+      result.sort((a, b) {
+        int cmp;
+        if (_self._walletSortBy == 'amount') {
+          cmp = a.amount.compareTo(b.amount);
+        } else {
+          cmp = a.timestamp.compareTo(b.timestamp);
+        }
+        return _self._walletSortAscending ? cmp : -cmp;
+      });
+      return result;
+    })();
 
     return Stack(
       key: const ValueKey('gameView'),
@@ -85,13 +94,13 @@ mixin _WalletBuilders on State<WalletScreen> {
                 ),
                 SliverToBoxAdapter(
                   child: AnimatedEntry(
-                    delay: const Duration(milliseconds: 350),
+                    delay: const Duration(milliseconds: 450),
                     child: _buildStatsRow(stats, displayColor),
                   ),
                 ),
                 SliverToBoxAdapter(
                   child: AnimatedEntry(
-                    delay: const Duration(milliseconds: 450),
+                    delay: const Duration(milliseconds: 500),
                     child: ConnectedPlayersPanel(
                       color: displayColor,
                       onPlayerTap: _self._showPlayerInfoDialog,
@@ -107,44 +116,65 @@ mixin _WalletBuilders on State<WalletScreen> {
                 if (history.isNotEmpty)
                   SliverToBoxAdapter(
                     child: AnimatedEntry(
-                      delay: const Duration(milliseconds: 500),
+                      delay: const Duration(milliseconds: 550),
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
-                        child: Row(
+                        padding: const EdgeInsets.fromLTRB(16, 32, 16, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'HISTORIAL',
-                              style: TextStyle(
-                                color: kTextSecondary,
-                                fontSize: 12,
-                                letterSpacing: 2,
-                                fontWeight: FontWeight.w600,
-                              ),
+                            Row(
+                              children: [
+                                const Text(
+                                  'HISTORIAL',
+                                  style: TextStyle(
+                                    color: kTextSecondary,
+                                    fontSize: 12,
+                                    letterSpacing: 2,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: kBgCard,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${filteredHistory.length}',
+                                    style: const TextStyle(color: kTextSecondary, fontSize: 11),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: kBgCard,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '${history.length}',
-                                style: const TextStyle(color: kTextSecondary, fontSize: 11),
-                              ),
-                            ),
+                            const SizedBox(height: 10),
+                            _buildWalletHistoryControls(history),
                           ],
                         ),
                       ),
                     ),
                   ),
-                if (history.isEmpty)
+                if (filteredHistory.isEmpty && history.isNotEmpty)
+                  const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.search_off_rounded, color: Color(0xFF4B5563), size: 48),
+                          SizedBox(height: 12),
+                          Text('Sin coincidencias', style: TextStyle(color: kTextSecondary)),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (history.isEmpty)
                   const SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          SizedBox(height: 24),
                           Icon(Icons.receipt_long_rounded, color: Color(0xFF4B5563), size: 48),
                           SizedBox(height: 12),
                           Text(
@@ -158,8 +188,8 @@ mixin _WalletBuilders on State<WalletScreen> {
                 else
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
-                      (_, i) => TransactionTile(tx: history[i]),
-                      childCount: history.length,
+                      (_, i) => TransactionTile(tx: filteredHistory[i]),
+                      childCount: filteredHistory.length,
                     ),
                   ),
                 SliverToBoxAdapter(
@@ -400,5 +430,92 @@ mixin _WalletBuilders on State<WalletScreen> {
 
   String _compact(double val) {
     return formatMoney(val);
+  }
+
+  Widget _buildWalletHistoryControls(List<TransactionModel> history) {
+    final typeValues = history.map((tx) => tx.type).where((t) => t.isNotEmpty).toSet().toList()..sort();
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(color: kBgCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                isExpanded: true,
+                value: _self._walletFilterType,
+                hint: const Text('Todos los tipos', style: TextStyle(color: kTextSecondary, fontSize: 12)),
+                dropdownColor: kBgCard,
+                items: [
+                  const DropdownMenuItem(value: null, child: Text('Todos los tipos', style: TextStyle(color: kTextPrimary, fontSize: 12))),
+                  ...typeValues.map((t) => DropdownMenuItem(
+                        value: t,
+                        child: Text(_walletTypeLabel(t), style: const TextStyle(color: kTextPrimary, fontSize: 12)),
+                      )),
+                ],
+                onChanged: (v) => setState(() => _self._walletFilterType = v),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(color: kBgCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                value: _self._walletSortBy,
+                dropdownColor: kBgCard,
+                items: const [
+                  DropdownMenuItem(value: 'date', child: Text('Ordenar por fecha', style: TextStyle(color: kTextPrimary, fontSize: 12))),
+                  DropdownMenuItem(value: 'amount', child: Text('Ordenar por monto', style: TextStyle(color: kTextPrimary, fontSize: 12))),
+                ],
+                onChanged: (v) => setState(() => _self._walletSortBy = v!),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: () => setState(() => _self._walletSortAscending = !_self._walletSortAscending),
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: kBgCard, borderRadius: BorderRadius.circular(12), border: Border.all(color: kBorder)),
+            child: Icon(
+              _self._walletSortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              color: kTextSecondary,
+              size: 18,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _walletTypeLabel(String type) {
+    if (type.startsWith('custom_')) {
+      final customId = type.substring('custom_'.length);
+      final match = BankSettingsService().customOps.where((c) => c.id == customId).firstOrNull;
+      return match?.name ?? 'Operaci\u00f3n personalizada';
+    }
+    return switch (type) {
+      'passGo' || 'bank_pass_go_sent' => 'Pasar por GO',
+      'received' || 'bank_payment_sent' => 'Recibido',
+      'payment' || 'bank_charge_received' => 'Cobro',
+      'charge' || 'sync_debit' || 'bank_sync_debit' => 'Cargado',
+      'transfer_received' || 'bank_transfer_received' || 'bank_transfer_delivered' => 'Transferencia recibida',
+      'transfer_held' || 'bank_transfer_held' => 'Retenido',
+      'transfer_cancelled' || 'bank_transfer_cancelled' => 'Devuelto',
+      'handshake_initial' || 'bank_player_joined' => 'Vinculaci\u00f3n',
+      'handshake_reconnect' || 'handshake_restore' || 'bank_player_reconnected' => 'Reconexi\u00f3n',
+      'investment_opened' || 'bank_investment_opened' => 'Inversi\u00f3n iniciada',
+      'investment_completed' || 'bank_investment_completed' => 'Inversi\u00f3n completada',
+      'investment_early_withdrawal' || 'bank_investment_early_withdrawal' => 'Retiro de inversi\u00f3n',
+      'bankruptcy' || 'bank_bankruptcy' => 'Bancarrota',
+      'sync_credit' || 'bank_sync_credit' => 'Sincronizaci\u00f3n',
+      _ => type,
+    };
   }
 }

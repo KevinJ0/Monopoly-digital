@@ -48,10 +48,14 @@ class GameScaleRoute extends PageRouteBuilder {
 
 class GameFadeRoute extends PageRouteBuilder {
   final Widget page;
-  final Color? barrierColor;
+  final Color? _barrierColor;
 
-  GameFadeRoute({required this.page, this.barrierColor})
-      : super(
+  @override
+  Color? get barrierColor => _barrierColor;
+
+  GameFadeRoute({required this.page, Color? barrierColor})
+      : _barrierColor = barrierColor,
+        super(
           pageBuilder: (context, animation, secondaryAnimation) => page,
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             final curved = CurvedAnimation(
@@ -68,8 +72,8 @@ class GameFadeRoute extends PageRouteBuilder {
 class GameDialogRoute<T> extends PageRouteBuilder<T> {
   GameDialogRoute({
     required WidgetBuilder builder,
-    RouteSettings? settings,
-    bool barrierDismissible = true,
+    super.settings,
+    super.barrierDismissible = true,
     Color? barrierColor,
   }) : super(
           pageBuilder: (context, animation, secondaryAnimation) =>
@@ -93,10 +97,8 @@ class GameDialogRoute<T> extends PageRouteBuilder<T> {
           transitionDuration: const Duration(milliseconds: 350),
           reverseTransitionDuration: const Duration(milliseconds: 250),
           opaque: false,
-          barrierDismissible: barrierDismissible,
           barrierColor: barrierColor ?? Colors.black54,
           barrierLabel: 'Cerrar diálogo',
-          settings: settings,
         );
 }
 

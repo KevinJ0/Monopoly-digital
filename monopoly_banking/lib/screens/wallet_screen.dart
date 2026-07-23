@@ -24,8 +24,6 @@ import 'package:monopoly_banking/services/transports/ws_models.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/animated_avatar.dart';
 import 'package:monopoly_banking/widgets/premium_dialog.dart';
-import 'package:monopoly_banking/widgets/monopoly_background.dart';
-import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/widgets/player_info_widget.dart';
 import 'package:monopoly_banking/widgets/transaction_tile.dart';
 import 'package:monopoly_banking/widgets/transport_selector.dart';
@@ -83,6 +81,10 @@ class _WalletScreenState extends State<WalletScreen>
   VoidCallback? _wsConnectionsListener;
   VoidCallback? _bankServerListener;
   final Set<String> _announcedWsConnections = {};
+
+  String? _walletFilterType;
+  String _walletSortBy = 'date';
+  bool _walletSortAscending = false;
 
   @override
   void initState() {

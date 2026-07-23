@@ -59,7 +59,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   bool _hasBeenKicked = false;
   bool _inReconnectionGrace = false;
   Timer? _reconnectionTimer;
-  bool _isExiting = false;
+  final bool _isExiting = false;
   StreamSubscription<Map<String, dynamic>>? _payloadSub;
   StreamSubscription<TxType>? _txSub;
   StreamSubscription<CardTier>? _tierSub;

@@ -5,10 +5,9 @@ mixin _BankBuilders on State<BankScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final playerColor = context.watch<SessionProvider>().color;
 
     return Scaffold(
-      backgroundColor: kBgDark,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: kBgDark,
         title: const Text(
@@ -25,10 +24,7 @@ mixin _BankBuilders on State<BankScreen> {
           ),
         ],
       ),
-      body: MonopolyBackground(
-        child: PlayerColorBackdrop(
-        color: playerColor,
-        child: SlideTransition(
+      body: SlideTransition(
           position: _self._slide,
           child: FadeTransition(
             opacity: _self._slideCtrl,
@@ -40,7 +36,7 @@ mixin _BankBuilders on State<BankScreen> {
                     20,
                     20,
                     20,
-                    MediaQuery.viewPaddingOf(context).bottom + 128,
+                    MediaQuery.viewPaddingOf(context).bottom + 148,
                   ),
                   child: Form(
                     key: _self._formKey,
@@ -82,8 +78,6 @@ mixin _BankBuilders on State<BankScreen> {
                           delay: const Duration(milliseconds: 500),
                           child: _buildSendButton(),
                         ),
-                        const SizedBox(height: 40),
-                        _buildTransactionHistory(),
                       ],
                     ),
                   ),
@@ -91,9 +85,8 @@ mixin _BankBuilders on State<BankScreen> {
               ),
             ),
           ),
-        ),
       ),
-    ));
+    );
   }
 
   Widget _buildOpSelector() {
