@@ -180,10 +180,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                   ],
                 ),
                 const Spacer(),
-                _buildCardNumber(
-                    isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
-                    numberAvailableWidth,
-                    color: Colors.white),
+                _buildCardNumber(isBank ? 'BANCO CENTRAL' : _generateCardNumber(name), numberAvailableWidth, color: Colors.white),
                 SizedBox(height: cardHeight * 0.05),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -274,10 +271,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                   ],
                 ),
                 const Spacer(),
-                _buildCardNumber(
-                    isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
-                    numberAvailableWidth,
-                    color: const Color(0xFF3E2723)),
+                _buildCardNumber(isBank ? 'BANCO CENTRAL' : _generateCardNumber(name), numberAvailableWidth, color: const Color(0xFF3E2723)),
                 SizedBox(height: cardHeight * 0.05),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -375,10 +369,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                   ],
                 ),
                 const Spacer(),
-                _buildCardNumber(
-                    isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
-                    numberAvailableWidth,
-                    color: const Color(0xFF102A43)),
+                _buildCardNumber(isBank ? 'BANCO CENTRAL' : _generateCardNumber(name), numberAvailableWidth, color: const Color(0xFF102A43)),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -450,10 +441,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                 const Spacer(),
                 _buildEmvChipDesign(isBlack: true),
                 SizedBox(height: cardHeight * 0.02),
-                _buildCardNumber(
-                    isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
-                    numberAvailableWidth,
-                    color: const Color(0xFFD4AF37)),
+                _buildCardNumber(isBank ? 'BANCO CENTRAL' : _generateCardNumber(name), numberAvailableWidth, color: const Color(0xFFD4AF37)),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -613,10 +601,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                 const Spacer(),
                 _buildEmvChipDesign(),
                 SizedBox(height: cardHeight * 0.05),
-                _buildCardNumber(
-                    _generateCardNumber(name),
-                    numberAvailableWidth,
-                    color: Colors.white),
+                _buildCardNumber(_generateCardNumber(name), numberAvailableWidth, color: Colors.white),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -703,32 +688,29 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
   }
 
   Widget _buildCardNumber(String text, double availableWidth, {required Color color}) {
-    const charCount = 19;
-    const double charWidthRatio = 0.6;
-    const double minSpacing = 1.0;
-    const double maxSpacing = 12.0;
-    const double minFontSize = 8.0;
-    const double maxFontSize = 22.0;
-    double fontSize = 16.0;
-    double spacing = ((availableWidth - charCount * fontSize * charWidthRatio) / (charCount - 1)).clamp(minSpacing, maxSpacing);
-    if (spacing == minSpacing) {
-      fontSize = (availableWidth / (charCount * charWidthRatio + (charCount - 1) * (minSpacing / 14))).clamp(minFontSize, maxFontSize);
-      spacing = ((availableWidth - charCount * fontSize * charWidthRatio) / (charCount - 1)).clamp(minSpacing, maxSpacing);
-    }
+    final groups = text.split(' ');
+    final fontSize = (availableWidth / 200 * 16).clamp(10.0, 26.0);
     return Transform.translate(
       offset: const Offset(0, -10),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontSize: fontSize,
-          letterSpacing: spacing,
-          fontFamily: 'Courier',
-          fontWeight: FontWeight.w900,
-          shadows: [
-            Shadow(color: Colors.black38, offset: const Offset(0, 1.5), blurRadius: 0.5),
-            Shadow(color: Colors.white10, offset: const Offset(0, -0.5), blurRadius: 0),
-          ],
+      child: SizedBox(
+        width: availableWidth,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: groups
+              .map((g) => Text(
+                    g,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: fontSize,
+                      fontFamily: 'Courier',
+                      fontWeight: FontWeight.w900,
+                      shadows: [
+                        Shadow(color: Colors.black38, offset: const Offset(0, 1.5), blurRadius: 0.5),
+                        Shadow(color: Colors.white10, offset: const Offset(0, -0.5), blurRadius: 0),
+                      ],
+                    ),
+                  ))
+              .toList(),
         ),
       ),
     );

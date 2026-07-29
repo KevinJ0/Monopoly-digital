@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/widgets/animated_entry.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 import 'package:monopoly_banking/core/game_transitions.dart';
@@ -151,7 +153,11 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
     if (confirmed == true && mounted) {
       final didPop = await Navigator.of(context).maybePop();
       if (!didPop) {
-        SystemNavigator.pop();
+        if (Platform.isAndroid || Platform.isIOS) {
+          SystemNavigator.pop();
+        } else {
+          await windowManager.close();
+        }
       }
     }
   }
