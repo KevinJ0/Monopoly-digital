@@ -102,13 +102,13 @@ class SessionProvider extends ChangeNotifier {
     String? name,
     bool isHandshakeDone = false,
   }) async {
-    debugPrint('[SESSION] createSession role=$role initialBalance=$initialBalance isHandshakeDone=$isHandshakeDone');
     _role = role;
     _avatarId = avatarId;
     _colorId = colorId;
-    _name = name ?? (role == 'banco' ? 'Banca Central' : '');
+    _name = name ?? (role == 'banco' ? 'Banco Monopoly' : '');
     _isHandshakeDone = isHandshakeDone;
 
+    final initialTier = _tierIndexForBalance(initialBalance);
     final session = SessionModel(
       role: role,
       balance: initialBalance,
@@ -116,26 +116,30 @@ class SessionProvider extends ChangeNotifier {
       colorId: colorId,
       name: name,
       isHandshakeDone: isHandshakeDone,
+      maxTier: initialTier,
     );
 
     await HiveService.sessionBox.put('current', session);
     _wallet.rawBalance.value = initialBalance;
-    debugPrint('[SESSION] rawBalance set to ${_wallet.rawBalance.value}');
     _wallet.syncTierWithBalance();
     _initialized = true;
     notifyListeners();
+  }
+
+  static int _tierIndexForBalance(double value) {
+    if (value >= 15000) return 3;
+    if (value >= 8000) return 2;
+    if (value >= 4000) return 1;
+    return 0;
   }
 
   bool _isClearing = false;
 
   Future<void> clearSession() async {
     if (_isClearing) {
-      debugPrint('[┊] CLEAR_SESSION already in progress, ignoring');
       return;
     }
     _isClearing = true;
-    debugPrint('[┊] CLEAR_SESSION called!');
-    debugPrint('[┊] CLEAR_SESSION Stack:\n${StackTrace.current.toString().split('\n').take(15).join('\n')}');
     if (isBank) await BankLedgerService().closeBankSession();
     await HiveService.sessionBox.delete('current');
     await HiveService.txBox.clear();
@@ -232,18 +236,18 @@ class SessionProvider extends ChangeNotifier {
   }
 
   Future<void> applyHandshake(Map<String, dynamic> payload) async {
-    debugPrint('[SESSION] applyHandshake payload balance=${payload['balance']} _isHandshakeDone=$_isHandshakeDone');
+
     if (_isHandshakeDone) return;
 
     final balance = (payload['balance'] as num?)?.toDouble();
     if (balance == null || !balance.isFinite) {
-      debugPrint('[┊] applyHandshake: invalid balance in payload');
+
       return;
     }
     final avatar = payload['avatarId'] as String?;
     final color = payload['colorId'] as String?;
     if (avatar == null || color == null) {
-      debugPrint('[┊] applyHandshake: missing avatarId or colorId');
+
       return;
     }
     // Prefer existing name if available (already entered in RoleSelection),

@@ -198,8 +198,7 @@ class _AnimatedProgressFiller extends StatefulWidget {
   State<_AnimatedProgressFiller> createState() => _AnimatedProgressFillerState();
 }
 
-class _AnimatedProgressFillerState extends State<_AnimatedProgressFiller>
-    with SingleTickerProviderStateMixin {
+class _AnimatedProgressFillerState extends State<_AnimatedProgressFiller> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _anim;
   double? _from;

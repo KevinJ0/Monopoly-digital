@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:monopoly_banking/core/constants.dart';
@@ -77,7 +76,7 @@ class _BankScreenState extends State<BankScreen>
           color: kGreen),
       _OpOption(
           id: 'passGo',
-          label: 'Pasar por GO (\$${settings.passGoAmount.round()})',
+          label: 'Pasar por GO (${formatMoney(settings.passGoAmount.round())})',
           icon: Icons.flag_rounded,
           color: kGold),
       for (final c in settings.customOps)

@@ -1,5 +1,7 @@
 import 'dart:math' as math;
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -17,6 +19,7 @@ class WsConnectButton extends StatefulWidget {
   final VoidCallback? onStartWsClient;
   final VoidCallback? onStopWsClient;
   final void Function(String host, int port)? onConnectToBank;
+  final VoidCallback? onBackButtonPressed;
 
   const WsConnectButton({
     super.key,
@@ -27,6 +30,7 @@ class WsConnectButton extends StatefulWidget {
     this.onStartWsClient,
     this.onStopWsClient,
     this.onConnectToBank,
+    this.onBackButtonPressed,
   });
 
   @override
@@ -115,14 +119,29 @@ class _WsConnectButtonState extends State<WsConnectButton>
     final isActive =
         widget.scanning || widget.clientConnected || widget.connecting;
 
+    final backButton = Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: TextButton.icon(
+        onPressed: widget.onBackButtonPressed,
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 14),
+        label: const Text(
+          'Volver al inicio',
+          style: TextStyle(color: kTextSecondary, fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
     final content = SafeArea(
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              GestureDetector(
+      child: Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 16),
+                    GestureDetector(
                 onTap: _onTap,
                 child: AnimatedBuilder(
                   animation: _scaleCtrl,
@@ -322,22 +341,24 @@ class _WsConnectButtonState extends State<WsConnectButton>
                 ),
               ],
               const SizedBox(height: 6),
-              TextButton.icon(
-                onPressed: _scanQr,
-                icon: const Icon(Icons.qr_code_rounded, size: 16),
-                label: const Text(
-                  'Escanear QR',
-                  style: TextStyle(color: kTextSecondary, fontSize: 12),
+              if (kIsWeb || !Platform.isWindows) ...[
+                TextButton.icon(
+                  onPressed: _scanQr,
+                  icon: const Icon(Icons.qr_code_rounded, size: 16),
+                  label: const Text(
+                    'Escanear QR',
+                    style: TextStyle(color: kTextSecondary, fontSize: 12),
+                  ),
                 ),
-              ),
-              TextButton.icon(
-                onPressed: _scanMobile,
-                icon: const Icon(Icons.qr_code_scanner_rounded, size: 16),
-                label: const Text(
-                  'Escanear QR (v2)',
-                  style: TextStyle(color: kTextSecondary, fontSize: 12),
+                TextButton.icon(
+                  onPressed: _scanMobile,
+                  icon: const Icon(Icons.qr_code_scanner_rounded, size: 16),
+                  label: const Text(
+                    'Escanear QR (v2)',
+                    style: TextStyle(color: kTextSecondary, fontSize: 12),
+                  ),
                 ),
-              ),
+              ],
               TextButton.icon(
                 onPressed: () => setState(() => _showManual = !_showManual),
                 icon: Icon(
@@ -358,27 +379,30 @@ class _WsConnectButtonState extends State<WsConnectButton>
               ),
               if (widget.connecting || widget.clientConnected) ...[
                 const SizedBox(height: 12),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 200),
-                  child: SizedBox(
-                    height: 44,
-                    child: OutlinedButton.icon(
-                      onPressed: () => widget.onStopWsClient?.call(),
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                      label: Text(
-                        widget.clientConnected ? 'DESCONECTARSE' : 'CANCELAR',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.8,
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 200),
+                    child: SizedBox(
+                      height: 44,
+                      child: OutlinedButton.icon(
+                        onPressed: () => widget.onStopWsClient?.call(),
+                        icon: const Icon(Icons.close_rounded, size: 18),
+                        label: Text(
+                          widget.clientConnected ? 'DESCONECTARSE' : 'CANCELAR',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                          ),
                         ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: kTextSecondary,
-                        side: BorderSide(color: kTextSecondary.withValues(alpha: 0.3)),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: kTextSecondary,
+                          side: BorderSide(color: kTextSecondary.withValues(alpha: 0.3)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
@@ -455,8 +479,11 @@ class _WsConnectButtonState extends State<WsConnectButton>
           ),
         ),
       ),
+    ),
+          backButton,
+        ],
+      ),
     );
-
     return content;
   }
 }

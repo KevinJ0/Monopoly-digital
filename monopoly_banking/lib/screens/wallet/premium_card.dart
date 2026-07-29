@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sensors_plus/sensors_plus.dart';
@@ -49,17 +51,19 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
   @override
   void initState() {
     super.initState();
-    try {
-      _gyroSub = gyroscopeEventStream(
-        samplingPeriod: const Duration(milliseconds: 50),
-      ).listen((event) {
-        if (!mounted) return;
-        setState(() {
-          _gyroX = (event.y).clamp(-0.8, 0.8);
-          _gyroY = (-event.x).clamp(-0.8, 0.8);
+    if (kIsWeb || !Platform.isWindows) {
+      try {
+        _gyroSub = gyroscopeEventStream(
+          samplingPeriod: const Duration(milliseconds: 50),
+        ).listen((event) {
+          if (!mounted) return;
+          setState(() {
+            _gyroX = (event.y).clamp(-0.8, 0.8);
+            _gyroY = (-event.x).clamp(-0.8, 0.8);
+          });
         });
-      });
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
 
   @override
@@ -68,43 +72,64 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
     super.dispose();
   }
 
+  static const double _maxCardWidth = 371.6;
+  static const double _maxCardHeight = 233.6;
+  static const double _cardAspectRatio = _maxCardWidth / _maxCardHeight;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      final cardHeight =
-          ((constraints.maxWidth - 32) / 1.586).clamp(0.0, 240.0);
+      final rawW = constraints.maxWidth;
+      final rawH = constraints.maxHeight - 16;
+
+      var cardWidth = rawW > _maxCardWidth ? _maxCardWidth : rawW;
+      var cardHeight = cardWidth / _cardAspectRatio;
+
+      if (cardHeight > _maxCardHeight) {
+        cardHeight = _maxCardHeight;
+        cardWidth = cardHeight * _cardAspectRatio;
+      }
+
+      if (rawH > 0 && cardHeight > rawH) {
+        cardHeight = rawH;
+        cardWidth = cardHeight * _cardAspectRatio;
+      }
 
       final nameLower = widget.name.toLowerCase().trim();
       final Widget cardContent;
       if (nameLower == 'kevin' || nameLower == 'meibi') {
-        cardContent = _buildVipBlackCard(cardHeight: cardHeight);
+        cardContent = _buildVipBlackCard(cardHeight: cardHeight, cardWidth: cardWidth);
       } else {
         final wallet = context.read<WalletController>();
         final tier = widget.tier ?? wallet.currentTier;
         final styles = _getStyles(tier, color);
 
         cardContent = switch (tier) {
-          CardTier.standard =>
-            _buildStandardCard(styles, cardHeight: cardHeight),
-          CardTier.gold => _buildGoldCard(styles, cardHeight: cardHeight),
-          CardTier.platinum =>
-            _buildPlatinumCard(styles, cardHeight: cardHeight),
-          CardTier.black => _buildBlackCard(styles, cardHeight: cardHeight),
+          CardTier.standard => _buildStandardCard(styles, cardHeight: cardHeight, cardWidth: cardWidth),
+          CardTier.gold => _buildGoldCard(styles, cardHeight: cardHeight, cardWidth: cardWidth),
+          CardTier.platinum => _buildPlatinumCard(styles, cardHeight: cardHeight, cardWidth: cardWidth),
+          CardTier.black => _buildBlackCard(styles, cardHeight: cardHeight, cardWidth: cardWidth),
         };
       }
 
-      return Transform(
-        alignment: FractionalOffset.center,
-        transform: Matrix4.identity()
-          ..setEntry(3, 2, 0.001)
-          ..rotateX(_gyroY / _tiltFactor)
-          ..rotateY(_gyroX / _tiltFactor),
-        child: ShimmerCard(child: cardContent),
+      return Center(
+        child: SizedBox(
+          width: cardWidth + 32,
+          child: Transform(
+            alignment: FractionalOffset.center,
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.001)
+              ..rotateX(_gyroY / _tiltFactor)
+              ..rotateY(_gyroX / _tiltFactor),
+            child: ShimmerCard(child: cardContent),
+          ),
+        ),
       );
     });
   }
 
-  Widget _buildStandardCard(CardStyles styles, {required double cardHeight}) {
+  Widget _buildStandardCard(CardStyles styles, {required double cardHeight, required double cardWidth}) {
+    final numberAvailableWidth = cardWidth - (cardHeight * 0.1 * 2);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       height: cardHeight,
@@ -116,23 +141,13 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
           width: 1,
         ),
         boxShadow: [
-          BoxShadow(
-              color: styles.accent.withValues(alpha: 0.2),
-              blurRadius: 12,
-              offset: const Offset(0, 8),
-              spreadRadius: 0),
-          BoxShadow(
-              color: styles.accent.withValues(alpha: 0.08),
-              blurRadius: 4,
-              offset: const Offset(0, 2)),
+          BoxShadow(color: styles.accent.withValues(alpha: 0.2), blurRadius: 12, offset: const Offset(0, 8), spreadRadius: 0),
+          BoxShadow(color: styles.accent.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 2)),
         ],
       ),
       child: Stack(
         children: [
-          Positioned(
-              right: -30,
-              top: -30,
-              child: Icon(Icons.circle, size: 200, color: Colors.white10)),
+          Positioned(right: -30, top: -30, child: Icon(Icons.circle, size: 200, color: Colors.white10)),
           Positioned(
             left: 0,
             right: 0,
@@ -140,9 +155,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
             height: cardHeight * 0.5,
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(24),
-                    topRight: Radius.circular(24)),
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
                 gradient: LinearGradient(
                   colors: [
                     Colors.white.withValues(alpha: 0.04),
@@ -155,7 +168,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.all(cardHeight * 0.1),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -163,65 +176,39 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     _buildEmvChipDesign(),
-                    Text(styles.tierName,
-                        style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 2)),
+                    Text(styles.tierName, style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 2)),
                   ],
                 ),
                 const Spacer(),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                      isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          letterSpacing: 4,
-                          fontFamily: 'Courier')),
-                ),
-                const SizedBox(height: 12),
+                _buildCardNumber(
+                    isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
+                    numberAvailableWidth,
+                    color: Colors.white),
+                SizedBox(height: cardHeight * 0.05),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('JUGADOR',
-                                style: TextStyle(
-                                    color: Colors.white54, fontSize: 8)),
-                            Text(name.toUpperCase(),
-                                 style: const TextStyle(
-                                     color: Colors.white,
-                                     fontWeight: FontWeight.bold,
-                                     fontSize: 10),
-                                 overflow: TextOverflow.ellipsis),
-                          ]),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('JUGADOR', style: TextStyle(color: Colors.white54, fontSize: 8)),
+                        Text(name.toUpperCase(),
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10), overflow: TextOverflow.ellipsis),
+                      ]),
                     ),
-                    Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      const Text('SALDO', style: TextStyle(color: Colors.white54, fontSize: 8)),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('SALDO',
-                              style: TextStyle(
-                                  color: Colors.white54, fontSize: 8)),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              OdometerWidget(
-                                  value: balance,
-                                  color: Colors.white,
-                                  style: const TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w900,
-                                      color: Colors.white)),
-                              const SizedBox(width: 8),
-                              _buildCardNetworkLogo(isVisa: true),
-                            ],
-                          ),
-                        ]),
+                          OdometerWidget(
+                              value: balance,
+                              color: Colors.white,
+                              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Colors.white)),
+                          const SizedBox(width: 8),
+                          _buildCardNetworkLogo(isVisa: true),
+                        ],
+                      ),
+                    ]),
                   ],
                 ),
               ],
@@ -232,9 +219,10 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
     );
   }
 
-  Widget _buildGoldCard(CardStyles styles, {required double cardHeight}) {
+  Widget _buildGoldCard(CardStyles styles, {required double cardHeight, required double cardWidth}) {
     const goldLight = Color(0xFFFCF6BA);
     const goldDeep = Color(0xFFBF953F);
+    final numberAvailableWidth = cardWidth - (cardHeight * 0.1 * 2);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       height: cardHeight,
@@ -246,24 +234,13 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
           width: 1.5,
         ),
         boxShadow: [
-          BoxShadow(
-              color: goldDeep.withValues(alpha: 0.25),
-              blurRadius: 14,
-              spreadRadius: 0,
-              offset: const Offset(0, 8)),
-          BoxShadow(
-              color: goldLight.withValues(alpha: 0.08),
-              blurRadius: 4,
-              offset: const Offset(0, 2)),
+          BoxShadow(color: goldDeep.withValues(alpha: 0.25), blurRadius: 14, spreadRadius: 0, offset: const Offset(0, 8)),
+          BoxShadow(color: goldLight.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 2)),
         ],
       ),
       child: Stack(
         children: [
-          Center(
-              child: Opacity(
-                  opacity: 0.1,
-                  child:
-                      Icon(Icons.stars_rounded, size: 200, color: goldLight))),
+          Center(child: Opacity(opacity: 0.1, child: Icon(Icons.stars_rounded, size: 200, color: goldLight))),
           Positioned(
             left: 0,
             right: 0,
@@ -271,9 +248,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
             height: cardHeight * 0.5,
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16)),
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
                 gradient: LinearGradient(
                   colors: [
                     Colors.white.withValues(alpha: 0.04),
@@ -286,7 +261,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.all(cardHeight * 0.1),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -295,69 +270,40 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                   children: [
                     _buildEmvChipDesign(),
                     Text(styles.tierName,
-                        style: TextStyle(
-                            color: goldLight.withValues(alpha: 0.8),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 2)),
+                        style: TextStyle(color: goldLight.withValues(alpha: 0.8), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 2)),
                   ],
                 ),
                 const Spacer(),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                      isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
-                      style: const TextStyle(
-                          color: Color(0xFF3E2723),
-                          fontSize: 18,
-                          letterSpacing: 4,
-                          fontFamily: 'Courier',
-                          fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 12),
+                _buildCardNumber(
+                    isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
+                    numberAvailableWidth,
+                    color: const Color(0xFF3E2723)),
+                SizedBox(height: cardHeight * 0.05),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('GOLD MEMBER',
-                                style: TextStyle(
-                                    color: Color(0xFF5D4037),
-                                    fontSize: 7,
-                                    fontWeight: FontWeight.bold)),
-                            Text(name.toUpperCase(),
-                                 style: const TextStyle(
-                                     color: Color(0xFF3E2723),
-                                     fontWeight: FontWeight.w900,
-                                     fontSize: 11),
-                                 overflow: TextOverflow.ellipsis),
-                          ]),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('GOLD MEMBER', style: TextStyle(color: Color(0xFF5D4037), fontSize: 7, fontWeight: FontWeight.bold)),
+                        Text(name.toUpperCase(),
+                            style: const TextStyle(color: Color(0xFF3E2723), fontWeight: FontWeight.w900, fontSize: 11),
+                            overflow: TextOverflow.ellipsis),
+                      ]),
                     ),
-                    Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      const Text('SALDO DISPONIBLE', style: TextStyle(color: Color(0xFF5D4037), fontSize: 8, fontWeight: FontWeight.bold)),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('SALDO DISPONIBLE',
-                              style: TextStyle(
-                                  color: Color(0xFF5D4037),
-                                  fontSize: 8,
-                                  fontWeight: FontWeight.bold)),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              OdometerWidget(
-                                  value: balance,
-                                  color: const Color(0xFF3E2723),
-                                  style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w900,
-                                      color: Color(0xFF3E2723))),
-                              const SizedBox(width: 8),
-                              _buildCardNetworkLogo(isVisa: false),
-                            ],
-                          ),
-                        ]),
+                          OdometerWidget(
+                              value: balance,
+                              color: const Color(0xFF3E2723),
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF3E2723))),
+                          const SizedBox(width: 8),
+                          _buildCardNetworkLogo(isVisa: false),
+                        ],
+                      ),
+                    ]),
                   ],
                 ),
               ],
@@ -368,7 +314,8 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
     );
   }
 
-  Widget _buildPlatinumCard(CardStyles styles, {required double cardHeight}) {
+  Widget _buildPlatinumCard(CardStyles styles, {required double cardHeight, required double cardWidth}) {
+    final numberAvailableWidth = cardWidth - (cardHeight * 0.1 * 2);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       height: cardHeight,
@@ -386,8 +333,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                     top: 0,
                     bottom: 0,
                     width: 1,
-                    child:
-                        Container(color: Colors.white.withValues(alpha: 0.03)),
+                    child: Container(color: Colors.white.withValues(alpha: 0.03)),
                   )),
           Positioned(
             right: -20,
@@ -410,7 +356,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(24.0),
+            padding: EdgeInsets.all(cardHeight * 0.1),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -421,72 +367,43 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Icon(Icons.wifi_rounded,
-                            color: Color(0xFF486581), size: 24),
+                        const Icon(Icons.wifi_rounded, color: Color(0xFF486581), size: 24),
                         Text(styles.tierName,
-                            style: const TextStyle(
-                                color: Color(0xFF486581),
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: 2.5)),
+                            style: const TextStyle(color: Color(0xFF486581), fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 2.5)),
                       ],
                     ),
                   ],
                 ),
                 const Spacer(),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                      isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
-                      style: const TextStyle(
-                          color: Color(0xFF102A43),
-                          fontSize: 22,
-                          letterSpacing: 4.5,
-                          fontFamily: 'Courier',
-                          fontWeight: FontWeight.w900)),
-                ),
+                _buildCardNumber(
+                    isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
+                    numberAvailableWidth,
+                    color: const Color(0xFF102A43)),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('PLATINUM CARDHOLDER',
-                                style: TextStyle(
-                                    color: Color(0xFF486581),
-                                    fontSize: 7,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 1)),
-                            Text(name.toUpperCase(),
-                                 style: const TextStyle(
-                                     color: Color(0xFF102A43),
-                                     fontSize: 11,
-                                     letterSpacing: 1.5,
-                                     fontWeight: FontWeight.w900),
-                                 overflow: TextOverflow.ellipsis),
-                          ]),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('PLATINUM CARDHOLDER',
+                            style: TextStyle(color: Color(0xFF486581), fontSize: 7, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                        Text(name.toUpperCase(),
+                            style: const TextStyle(color: Color(0xFF102A43), fontSize: 11, letterSpacing: 1.5, fontWeight: FontWeight.w900),
+                            overflow: TextOverflow.ellipsis),
+                      ]),
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text('BALANCE DISPONIBLE',
-                            style: TextStyle(
-                                color: Color(0xFF486581),
-                                fontSize: 7,
-                                fontWeight: FontWeight.w900)),
+                        const Text('BALANCE DISPONIBLE', style: TextStyle(color: Color(0xFF486581), fontSize: 7, fontWeight: FontWeight.w900)),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             OdometerWidget(
                                 value: balance,
                                 color: const Color(0xFF102A43),
-                                style: const TextStyle(
-                                    fontSize: 21,
-                                    fontWeight: FontWeight.w900,
-                                    color: Color(0xFF102A43))),
+                                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: Color(0xFF102A43))),
                             const SizedBox(width: 8),
                             _buildCardNetworkLogo(isVisa: true),
                           ],
@@ -503,27 +420,22 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
     );
   }
 
-  Widget _buildBlackCard(CardStyles styles, {required double cardHeight}) {
+  Widget _buildBlackCard(CardStyles styles, {required double cardHeight, required double cardWidth}) {
+    final numberAvailableWidth = cardWidth - (cardHeight * 0.1 * 2);
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       height: cardHeight,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: Colors.black,
-        border:
-            Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.2)),
-        boxShadow: [
-          BoxShadow(
-              color: const Color(0xFFD4AF37).withValues(alpha: 0.1),
-              blurRadius: 30,
-              spreadRadius: 5)
-        ],
+        border: Border.all(color: const Color(0xFFD4AF37).withValues(alpha: 0.2)),
+        boxShadow: [BoxShadow(color: const Color(0xFFD4AF37).withValues(alpha: 0.1), blurRadius: 30, spreadRadius: 5)],
       ),
       child: Stack(
         children: [
           Positioned.fill(child: CustomPaint(painter: CarbonFiberPainter())),
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 14),
+            padding: EdgeInsets.fromLTRB(cardHeight * 0.1, cardHeight * 0.1, cardHeight * 0.1, cardHeight * 0.06),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -532,43 +444,27 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                   children: [
                     const SizedBox(width: 32),
                     Text(styles.tierName,
-                        style: const TextStyle(
-                            color: Color(0xFFD4AF37),
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 4)),
+                        style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 4)),
                   ],
                 ),
                 const Spacer(),
                 _buildEmvChipDesign(isBlack: true),
-                const SizedBox(height: 4),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                      isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
-                      style: const TextStyle(
-                          color: Color(0xFFD4AF37),
-                          fontSize: 20,
-                          letterSpacing: 5,
-                          fontFamily: 'Courier',
-                          fontWeight: FontWeight.bold)),
-                ),
+                SizedBox(height: cardHeight * 0.02),
+                _buildCardNumber(
+                    isBank ? 'BANCO CENTRAL' : _generateCardNumber(name),
+                    numberAvailableWidth,
+                    color: const Color(0xFFD4AF37)),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(name.toUpperCase(),
-                                 style: const TextStyle(
-                                     color: Color(0xFFD4AF37),
-                                     fontSize: 11,
-                                     fontWeight: FontWeight.w800),
-                                 overflow: TextOverflow.ellipsis),
-                          ]),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(name.toUpperCase(),
+                            style: const TextStyle(color: Color(0xFFD4AF37), fontSize: 11, fontWeight: FontWeight.w800),
+                            overflow: TextOverflow.ellipsis),
+                      ]),
                     ),
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -576,10 +472,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                         OdometerWidget(
                             value: balance,
                             color: const Color(0xFFD4AF37),
-                            style: const TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFFD4AF37))),
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFFD4AF37))),
                         const SizedBox(width: 8),
                         _buildCardNetworkLogo(isVisa: false),
                       ],
@@ -590,10 +483,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                 Text(_getRandomQuote(),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        color: const Color(0xFFD4AF37).withValues(alpha: 0.6),
-                        fontSize: 9,
-                        fontStyle: FontStyle.italic)),
+                    style: TextStyle(color: const Color(0xFFD4AF37).withValues(alpha: 0.6), fontSize: 9, fontStyle: FontStyle.italic)),
               ],
             ),
           ),
@@ -608,14 +498,11 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
       height: 35,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-            colors: isBlack
-                ? [Colors.grey.shade800, Colors.grey.shade600]
-                : [Colors.amber.shade200, Colors.amber.shade400],
+            colors: isBlack ? [Colors.grey.shade800, Colors.grey.shade600] : [Colors.amber.shade200, Colors.amber.shade400],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-            color: isBlack ? Colors.white24 : Colors.amber.shade700, width: 1),
+        border: Border.all(color: isBlack ? Colors.white24 : Colors.amber.shade700, width: 1),
       ),
       child: Stack(
         children: [
@@ -650,18 +537,14 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
             Container(
               width: 25,
               height: 25,
-              decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.8),
-                  shape: BoxShape.circle),
+              decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.8), shape: BoxShape.circle),
             ),
             Positioned(
               left: 12,
               child: Container(
                 width: 25,
                 height: 25,
-                decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.8),
-                    shape: BoxShape.circle),
+                decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.8), shape: BoxShape.circle),
               ),
             ),
           ],
@@ -670,10 +553,11 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
     }
   }
 
-  Widget _buildVipBlackCard({required double cardHeight}) {
+  Widget _buildVipBlackCard({required double cardHeight, required double cardWidth}) {
     const goldDeep = Color(0xFFBF953F);
     const goldLight = Color(0xFFFCF6BA);
     const goldMid = Color(0xFFD4AF37);
+    final numberAvailableWidth = cardWidth - (cardHeight * 0.1 * 2);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -688,15 +572,8 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
         ),
         border: Border.all(color: goldMid, width: 1.5),
         boxShadow: [
-          BoxShadow(
-              color: goldMid.withValues(alpha: 0.4),
-              blurRadius: 24,
-              spreadRadius: 2,
-              offset: const Offset(0, 8)),
-          BoxShadow(
-              color: goldDeep.withValues(alpha: 0.2),
-              blurRadius: 48,
-              spreadRadius: -4),
+          BoxShadow(color: goldMid.withValues(alpha: 0.4), blurRadius: 24, spreadRadius: 2, offset: const Offset(0, 8)),
+          BoxShadow(color: goldDeep.withValues(alpha: 0.2), blurRadius: 48, spreadRadius: -4),
         ],
       ),
       child: Stack(
@@ -709,11 +586,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                   width: 200,
                   height: 200,
                   decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(colors: [
-                        goldMid.withValues(alpha: 0.15),
-                        Colors.transparent
-                      ])))),
+                      shape: BoxShape.circle, gradient: RadialGradient(colors: [goldMid.withValues(alpha: 0.15), Colors.transparent])))),
           Positioned(
               left: -40,
               bottom: -40,
@@ -721,77 +594,46 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                   width: 150,
                   height: 150,
                   decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(colors: [
-                        goldDeep.withValues(alpha: 0.2),
-                        Colors.transparent
-                      ])))),
+                      shape: BoxShape.circle, gradient: RadialGradient(colors: [goldDeep.withValues(alpha: 0.2), Colors.transparent])))),
           Padding(
-            padding: const EdgeInsets.all(22.0),
+            padding: EdgeInsets.all(cardHeight * 0.1),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('MONOPOLY BANK',
-                              style: TextStyle(
-                                  color: goldLight,
-                                  fontSize: 9,
-                                  letterSpacing: 3,
-                                  fontWeight: FontWeight.w800)),
-                          const Text('VIP BLACK EDITION',
-                              style: TextStyle(
-                                  color: goldMid,
-                                  fontSize: 8,
-                                  letterSpacing: 2.5,
-                                  fontWeight: FontWeight.w700)),
-                        ]),
+                    Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text('MONOPOLY BANK', style: TextStyle(color: goldLight, fontSize: 9, letterSpacing: 3, fontWeight: FontWeight.w800)),
+                      const Text('VIP BLACK EDITION', style: TextStyle(color: goldMid, fontSize: 8, letterSpacing: 2.5, fontWeight: FontWeight.w700)),
+                    ]),
                     Icon(Icons.diamond_rounded, color: goldLight, size: 30),
                   ],
                 ),
                 const Spacer(),
                 _buildEmvChipDesign(),
-                const SizedBox(height: 12),
-                Text(_generateCardNumber(name),
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Courier',
-                        fontSize: 18,
-                        letterSpacing: 3,
-                        fontWeight: FontWeight.bold)),
+                SizedBox(height: cardHeight * 0.05),
+                _buildCardNumber(
+                    _generateCardNumber(name),
+                    numberAvailableWidth,
+                    color: Colors.white),
                 const Spacer(),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('PLATINUM CARDHOLDER',
-                                style: TextStyle(color: goldDeep, fontSize: 7)),
-                            Text(name.toUpperCase(),
-                                 style: const TextStyle(
-                                     color: Colors.white,
-                                     fontSize: 13,
-                                     fontWeight: FontWeight.w900),
-                                 overflow: TextOverflow.ellipsis),
-                          ]),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('PLATINUM CARDHOLDER', style: TextStyle(color: goldDeep, fontSize: 7)),
+                        Text(name.toUpperCase(),
+                            style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w900), overflow: TextOverflow.ellipsis),
+                      ]),
                     ),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         OdometerWidget(
-                            value: balance,
-                            color: goldLight,
-                            style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w900,
-                                color: goldLight)),
+                            value: balance, color: goldLight, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: goldLight)),
                         const SizedBox(width: 8),
                         _buildCardNetworkLogo(isVisa: true),
                       ],
@@ -811,11 +653,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
       case CardTier.standard:
         return CardStyles(
           gradient: LinearGradient(
-            colors: [
-              playerColor,
-              Color.lerp(playerColor, Colors.black, 0.4)!,
-              Color.lerp(playerColor, Colors.black, 0.7)!
-            ],
+            colors: [playerColor, Color.lerp(playerColor, Colors.black, 0.4)!, Color.lerp(playerColor, Colors.black, 0.7)!],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -825,13 +663,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
       case CardTier.gold:
         return CardStyles(
           gradient: const LinearGradient(
-            colors: [
-              Color(0xFFBF953F),
-              Color(0xFFFCF6BA),
-              Color(0xFFB38728),
-              Color(0xFFFBF5B7),
-              Color(0xFFFBF5B7)
-            ],
+            colors: [Color(0xFFBF953F), Color(0xFFFCF6BA), Color(0xFFB38728), Color(0xFFFBF5B7), Color(0xFFFBF5B7)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -863,13 +695,43 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
 
   String _generateCardNumber(String source) {
     if (source.isEmpty) source = "JUGADOR";
-    final seed = source
-        .split('')
-        .fold<int>(0, (prev, char) => prev + char.codeUnitAt(0));
+    final seed = source.split('').fold<int>(0, (prev, char) => prev + char.codeUnitAt(0));
     final rand = Random(seed);
 
     String part() => (rand.nextInt(9000) + 1000).toString().padLeft(4, '0');
     return "${part()} ${part()} ${part()} ${part()}";
+  }
+
+  Widget _buildCardNumber(String text, double availableWidth, {required Color color}) {
+    const charCount = 19;
+    const double charWidthRatio = 0.6;
+    const double minSpacing = 1.0;
+    const double maxSpacing = 12.0;
+    const double minFontSize = 8.0;
+    const double maxFontSize = 22.0;
+    double fontSize = 16.0;
+    double spacing = ((availableWidth - charCount * fontSize * charWidthRatio) / (charCount - 1)).clamp(minSpacing, maxSpacing);
+    if (spacing == minSpacing) {
+      fontSize = (availableWidth / (charCount * charWidthRatio + (charCount - 1) * (minSpacing / 14))).clamp(minFontSize, maxFontSize);
+      spacing = ((availableWidth - charCount * fontSize * charWidthRatio) / (charCount - 1)).clamp(minSpacing, maxSpacing);
+    }
+    return Transform.translate(
+      offset: const Offset(0, -10),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: fontSize,
+          letterSpacing: spacing,
+          fontFamily: 'Courier',
+          fontWeight: FontWeight.w900,
+          shadows: [
+            Shadow(color: Colors.black38, offset: const Offset(0, 1.5), blurRadius: 0.5),
+            Shadow(color: Colors.white10, offset: const Offset(0, -0.5), blurRadius: 0),
+          ],
+        ),
+      ),
+    );
   }
 
   String _getRandomQuote() {

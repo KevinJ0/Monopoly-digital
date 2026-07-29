@@ -147,7 +147,7 @@ class _ColorSelectionScreenState extends State<ColorSelectionScreen> {
                     SizedBox(height: isShort ? 20 : 32),
                     AnimatedEntry(
                       delay: const Duration(milliseconds: 400),
-                      child: _buildPreviewCard(isShort),
+                      child: _buildPreviewCard(isShort, constraints.maxWidth),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -257,10 +257,10 @@ class _ColorSelectionScreenState extends State<ColorSelectionScreen> {
     );
   }
 
-  Widget _buildPreviewCard(bool isShort) {
-    final cardHeight = isShort ? 150.0 : 200.0;
-    final vPad = isShort ? 16.0 : 24.0;
-    final balanceSize = isShort ? 18.0 : 22.0;
+  Widget _buildPreviewCard(bool isShort, double availWidth) {
+    final cardHeight = (availWidth * 0.33).clamp(140.0, 220.0);
+    final vPad = cardHeight * 0.12;
+    final balanceSize = cardHeight * 0.11;
     return Container(
       width: double.infinity,
       height: cardHeight,
@@ -290,16 +290,16 @@ class _ColorSelectionScreenState extends State<ColorSelectionScreen> {
       child: Stack(
         children: [
           Positioned(
-            right: -30,
-            top: -30,
+            right: -cardHeight * 0.15,
+            top: -cardHeight * 0.15,
             child: Icon(Icons.circle,
-                size: 200, color: Colors.white.withValues(alpha: 0.1)),
+                size: cardHeight, color: Colors.white.withValues(alpha: 0.1)),
           ),
           Positioned(
             left: 0,
             right: 0,
             top: 0,
-            height: 100,
+            height: cardHeight * 0.5,
             child: Container(
               decoration: BoxDecoration(
                 borderRadius: const BorderRadius.only(
@@ -392,7 +392,7 @@ class _ColorSelectionScreenState extends State<ColorSelectionScreen> {
                         const Text('SALDO',
                             style: TextStyle(
                                 color: Colors.white54, fontSize: 8)),
-                        Text('\$2,000',
+                        Text(formatMoney(2000),
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: balanceSize,

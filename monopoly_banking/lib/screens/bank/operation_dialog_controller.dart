@@ -3,13 +3,11 @@ part of '../bank_screen.dart';
 class _BankOperationDialogController {
   _BankOperationDialogController({required this.transportType})
       : title = ValueNotifier<String>('Preparando operación'),
-        message = ValueNotifier<String>('Esperando conexión del jugador...'),
-        debugInfo = ValueNotifier<String>('');
+        message = ValueNotifier<String>('Esperando conexión del jugador...');
 
   final TransportType transportType;
   final ValueNotifier<String> title;
   final ValueNotifier<String> message;
-  final ValueNotifier<String> debugInfo;
   final completed = ValueNotifier<bool>(false);
   final failed = ValueNotifier<bool>(false);
   final cancelled = ValueNotifier<bool>(false);

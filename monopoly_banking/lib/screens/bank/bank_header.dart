@@ -29,7 +29,7 @@ class _BankHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Banca Central',
+                  'Banco Monopoly',
                   style: TextStyle(
                       color: kGold, fontWeight: FontWeight.w800, fontSize: 16),
                 ),

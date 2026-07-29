@@ -24,14 +24,14 @@ class TransactionTile extends StatelessWidget {
     };
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      margin: const EdgeInsets.only(right: 16, left: 16, top: 4, bottom: 2),
       decoration: BoxDecoration(
         color: kBgCard,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: kBorder),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
         leading: Container(
           width: 44,
           height: 44,
@@ -50,9 +50,7 @@ class TransactionTile extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          tx.counterpartyId?.trim().isNotEmpty == true
-              ? '${tx.counterpartyId} · ${_formatDate(tx.timestamp)}'
-              : _formatDate(tx.timestamp),
+          tx.counterpartyId?.trim().isNotEmpty == true ? '${tx.counterpartyId} · ${_formatDate(tx.timestamp)}' : _formatDate(tx.timestamp),
           style: const TextStyle(color: kTextSecondary, fontSize: 12),
         ),
         trailing: Text(
@@ -70,14 +68,9 @@ class TransactionTile extends StatelessWidget {
   _TransactionDirection _directionFor(String type) {
     if (type.startsWith('custom_')) {
       final customId = type.substring('custom_'.length);
-      final match = BankSettingsService()
-          .customOps
-          .where((c) => c.id == customId)
-          .firstOrNull;
+      final match = BankSettingsService().customOps.where((c) => c.id == customId).firstOrNull;
       if (match != null) {
-        return match.isGive
-            ? _TransactionDirection.received
-            : _TransactionDirection.sent;
+        return match.isGive ? _TransactionDirection.received : _TransactionDirection.sent;
       }
       return _TransactionDirection.neutral;
     }
@@ -115,13 +108,9 @@ class TransactionTile extends StatelessWidget {
   IconData _iconFor(String type) {
     if (type.startsWith('custom_')) {
       final customId = type.substring('custom_'.length);
-      final match = BankSettingsService()
-          .customOps
-          .where((c) => c.id == customId)
-          .firstOrNull;
+      final match = BankSettingsService().customOps.where((c) => c.id == customId).firstOrNull;
       if (match != null) {
-        return BankSettingsService.availableIcons[match.iconKey] ??
-            Icons.payments_rounded;
+        return BankSettingsService.availableIcons[match.iconKey] ?? Icons.payments_rounded;
       }
       return Icons.payments_rounded;
     }
@@ -174,10 +163,7 @@ class TransactionTile extends StatelessWidget {
   String _labelFor(String type) {
     if (type.startsWith('custom_')) {
       final customId = type.substring('custom_'.length);
-      final match = BankSettingsService()
-          .customOps
-          .where((c) => c.id == customId)
-          .firstOrNull;
+      final match = BankSettingsService().customOps.where((c) => c.id == customId).firstOrNull;
       return match?.name ?? 'Operación personalizada';
     }
     switch (type) {
@@ -234,7 +220,11 @@ class TransactionTile extends StatelessWidget {
   }
 
   String _formatDate(DateTime dt) {
-    final h = dt.hour == 0 ? 12 : dt.hour > 12 ? dt.hour - 12 : dt.hour;
+    final h = dt.hour == 0
+        ? 12
+        : dt.hour > 12
+            ? dt.hour - 12
+            : dt.hour;
     final m = dt.minute.toString().padLeft(2, '0');
     final ampm = dt.hour < 12 ? 'AM' : 'PM';
     return '${dt.day}/${dt.month}/${dt.year}  $h:$m $ampm';

@@ -19,7 +19,7 @@ class WsTransport extends P2PTransport {
   @override
   bool get isEnabled => true;
 
-  static const int defaultPort = 8080;
+  static const int defaultPort = 7070;
 
   HttpServer? _server;
   WebSocket? _clientSocket;
@@ -85,19 +85,32 @@ class WsTransport extends P2PTransport {
   }
 
   Future<String?> findLocalIp() async {
-    try {
-      final interfaces = await NetworkInterface.list();
-      for (final iface in interfaces) {
-        for (final addr in iface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-            return addr.address;
+    final interfaces = await NetworkInterface.list();
+    String? fallback;
+    String? tailscaleIp;
+    for (final iface in interfaces) {
+      for (final addr in iface.addresses) {
+        if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+          final octets = addr.address.split('.');
+          if (octets.length == 4) {
+            final first = int.tryParse(octets[0]) ?? 0;
+            final second = int.tryParse(octets[1]) ?? 0;
+            // Tailscale range: 100.64.0.0/10
+            if (first == 100 && second >= 64 && second <= 127) {
+              tailscaleIp ??= addr.address;
+              continue;
+            }
           }
+          // Skip known local-only virtual adapters
+          final name = iface.name.toLowerCase();
+          if (name.contains('loopback') || name.contains('isatap') || name.contains('teredo')) {
+            continue;
+          }
+          fallback ??= addr.address;
         }
       }
-    } catch (e) {
-      debugPrint('WsTransport findLocalIp error: $e');
     }
-    return null;
+    return tailscaleIp ?? fallback;
   }
 
   @override
@@ -121,21 +134,26 @@ class WsTransport extends P2PTransport {
     try {
       _server = await HttpServer.bind(InternetAddress.anyIPv4, defaultPort);
       _port = _server!.port;
+      _localIp = await findLocalIp();
       _serverActiveCtrl.value = true;
-      _connectionStatusCtrl.value = 'Servidor activo en puerto $_port';
+      _connectionStatusCtrl.value = 'Servidor activo en $_localIp:$_port';
+
+      debugPrint('WsTransport: Server started on ${_localIp ?? "unknown"}:$_port');
 
       unawaited(startDiscovery(isBank: true));
 
       _serverSub = _server!.listen((HttpRequest request) {
+        final remoteAddr = request.connectionInfo?.remoteAddress.address ?? 'unknown';
+        debugPrint('WsTransport: HTTP request from $remoteAddr path=${request.uri.path}');
         if (request.uri.path == '/') {
-          final address =
-              request.connectionInfo?.remoteAddress.address ?? '';
           WebSocketTransformer.upgrade(request).then((WebSocket socket) {
-            _handleClientConnection(socket, address);
+            debugPrint('WsTransport: WebSocket upgrade OK from $remoteAddr');
+            _handleClientConnection(socket, remoteAddr);
           }).catchError((e) {
-            debugPrint('WsTransport WebSocket upgrade error: $e');
+            debugPrint('WsTransport: WebSocket upgrade FAILED from $remoteAddr: $e');
           });
         } else {
+          debugPrint('WsTransport: Rejecting non-root path from $remoteAddr');
           request.response.statusCode = 404;
           request.response.close();
         }
@@ -155,11 +173,9 @@ class WsTransport extends P2PTransport {
     final sub = socket.listen(
       (data) {
         if (data is! String) {
-          debugPrint('WsTransport: non-string data received, ignoring');
           return;
         }
-        try {
-          final decoded = jsonDecode(data) as Map<String, dynamic>;
+        final decoded = jsonDecode(data) as Map<String, dynamic>;
           decoded['_wsPlayerId'] = playerId;
 
           if (decoded['type'] == 'ws_identity') {
@@ -178,9 +194,6 @@ class WsTransport extends P2PTransport {
               // el onDone del socket anterior aún no se ha procesado), reemplazarla
               final activeId = _connectionsByInstallationId[installationId];
               if (activeId != null && activeId != playerId) {
-                debugPrint(
-                  'WsTransport: Reemplazando conexión activa para $installationId ($activeId)',
-                );
                 _pendingReconnectionTimers[activeId]?.cancel();
                 _pendingReconnectionTimers.remove(activeId);
                 _disconnectedPlayers.remove(activeId);
@@ -206,11 +219,6 @@ class WsTransport extends P2PTransport {
 
                 // Eliminar el registro antiguo de desconectado
                 _disconnectedPlayers.remove(restoredPlayerId);
-
-                debugPrint(
-                  'WsTransport: Reconexión detectada para jugador '
-                  '$restoredPlayerId ($name)',
-                );
               }
             }
             
@@ -250,15 +258,11 @@ class WsTransport extends P2PTransport {
           }
 
           _onData?.call(decoded);
-        } catch (e) {
-          debugPrint('WsTransport json decode error: $e');
-        }
       },
       onDone: () {
         _removeClient(effectivePlayerId);
       },
-      onError: (e) {
-        debugPrint('WsTransport client error: $e');
+      onError: (_) {
         _removeClient(effectivePlayerId);
       },
     );
@@ -360,29 +364,23 @@ class WsTransport extends P2PTransport {
     final list = List<WsPlayer>.from(_connectedPlayersCtrl.value);
     list.removeWhere((p) => p.id == playerId);
     _connectedPlayersCtrl.value = list;
-
-    debugPrint('WsTransport: Jugador $playerId eliminado tras período de gracia');
   }
 
   Future<void> connectToBank(String host, {int port = defaultPort}) async {
     try {
       _connectionStatusCtrl.value = 'Conectando a $host:$port...';
-      _clientSocket = await WebSocket.connect('ws://$host:$port');
+      _clientSocket = await WebSocket.connect('ws://$host:$port')
+          .timeout(const Duration(seconds: 8));
       _clientConnectedCtrl.value = true;
       _connectionStatusCtrl.value = 'Conectado';
 
       _clientSub = _clientSocket!.listen(
         (data) {
           if (data is! String) {
-            debugPrint('WsTransport client: non-string data received');
             return;
           }
-          try {
-            final decoded = jsonDecode(data) as Map<String, dynamic>;
+          final decoded = jsonDecode(data) as Map<String, dynamic>;
             _onData?.call(decoded);
-          } catch (e) {
-            debugPrint('WsTransport client json decode error: $e');
-          }
         },
         onDone: () {
           _clientConnectedCtrl.value = false;
@@ -390,8 +388,7 @@ class WsTransport extends P2PTransport {
           _clientSocket = null;
           _clientSub = null;
         },
-        onError: (e) {
-          debugPrint('WsTransport client connection error: $e');
+        onError: (_) {
           _clientConnectedCtrl.value = false;
           _connectionStatusCtrl.value = 'Error de conexión';
           _clientSocket = null;
@@ -510,11 +507,7 @@ class WsTransport extends P2PTransport {
     _clientSubs.clear();
 
     for (final socket in _connections.values) {
-      try {
-        socket.close();
-      } catch (e) {
-        debugPrint('WsTransport socket close error: $e');
-      }
+      socket.close();
     }
     _connections.clear();
     _connectionsByInstallationId.clear();
@@ -528,21 +521,13 @@ class WsTransport extends P2PTransport {
 
     _connectedPlayersCtrl.value = const [];
 
-    try {
-      await _server?.close();
-    } catch (e) {
-      debugPrint('WsTransport server close error: $e');
-    }
+    await _server?.close();
     _server = null;
     _serverActiveCtrl.value = false;
     _connectionStatusCtrl.value = '';
 
     if (_clientSocket != null) {
-      try {
-        _clientSocket!.close();
-      } catch (e) {
-        debugPrint('WsTransport client socket close error: $e');
-      }
+      _clientSocket!.close();
       _clientSocket = null;
     }
     _clientSub?.cancel();
@@ -644,37 +629,28 @@ class WsTransport extends P2PTransport {
           },
         );
       }
-    } catch (e) {
+    } catch (_) {
       _isDiscovering = false;
-      debugPrint('WsTransport startDiscovery error: $e');
     }
   }
 
   void _broadcastPresence() {
     if (_localIp == null) return;
-    try {
-      final data = utf8.encode('$_discoveryResponse|$_localIp|$_port');
-      _discoverySocket?.send(
-        data,
-        InternetAddress('255.255.255.255'),
-        discoveryPort,
-      );
-    } catch (e) {
-      debugPrint('WsTransport broadcastPresence error: $e');
-    }
+    final data = utf8.encode('$_discoveryResponse|$_localIp|$_port');
+    _discoverySocket?.send(
+      data,
+      InternetAddress('255.255.255.255'),
+      discoveryPort,
+    );
   }
 
   void _sendDiscoveryBroadcast() {
-    try {
-      final data = utf8.encode(_discoveryRequest);
-      _discoverySocket?.send(
-        data,
-        InternetAddress('255.255.255.255'),
-        discoveryPort,
-      );
-    } catch (e) {
-      debugPrint('WsTransport sendDiscoveryBroadcast error: $e');
-    }
+    final data = utf8.encode(_discoveryRequest);
+    _discoverySocket?.send(
+      data,
+      InternetAddress('255.255.255.255'),
+      discoveryPort,
+    );
   }
 
   void _handleBankDiscoveryRequest(String msg, Datagram datagram) {

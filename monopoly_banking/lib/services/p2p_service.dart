@@ -25,7 +25,6 @@ class P2PService {
   P2PTransport get _active {
     final transport = transports[_currentType];
     if (transport == null) {
-      debugPrint('P2PService: transport $_currentType not registered, falling back to ws');
       return transports[TransportType.ws]!;
     }
     return transport;
@@ -64,7 +63,6 @@ class P2PService {
 
   void setTransport(TransportType type) {
     if (!transports.containsKey(type)) {
-      debugPrint('P2PService: cannot set transport $type, not registered');
       return;
     }
     _currentType = type;

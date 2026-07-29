@@ -23,12 +23,10 @@ mixin _WalletIncoming on State<WalletScreen> {
 
       if (type == 'bank_state_ack') {
         final bankTxId = payload['bankTxId'] as String?;
-        debugPrint('[BANK] bank_state_ack received bankTxId=$bankTxId hasCompleter=${_self._bankDeliveryAcks.containsKey(bankTxId)}');
         if (bankTxId != null) {
           final completer = _self._bankDeliveryAcks[bankTxId];
           if (completer != null && !completer.isCompleted) {
             completer.complete(payload);
-            debugPrint('[BANK] bank_state_ack completed for bankTxId=$bankTxId');
           }
         }
         return;
@@ -51,13 +49,9 @@ mixin _WalletIncoming on State<WalletScreen> {
         return;
       }
 
-      if (type == 'ws_identity') {
-        debugPrint('[BANK_WS] ws_identity received deviceId=$deviceInstallationId name=${payload['name']}');
-      }
       if (type == 'ws_identity' &&
           deviceInstallationId != null &&
           deviceInstallationId.isNotEmpty) {
-        debugPrint('[BANK_WS] Processing ws_identity');
         final playerId = ((payload['playerId'] as String?) ??
                 (payload['name'] as String?) ??
                 '')
@@ -67,7 +61,6 @@ mixin _WalletIncoming on State<WalletScreen> {
           final deviceAccount =
               BankLedgerService().accountForDeviceId(deviceInstallationId);
           if (deviceAccount != null && !deviceAccount.bankrupt) {
-            debugPrint('[BANK_WS] Returning device with cleared local data: ${deviceAccount.playerId}');
             final storedName = deviceAccount.playerId;
             if (storedName.isNotEmpty) {
               P2PService().wsTransport.updatePlayerIdentity(
@@ -106,7 +99,6 @@ mixin _WalletIncoming on State<WalletScreen> {
               // se reintenta en la próxima identidad
             }
           } else {
-            debugPrint('[BANK_WS] New device, sending new_player');
             P2PService().setTransport(TransportType.ws);
             await P2PService().sendPayload({
               'type': 'new_player',
@@ -190,13 +182,7 @@ mixin _WalletIncoming on State<WalletScreen> {
             ...result.account.toClientState(),
           };
           P2PService().setTransport(TransportType.ws);
-          debugPrint('[BANK_WS] Sending handshake to $playerId balance=${handshake['balance']}');
-          try {
-            await P2PService().sendPayload(handshake);
-            debugPrint('[BANK_WS] Handshake sent successfully');
-          } on TransportUnavailableException {
-            debugPrint('[BANK_WS] TransportUnavailableException sending handshake');
-          }
+          await P2PService().sendPayload(handshake);
         }
         return;
       }
@@ -207,7 +193,6 @@ mixin _WalletIncoming on State<WalletScreen> {
         final colorId = payload['colorId'] as String? ?? '0';
         final deviceId = payload['deviceInstallationId'] as String? ?? '';
         if (name != null && name.isNotEmpty) {
-          debugPrint('[BANK_WS] player_profile name=$name avatarId=$avatarId colorId=$colorId');
           P2PService().wsTransport.updatePlayerIdentity(
             deviceInstallationId: deviceId,
             name: name,
@@ -237,13 +222,7 @@ mixin _WalletIncoming on State<WalletScreen> {
             ...result.account.toClientState(),
           };
           P2PService().setTransport(TransportType.ws);
-          debugPrint('[BANK_WS] player_profile handshake to $name balance=${handshake['balance']}');
-          try {
-            await P2PService().sendPayload(handshake);
-            debugPrint('[BANK_WS] player_profile handshake sent to $name');
-          } on TransportUnavailableException {
-            debugPrint('[BANK_WS] TransportUnavailableException sending player_profile handshake');
-          }
+          await P2PService().sendPayload(handshake);
         }
         return;
       }
@@ -324,17 +303,14 @@ mixin _WalletIncoming on State<WalletScreen> {
   }) async {
     final payload = result.toClientPayload();
     if (requestId != null) payload['requestId'] = requestId;
-    debugPrint('[BANK] _sendBankResult targetPlayerId=${payload['targetPlayerId']} bankTxId=${result.transactionId} balance=${payload['balance']} type=${payload['type']}');
     final completer = Completer<Map<String, dynamic>>();
     _self._bankDeliveryAcks[result.transactionId] = completer;
     try {
       P2PService().setTransport(transportType);
       await P2PService().sendPayload(payload);
 
-      debugPrint('[BANK] _sendBankResult waiting for ack...');
       final confirmation =
           await completer.future.timeout(const Duration(seconds: 12));
-      debugPrint('[BANK] _sendBankResult ack received confirmedPlayer=${confirmation['playerId']} confirmedBalance=${confirmation['appliedBalance']}');
       final confirmedPlayer = confirmation['playerId'] as String?;
       final confirmedBalance =
           (confirmation['appliedBalance'] as num?)?.toDouble();

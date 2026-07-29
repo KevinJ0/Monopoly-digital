@@ -274,16 +274,22 @@ class _NameInputScreenState extends State<NameInputScreen>
                   fontSize: 18)),
           centerTitle: true,
           actions: [
-            TextButton(
-              onPressed: _onContinue,
-              child: Text(
-                'Continuar',
-                style: TextStyle(
-                  color: _accent,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 15,
-                ),
-              ),
+            ListenableBuilder(
+              listenable: _controller,
+              builder: (context, _) {
+                final valid = _controller.text.trim().length >= 2;
+                return TextButton(
+                  onPressed: valid ? _onContinue : null,
+                  child: Text(
+                    'Continuar',
+                    style: TextStyle(
+                      color: valid ? _accent : kTextSecondary.withValues(alpha: 0.4),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -369,6 +375,7 @@ class _NameInputScreenState extends State<NameInputScreen>
         TextFormField(
           controller: _controller,
           focusNode: _focusNode,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           style: const TextStyle(
             color: kTextPrimary,
             fontSize: 22,

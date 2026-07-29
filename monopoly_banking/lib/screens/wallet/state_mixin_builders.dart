@@ -21,8 +21,6 @@ mixin _WalletBuilders on State<WalletScreen> {
     final displayAvatar = _self._lastAvatarId ?? '';
     final displayBalance = _self._lastBalance ?? 0.0;
 
-    debugPrint('[┊] BANK_BUILD displayName=$displayName lastBalance=$displayBalance history=${history.length}');
-
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -57,8 +55,6 @@ mixin _WalletBuilders on State<WalletScreen> {
     required String displayAvatar,
     required double displayBalance,
   }) {
-    debugPrint('[┊] BANK_GAME_VIEW BUILDING displayName=$displayName history=${history.length}');
-
     final filteredHistory = (() {
       var result = _self._walletFilterType != null ? history.where((tx) => tx.type == _self._walletFilterType).toList() : history.toList();
       result.sort((a, b) {
@@ -318,7 +314,7 @@ mixin _WalletBuilders on State<WalletScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Banca Central',
+                            'Banco Monopoly',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

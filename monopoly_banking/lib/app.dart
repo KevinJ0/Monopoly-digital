@@ -122,11 +122,6 @@ class _RootRouterState extends State<_RootRouter> {
     }
 
     final hasSession = session.role.isNotEmpty && session.avatarId.isNotEmpty;
-    final childKey = hasSession
-        ? (session.isBank ? 'bank_home' : 'wallet')
-        : 'role';
-    debugPrint('[┊] ROOT_ROUTER hasSession=$hasSession childKey=$childKey');
-
     Widget screen;
     if (hasSession) {
       if (session.isBank) {

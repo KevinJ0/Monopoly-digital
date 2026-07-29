@@ -40,14 +40,14 @@ class _BankruptcyScreenState extends State<BankruptcyScreen>
     super.dispose();
   }
 
-  Future<void> _leaveGame() async {
+
+
+  void _goToRoleSelection() {
     if (_leaving) return;
     setState(() => _leaving = true);
     SoundService.playClick();
-    await P2PService().shutdown();
-    if (!mounted) return;
-    await context.read<SessionProvider>().clearSession();
-    if (!mounted) return;
+    P2PService().shutdown();
+    context.read<SessionProvider>().clearSession();
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
@@ -293,33 +293,38 @@ class _BankruptcyScreenState extends State<BankruptcyScreen>
                                   : compact
                                       ? 20
                                       : 32),
-                          SizedBox(
-                            width: double.infinity,
-                            height: veryCompact
-                                ? 46
-                                : compact
-                                    ? 50
-                                    : 56,
-                            child: ElevatedButton.icon(
-                              onPressed: _leaving ? null : _leaveGame,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: kRed,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              SizedBox(
+                                width: 160,
+                                height: veryCompact
+                                    ? 46
+                                    : compact
+                                        ? 50
+                                        : 56,
+                                child: ElevatedButton.icon(
+                                  onPressed: _leaving ? null : _goToRoleSelection,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: kRed,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  icon: _leaving
+                                      ? const AppSpinner(
+                                          size: 20,
+                                          color: Colors.white,
+                                        )
+                                      : const Icon(Icons.home_rounded),
+                                  label: const Text(
+                                    'Volver al inicio',
+                                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                                  ),
                                 ),
                               ),
-                              icon: _leaving
-                                  ? const AppSpinner(
-                                      size: 20,
-                                      color: Colors.white,
-                                    )
-                                  : const Icon(Icons.logout_rounded),
-                              label: const Text(
-                                'Salir de la partida',
-                                style: TextStyle(fontWeight: FontWeight.w800),
-                              ),
-                            ),
+                            ],
                           ),
                         ],
                       ),

@@ -53,9 +53,6 @@ mixin _WalletConnection on State<WalletScreen> {
       for (final player in connected) {
         if (_self._announcedWsConnections.contains(player.id)) continue;
         _self._announcedWsConnections.add(player.id);
-        debugPrint(
-          '[WS bank] Jugador conectado id=${player.id} nombre=${player.displayName}',
-        );
         NotificationService().show(
           '${player.displayName} se conect\u00f3 al banco',
           backgroundColor: kGreen,

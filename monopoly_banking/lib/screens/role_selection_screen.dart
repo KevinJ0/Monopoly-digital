@@ -11,6 +11,7 @@ import 'package:monopoly_banking/widgets/animated_entry.dart';
 import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
 import 'package:monopoly_banking/services/error_translator_service.dart';
 import 'package:monopoly_banking/core/game_transitions.dart';
+import 'package:monopoly_banking/screens/ws_debug_screen.dart';
 
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
@@ -32,7 +33,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
     super.initState();
     _fadeCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 480),
     )..forward();
     _fade = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
 
@@ -195,17 +196,17 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             const AnimatedEntry(
-                              delay: Duration(milliseconds: 200),
+                              delay: Duration(milliseconds: 160),
                               child: _HeaderWidget(),
                             ),
                             const SizedBox(height: 32),
                             AnimatedEntry(
-                              delay: const Duration(milliseconds: 400),
+                              delay: const Duration(milliseconds: 320),
                               child: _buildBankSection(),
                             ),
                             const SizedBox(height: 10),
                             AnimatedEntry(
-                              delay: const Duration(milliseconds: 600),
+                              delay: const Duration(milliseconds: 480),
                               child: _buildClientSection(),
                             ),
                             const SizedBox(height: 48),
@@ -216,6 +217,17 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
                                 fontSize: 12,
                                 letterSpacing: 1.5,
                                 fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton.icon(
+                              onPressed: () => Navigator.of(context).push(
+                                GameFadeRoute(page: const WsDebugScreen()),
+                              ),
+                              icon: const Icon(Icons.bug_report_rounded, size: 14),
+                              label: const Text('WS Debug', style: TextStyle(fontSize: 11)),
+                              style: TextButton.styleFrom(
+                                foregroundColor: kTextSecondary.withValues(alpha: 0.4),
                               ),
                             ),
                           ],
@@ -307,7 +319,7 @@ class _RoleButtonState extends State<_RoleButton>
 
     setState(() => _isExpanding = true);
 
-    await Future.delayed(const Duration(milliseconds: 200));
+    await Future.delayed(const Duration(milliseconds: 160));
     if (!mounted) return;
 
     final renderBox =

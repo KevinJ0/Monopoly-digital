@@ -174,34 +174,7 @@ mixin _BankDialogs on State<BankScreen> {
                                       ),
                                     ),
                                   ),
-                                  if (kDebugMode) ...[
-                                    const SizedBox(height: 10),
-                                    ValueListenableBuilder<String>(
-                                      valueListenable: controller.debugInfo,
-                                      builder: (context, debugInfo, _) {
-                                        if (debugInfo.isEmpty) {
-                                          return const SizedBox.shrink();
-                                        }
-                                        return Container(
-                                          width: double.infinity,
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withValues(alpha: 0.4),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Text(
-                                            debugInfo,
-                                            style: const TextStyle(
-                                              color: Colors.greenAccent,
-                                              fontSize: 10,
-                                              fontFamily: 'monospace',
-                                              height: 1.4,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ],
+
                                 ],
                               ),
                             ),

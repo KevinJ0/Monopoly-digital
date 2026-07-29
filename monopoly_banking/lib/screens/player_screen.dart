@@ -66,6 +66,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   Timer? _tierCelebrationTimer;
   CardTier? _pendingCelebrationTier;
   bool _evolutionDialogOpen = false;
+  final Set<CardTier> _celebratedTiers = {};
   bool _wsScanning = false;
   bool _userRequestedWsDisconnect = false;
   bool _reconnecting = false;
@@ -90,7 +91,6 @@ class _PlayerScreenState extends State<PlayerScreen>
   @override
   void initState() {
     super.initState();
-    debugPrint('[PLAYER] INIT_STATE');
     WidgetsBinding.instance.addObserver(this);
     _pulseCtrl = AnimationController(
       vsync: this,
@@ -120,7 +120,6 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   @override
   void dispose() {
-    debugPrint('[PLAYER] DISPOSE isExiting=$_isExiting');
     WidgetsBinding.instance.removeObserver(this);
     _wsScanning = false;
     _wsConnecting = false;

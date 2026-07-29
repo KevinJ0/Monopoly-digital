@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/providers/session_provider.dart';
+import 'package:monopoly_banking/screens/bank_desktop_screen.dart';
 import 'package:monopoly_banking/screens/wallet_screen.dart';
 import 'package:monopoly_banking/screens/bank_screen.dart';
 import 'package:monopoly_banking/services/bank_ledger_service.dart';
@@ -46,9 +47,7 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
   void _goToPage(int index) {
     if (_isAnimating || index == _currentIndex) return;
     setState(() => _isAnimating = true);
-    _pageCtrl
-        .animateToPage(index, duration: 300.ms, curve: Curves.easeInOutCubic)
-        .then((_) {
+    _pageCtrl.animateToPage(index, duration: 300.ms, curve: Curves.easeInOutCubic).then((_) {
       if (mounted) setState(() => _isAnimating = false);
     });
   }
@@ -56,6 +55,12 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final bankColor = context.watch<SessionProvider>().color;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isWide = screenWidth > 600;
+
+    if (isWide) {
+      return const BankDesktopScreen();
+    }
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -148,7 +153,7 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
                                           Icon(
                                             tab.icon,
                                             color: selected ? kBgDark : kTextSecondary,
-                                            size: 20,
+                                            size: 30,
                                           ),
                                           if (count > 0)
                                             Positioned(
@@ -188,7 +193,7 @@ class _BankHomeScreenState extends State<BankHomeScreen> {
                               : Icon(
                                   tab.icon,
                                   color: selected ? kBgDark : kTextSecondary,
-                                  size: 20,
+                                  size: 30,
                                 ),
                           if (selected) ...[
                             const SizedBox(width: 6),

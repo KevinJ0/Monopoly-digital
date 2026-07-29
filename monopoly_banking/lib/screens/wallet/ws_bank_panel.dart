@@ -29,7 +29,7 @@ class _WsBankPanelState extends State<WsBankPanel> {
     final transport = P2PService().wsTransport;
 
     final panel = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       child: ValueListenableBuilder<bool>(
         valueListenable: transport.serverActiveNotifier,
         builder: (context, active, _) {

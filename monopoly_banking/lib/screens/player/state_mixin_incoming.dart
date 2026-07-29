@@ -28,8 +28,8 @@ mixin _PlayerIncoming on State<PlayerScreen> {
         } finally {
           _self._userRequestedWsDisconnect = false;
         }
+        await session.clearSession();
         if (mounted) {
-          _self._safeSetState(() {});
           NotificationService().show(
             'El banco apag\u00f3 el servidor. Has sido desconectado.',
             backgroundColor: kRed,
@@ -60,22 +60,14 @@ mixin _PlayerIncoming on State<PlayerScreen> {
       }
 
       if (type == 'handshake') {
-        debugPrint('[PLAYER] Handshake received target=${payload['targetPlayerId']} myName=${session.name} balance=${payload['balance']} isHandshakeDone=${session.isHandshakeDone}');
         if (!_isPayloadForPlayer(payload, session.name)) {
-          debugPrint('[PLAYER] Handshake NOT for me, skipping');
           return;
         }
-        try {
-          if (!session.isHandshakeDone) {
-            await session.applyHandshake(payload);
-            _self._setClientIdentity();
-            _self._triggerWelcomeAnimation(payload['name'] as String?);
-          }
-          await wallet.applyBankState(payload);
-          debugPrint('[PLAYER] after applyBankState wallet.balance=${wallet.balance} rawBalance=${wallet.rawBalance.value}');
-        } catch (e) {
-          debugPrint('[PLAYER] HANDSHAKE ERROR: $e');
+        if (!session.isHandshakeDone) {
+          await session.applyHandshake(payload);
+          _self._setClientIdentity();
         }
+        await wallet.applyBankState(payload);
         try {
           await WidgetsBinding.instance.endOfFrame
               .timeout(const Duration(seconds: 1));
@@ -95,17 +87,13 @@ mixin _PlayerIncoming on State<PlayerScreen> {
           // Ignorado intencionalmente
         }
       } else if (type == 'bank_state') {
-        debugPrint('[PLAYER] bank_state received isHandshakeDone=${session.isHandshakeDone} targetPlayerId=${payload['targetPlayerId']} myName=${session.name} balance=${payload['balance']}');
         if (!session.isHandshakeDone) {
-          debugPrint('[PLAYER] bank_state SKIPPED: isHandshakeDone=false');
           return;
         }
         if (!_isPayloadForPlayer(payload, session.name)) {
-          debugPrint('[PLAYER] bank_state SKIPPED: not for me');
           return;
         }
         await wallet.applyBankState(payload);
-        debugPrint('[PLAYER] applyBankState done balance=${wallet.balance} rawBalance=${wallet.rawBalance.value}');
         final bankTxId = payload['bankTxId'] as String?;
         if (bankTxId != null && bankTxId.isNotEmpty) {
           try {
@@ -114,19 +102,14 @@ mixin _PlayerIncoming on State<PlayerScreen> {
           } on TimeoutException {
             // Ignorado intencionalmente
           }
-          try {
-            await P2PService().sendPayload({
-              'type': 'bank_state_ack',
-              'bankTxId': bankTxId,
-              'playerId': session.name,
-              'name': session.name,
-              'appliedBalance': wallet.balance,
-              'deviceInstallationId': DeviceIdentityService.installationId,
-            });
-            debugPrint('[PLAYER] bank_state_ack sent for bankTxId=$bankTxId');
-          } on TransportUnavailableException {
-            debugPrint('[PLAYER] bank_state_ack failed: transport unavailable');
-          }
+          await P2PService().sendPayload({
+            'type': 'bank_state_ack',
+            'bankTxId': bankTxId,
+            'playerId': session.name,
+            'name': session.name,
+            'appliedBalance': wallet.balance,
+            'deviceInstallationId': DeviceIdentityService.installationId,
+          });
         }
         final requestId = payload['requestId'] as String?;
         if (requestId == _self._pendingBankOperationId) {
@@ -192,17 +175,14 @@ mixin _PlayerIncoming on State<PlayerScreen> {
         );
       } else if (type == 'new_player') {
         if (session.isHandshakeDone) {
-          debugPrint('[PLAYER] new_player SKIPPED: already in a session');
           return;
         }
-        debugPrint('[PLAYER] new_player received, showing onboarding');
         if (!mounted) return;
         final nav = Navigator.of(context);
         final result = await nav.push<Map<String, dynamic>>(
           MaterialPageRoute(builder: (_) => const OnboardingScreen()),
         );
         if (result == null || !mounted) {
-          debugPrint('[PLAYER] new_player onboarding cancelled, disconnecting');
           _self._stopWsClient();
           return;
         }

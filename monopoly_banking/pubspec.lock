@@ -406,22 +406,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.4.8"
-  flutter_plugin_android_lifecycle:
-    dependency: transitive
-    description:
-      name: flutter_plugin_android_lifecycle
-      sha256: "3854fe5e3bff0b113c658f260b90c95dea17c92db0f2addeac2e343dd9969785"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.35"
-  flutter_reactive_ble:
-    dependency: "direct main"
-    description:
-      name: flutter_reactive_ble
-      sha256: "5db17abd4afe5e0803098e2270fa41f39682e8bd75a6928508ee0d7112b0d813"
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.5.0"
   flutter_riverpod:
     dependency: "direct main"
     description:
@@ -486,14 +470,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.1.3"
-  flutter_tts:
-    dependency: "direct main"
-    description:
-      name: flutter_tts
-      sha256: baa3cb6b4990318460fe28bfa8c7869399e97223971532c02bd97c5e876aa3c5
-      url: "https://pub.dev"
-    source: hosted
-    version: "4.2.2"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
@@ -507,14 +483,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
-  functional_data:
-    dependency: transitive
-    description:
-      name: functional_data
-      sha256: "76d17dc707c40e552014f5a49c0afcc3f1e3f05e800cd6b7872940bfe41a5039"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.2.0"
   glob:
     dependency: transitive
     description:
@@ -683,46 +651,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.1.1"
-  local_auth:
-    dependency: "direct main"
-    description:
-      name: local_auth
-      sha256: "434d854cf478f17f12ab29a76a02b3067f86a63a6d6c4eb8fbfdcfe4879c1b7b"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.3.0"
-  local_auth_android:
-    dependency: transitive
-    description:
-      name: local_auth_android
-      sha256: a0bdfcc0607050a26ef5b31d6b4b254581c3d3ce3c1816ab4d4f4a9173e84467
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.56"
-  local_auth_darwin:
-    dependency: transitive
-    description:
-      name: local_auth_darwin
-      sha256: "699873970067a40ef2f2c09b4c72eb1cfef64224ef041b3df9fdc5c4c1f91f49"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.6.1"
-  local_auth_platform_interface:
-    dependency: transitive
-    description:
-      name: local_auth_platform_interface
-      sha256: f98b8e388588583d3f781f6806e4f4c9f9e189d898d27f0c249b93a1973dd122
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.0"
-  local_auth_windows:
-    dependency: transitive
-    description:
-      name: local_auth_windows
-      sha256: bc4e66a29b0fdf751aafbec923b5bed7ad6ed3614875d8151afe2578520b2ab5
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.11"
   logger:
     dependency: "direct main"
     description:
@@ -907,14 +835,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.5.0"
-  protobuf:
-    dependency: transitive
-    description:
-      name: protobuf
-      sha256: "75ec242d22e950bdcc79ee38dd520ce4ee0bc491d7fadc4ea47694604d22bf06"
-      url: "https://pub.dev"
-    source: hosted
-    version: "6.0.0"
   provider:
     dependency: "direct main"
     description:
@@ -963,22 +883,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.0"
-  reactive_ble_mobile:
-    dependency: transitive
-    description:
-      name: reactive_ble_mobile
-      sha256: "53c1e589d352690be8441960c00fb006dcf77baeb0f7414be4d9764454fcecf9"
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.5.0"
-  reactive_ble_platform_interface:
-    dependency: transitive
-    description:
-      name: reactive_ble_platform_interface
-      sha256: "20efc78259f8d8bf20cd8048c274985e67e043f0d2c62d778303baaa1f1ac667"
-      url: "https://pub.dev"
-    source: hosted
-    version: "5.5.0"
   record_use:
     dependency: transitive
     description:
@@ -995,6 +899,46 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.6.1"
+  screen_retriever:
+    dependency: transitive
+    description:
+      name: screen_retriever
+      sha256: ace919117a7520c13a50a6259e60c4a0d4cbe98809468792a91b5c5adada2aa6
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.2"
+  screen_retriever_linux:
+    dependency: transitive
+    description:
+      name: screen_retriever_linux
+      sha256: "7b52006a5ceae1f3d5af7f77188c3290d6e7d8ded16d99809bea84967c65c257"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.2"
+  screen_retriever_macos:
+    dependency: transitive
+    description:
+      name: screen_retriever_macos
+      sha256: a1489b99cce597c45a54b9aae1cd94c8d4705353b7e0bb2457a6e4de44e0ad8a
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.2"
+  screen_retriever_platform_interface:
+    dependency: transitive
+    description:
+      name: screen_retriever_platform_interface
+      sha256: "94a5535277510a63184ca178ce12a1449bc0b38618879aa1c18bf57369c5064a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.2"
+  screen_retriever_windows:
+    dependency: transitive
+    description:
+      name: screen_retriever_windows
+      sha256: dafc6922b0bfbf1d48cf3ccbf519b4fff47bdcb820da1728ea6db675fecc9324
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.2"
   sensors_plus:
     dependency: "direct main"
     description:
@@ -1056,46 +1000,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.10.2"
-  sqflite:
-    dependency: "direct main"
-    description:
-      name: sqflite
-      sha256: "58a799e6ac17dd32fbab93813d39ed835a75ccc0f8f85b8955fe318c6712b082"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.3"
-  sqflite_android:
-    dependency: transitive
-    description:
-      name: sqflite_android
-      sha256: d0548f9d7422a2dae99ec6f8b0a3074463b132d216fa5ba0d230eeefc901983b
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.3"
-  sqflite_common:
-    dependency: transitive
-    description:
-      name: sqflite_common
-      sha256: "5bf6a55c166e73bf651ba7ec3ed486e577620e3dc8f3a9c6a258a8031b624590"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.5.11"
-  sqflite_darwin:
-    dependency: transitive
-    description:
-      name: sqflite_darwin
-      sha256: c86ca18b8f666bbf903924687fe21cc16fc385d086005067e26619ca530bef9f
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.3+1"
-  sqflite_platform_interface:
-    dependency: transitive
-    description:
-      name: sqflite_platform_interface
-      sha256: f84939f84350d92d04416f8bc4dc52d3896aec7716cc9e80cf0146342139dc50
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.1"
   stack_trace:
     dependency: transitive
     description:
@@ -1240,6 +1144,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.15.0"
+  window_manager:
+    dependency: "direct main"
+    description:
+      name: window_manager
+      sha256: "05c231fd7b23d2380f14c5cc10b7b93d60d4fa4a2fb4e0f032de27e44b5560e9"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.2"
   xdg_directories:
     dependency: transitive
     description:

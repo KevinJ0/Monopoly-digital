@@ -499,6 +499,7 @@ class BankLedgerService {
 
   Future<void> closeBankSession() async {
     await HiveService.settingsBox.delete(_accountsKey);
+    _invalidateAccountCache();
     await HiveService.settingsBox.delete(_transactionsKey);
     _invalidateTxCache();
     await HiveService.settingsBox.delete(_bannedDevicesKey);

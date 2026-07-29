@@ -37,6 +37,7 @@ class PlayerInfoView extends StatelessWidget {
           _buildSectionHeader('Tarjeta del Jugador'),
           Container(
             width: double.infinity,
+            margin: const EdgeInsets.symmetric(horizontal: 6),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -120,7 +121,7 @@ class PlayerInfoView extends StatelessWidget {
       leading: Icon(icon, color: _txColor(type), size: 20),
       title: Text(label, style: const TextStyle(color: kTextPrimary, fontSize: 13)),
       subtitle: Text(
-        '${type.startsWith('withdraw') || type.startsWith('charge') ? '-' : '+'}\$${amount.toStringAsFixed(0)}  →  \$${balanceAfter.toStringAsFixed(0)}',
+        '${type.startsWith('withdraw') || type.startsWith('charge') ? '-' : '+'}${formatMoney(amount)}  →  ${formatMoney(balanceAfter)}',
         style: const TextStyle(color: kTextSecondary, fontSize: 11),
       ),
     );
@@ -129,13 +130,9 @@ class PlayerInfoView extends StatelessWidget {
   IconData _txIcon(String type) {
     if (type.startsWith('custom_')) {
       final customId = type.substring('custom_'.length);
-      final match = BankSettingsService()
-          .customOps
-          .where((c) => c.id == customId)
-          .firstOrNull;
+      final match = BankSettingsService().customOps.where((c) => c.id == customId).firstOrNull;
       if (match != null) {
-        return BankSettingsService.availableIcons[match.iconKey] ??
-            Icons.payments_rounded;
+        return BankSettingsService.availableIcons[match.iconKey] ?? Icons.payments_rounded;
       }
       return Icons.payments_rounded;
     }
@@ -151,10 +148,7 @@ class PlayerInfoView extends StatelessWidget {
   Color _txColor(String type) {
     if (type.startsWith('custom_')) {
       final customId = type.substring('custom_'.length);
-      final match = BankSettingsService()
-          .customOps
-          .where((c) => c.id == customId)
-          .firstOrNull;
+      final match = BankSettingsService().customOps.where((c) => c.id == customId).firstOrNull;
       if (match != null) {
         return match.isGive ? kGreen : kRed;
       }
@@ -171,10 +165,7 @@ class PlayerInfoView extends StatelessWidget {
   String _txLabel(String type) {
     if (type.startsWith('custom_')) {
       final customId = type.substring('custom_'.length);
-      final match = BankSettingsService()
-          .customOps
-          .where((c) => c.id == customId)
-          .firstOrNull;
+      final match = BankSettingsService().customOps.where((c) => c.id == customId).firstOrNull;
       return match?.name ?? 'Operación personalizada';
     }
     if (type.contains('passGo')) return 'Paso por GO';
@@ -201,21 +192,18 @@ class PlayerInfoView extends StatelessWidget {
   }
 
   Widget _buildStatsGrid() {
-      return Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-              color: kBgCard,
-              borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-              children: [
-                  _detailRow('Saldo', formatMoney(balance)),
-                  _detailRow('Volumen total', formatMoney(volume)),
-                  _detailRow('Pases por GO', '$passGoCount'),
-                  _detailRow('Transacciones', '$txCount realizadas'),
-              ]
-          )
-      );
+    return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: kBgCard,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(children: [
+          _detailRow('Saldo', formatMoney(balance)),
+          _detailRow('Volumen total', formatMoney(volume)),
+          _detailRow('Pases por GO', '$passGoCount'),
+          _detailRow('Transacciones', '$txCount realizadas'),
+        ]));
   }
 
   Widget _detailRow(String label, String value) {

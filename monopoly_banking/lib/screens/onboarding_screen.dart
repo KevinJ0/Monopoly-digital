@@ -46,7 +46,7 @@ const _colorLabels = {
 
 const _avatars = [
   '🎩', '🚗', '🐶', '⚓', '🎸', '👢', '💰', '🛳️',
-  '🐱', '👑', '💎', '🤖', '👽', '🧙', '🔥', '⭐',
+  '🐱', '👑', '💎', '🤖', '👽', '🧙', '🔥', '🚀',
   '🎲', '🎯', '🏆', '🦄', '🐉', '🃏', '🦅', '🦈',
 ];
 
@@ -54,9 +54,10 @@ const _avatarLabels = {
   '🎩': 'Sombrero', '🚗': 'Auto', '🐶': 'Perro', '⚓': 'Ancla',
   '🎸': 'Guitarra', '👢': 'Bota', '💰': 'Dinero', '🛳️': 'Yate',
   '🐱': 'Gato', '👑': 'Corona', '💎': 'Diamante', '🤖': 'Robot',
-  '👽': 'Alien', '🧙': 'Mago', '🔥': 'Fuego', '⭐': 'Estrella',
+  '👽': 'Alien', '🧙': 'Mago', '🔥': 'Fuego',
   '🎲': 'Dados', '🎯': 'Diana', '🏆': 'Trofeo', '🦄': 'Unicornio',
   '🐉': 'Dragon', '🃏': 'Comodin', '🦅': 'Aguila', '🦈': 'Tiburon',
+  '🚀': 'Cohete',
 };
 
 class _NameSuggestion {
@@ -122,6 +123,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void initState() {
     super.initState();
     _pageCtrl = PageController();
+    _nameController.addListener(() {
+      if (mounted) setState(() {});
+    });
     final rng = Random();
     _visibleSuggestions = List.from(_allSuggestions)..shuffle(rng);
     _visibleSuggestions.removeRange(24, _visibleSuggestions.length);
@@ -629,13 +633,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildPreviewCard(bool isShort) {
-    final cardHeight = isShort ? 190.0 : 240.0;
+    const double maxCardWidth = 371.6;
+    final cardHeight = isShort ? 190.0 : 233.6;
     final vPad = isShort ? 16.0 : 24.0;
     final balanceSize = isShort ? 18.0 : 22.0;
     final textColor = _accent.computeLuminance() > 0.5 ? Colors.black : Colors.white;
-    return Container(
-      width: double.infinity,
-      height: cardHeight,
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: maxCardWidth),
+        width: double.infinity,
+        height: cardHeight,
       margin: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
@@ -764,7 +771,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         Text('SALDO',
                             style: TextStyle(
                                 color: textColor.withValues(alpha: 0.54), fontSize: 8)),
-                        Text('\$2,000',
+                        Text(formatMoney(2000),
                             style: TextStyle(
                               color: textColor,
                               fontSize: balanceSize,
@@ -779,8 +786,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // ─── Name page widgets ───
 

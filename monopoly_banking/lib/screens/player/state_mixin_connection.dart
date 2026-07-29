@@ -122,7 +122,6 @@ mixin _PlayerConnection on State<PlayerScreen> {
   Future<void> _connectToBank(String host, {int port = 8080}) async {
     if (_self._wsConnecting) return;
     if (P2PService().wsTransport.clientConnectedNotifier.value) {
-      debugPrint('[PLAYER] CONNECT WS already connected, closing client first');
       await P2PService().wsTransport.closeClient();
     }
     _self._wsConnecting = true;

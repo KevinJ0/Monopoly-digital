@@ -88,13 +88,11 @@ class _AnimatedPlayersBackdropState extends State<AnimatedPlayersBackdrop>
       if (colors.isEmpty) colors.add(widget.bankColor);
       _palette = colors;
 
-      debugPrint('[AnimatedPlayersBackdrop] palette=${colors.length} colors, starting cycle');
       _cycleCtrl
         ..stop()
         ..duration = Duration(milliseconds: _palette.length * (_crossfadeMs + _holdMs))
         ..repeat();
-    } catch (e) {
-      debugPrint('[AnimatedPlayersBackdrop] error: $e');
+    } catch (_) {
       _palette = [widget.bankColor];
       _cycleCtrl
         ..stop()

@@ -2,9 +2,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:monopoly_banking/core/constants.dart';
+import 'package:monopoly_banking/providers/session_provider.dart';
 import 'package:monopoly_banking/services/p2p_service.dart';
 import 'package:monopoly_banking/services/sound_service.dart';
 import 'package:monopoly_banking/widgets/app_spinner.dart';
+import 'package:provider/provider.dart';
 
 class KickedScreen extends StatefulWidget {
   const KickedScreen({
@@ -18,8 +20,7 @@ class KickedScreen extends StatefulWidget {
   State<KickedScreen> createState() => _KickedScreenState();
 }
 
-class _KickedScreenState extends State<KickedScreen>
-    with SingleTickerProviderStateMixin {
+class _KickedScreenState extends State<KickedScreen> with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   bool _leaving = false;
 
@@ -44,7 +45,9 @@ class _KickedScreenState extends State<KickedScreen>
     SoundService.playClick();
     await P2PService().wsTransport.stop();
     if (!mounted) return;
-    Navigator.of(context).pop();
+    await context.read<SessionProvider>().clearSession();
+    if (!mounted) return;
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override
@@ -56,8 +59,7 @@ class _KickedScreenState extends State<KickedScreen>
         body: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final compact =
-                  constraints.maxHeight < 680 || constraints.maxWidth < 360;
+              final compact = constraints.maxHeight < 680 || constraints.maxWidth < 360;
               final veryCompact = constraints.maxHeight < 540;
               final horizontalPadding = compact ? 16.0 : 24.0;
               final verticalPadding = veryCompact
@@ -93,8 +95,7 @@ class _KickedScreenState extends State<KickedScreen>
                             animation: _controller,
                             builder: (context, _) {
                               final progress = _controller.value;
-                              final pulse =
-                                  1 + math.sin(progress * math.pi * 2) * 0.035;
+                              final pulse = 1 + math.sin(progress * math.pi * 2) * 0.035;
                               return SizedBox(
                                 width: visualSize,
                                 height: visualSize,
@@ -110,12 +111,7 @@ class _KickedScreenState extends State<KickedScreen>
                                         boxShadow: [
                                           BoxShadow(
                                             color: Colors.orange.withValues(
-                                              alpha: 0.2 *
-                                                  (0.6 +
-                                                      0.4 *
-                                                          math.sin(progress *
-                                                              math.pi *
-                                                              2)),
+                                              alpha: 0.2 * (0.6 + 0.4 * math.sin(progress * math.pi * 2)),
                                             ),
                                             blurRadius: 60,
                                             spreadRadius: 15,
@@ -124,21 +120,13 @@ class _KickedScreenState extends State<KickedScreen>
                                       ),
                                     ),
                                     ...List.generate(6, (index) {
-                                      final p =
-                                          (progress + index * 0.15) % 1.0;
-                                      final opacity =
-                                          (1 - p).clamp(0.0, 0.5);
-                                      final xOff = math.sin(p * math.pi * 4 + index) *
-                                          visualSize *
-                                          0.15;
+                                      final p = (progress + index * 0.15) % 1.0;
+                                      final opacity = (1 - p).clamp(0.0, 0.5);
+                                      final xOff = math.sin(p * math.pi * 4 + index) * visualSize * 0.15;
                                       final yOff = -p * visualSize * 0.55;
                                       return Positioned(
-                                        left: visualSize * 0.5 +
-                                            xOff -
-                                            6,
-                                        top: visualSize * 0.5 +
-                                            yOff -
-                                            6,
+                                        left: visualSize * 0.5 + xOff - 6,
+                                        top: visualSize * 0.5 + yOff - 6,
                                         child: Opacity(
                                           opacity: opacity,
                                           child: const Icon(

@@ -272,26 +272,12 @@ mixin _BankBuilders on State<BankScreen> {
       spacing: 8,
       runSpacing: 8,
       children: presets.map((p) {
-        return GestureDetector(
+        return _QuickAmountChip(
+          amount: p,
           onTap: () {
             SoundService.playClick();
             _self._amountCtrl.text = '$p';
           },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: kBgCard,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: kBorder),
-            ),
-            child: Text(
-              formatMoney(p),
-              style: const TextStyle(
-                  color: kTextSecondary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600),
-            ),
-          ),
         );
       }).toList(),
     );
@@ -570,7 +556,7 @@ mixin _BankBuilders on State<BankScreen> {
             ),
           ),
           Text(
-            '\$${amount.toStringAsFixed(0)}',
+            formatMoney(amount),
             style: TextStyle(
               color: _txColor(type),
               fontWeight: FontWeight.w700,
@@ -930,7 +916,7 @@ mixin _BankBuilders on State<BankScreen> {
     return ValueListenableBuilder<int>(
       valueListenable: BankLedgerService().heldTransfersCount,
       builder: (context, count, _) {
-        if (count == 0 && !kDebugMode) return const SizedBox.shrink();
+        if (count == 0) return const SizedBox.shrink();
         final held = BankLedgerService().heldTransfers;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -975,25 +961,6 @@ mixin _BankBuilders on State<BankScreen> {
             ),
             const SizedBox(height: 12),
             ...held.map((ht) => _buildHeldTransferTile(ht)),
-            if (held.isEmpty && kDebugMode) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: kBgCard.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.2),
-                    strokeAlign: BorderSide.strokeAlignInside,
-                  ),
-                ),
-                child: const Text(
-                  'No hay transacciones retenidas.',
-                  style: TextStyle(color: kTextSecondary, fontSize: 12),
-                ),
-              ),
-            ],
-
           ],
         );
       },
@@ -1272,5 +1239,72 @@ mixin _BankBuilders on State<BankScreen> {
       }
     }
   }
-
 }
+
+class _QuickAmountChip extends StatefulWidget {
+  final int amount;
+  final VoidCallback onTap;
+  const _QuickAmountChip({required this.amount, required this.onTap});
+
+  @override
+  State<_QuickAmountChip> createState() => _QuickAmountChipState();
+}
+
+class _QuickAmountChipState extends State<_QuickAmountChip>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
+    _scale = Tween<double>(begin: 1.0, end: 0.92).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    _ctrl.forward().then((_) => _ctrl.reverse());
+    widget.onTap();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _scale,
+      builder: (context, child) => Transform.scale(
+        scale: _scale.value,
+        child: child,
+      ),
+      child: GestureDetector(
+        onTap: _handleTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: kBgCard,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: kBorder),
+          ),
+          child: Text(
+            formatMoney(widget.amount),
+            style: const TextStyle(
+                color: kTextSecondary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

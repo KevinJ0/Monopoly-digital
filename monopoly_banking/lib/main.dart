@@ -1,5 +1,7 @@
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import 'app.dart';
 import 'services/app_audit_logger.dart';
 import 'services/error_translator_service.dart';
@@ -9,6 +11,20 @@ import 'services/sound_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kIsWeb && Platform.isWindows) {
+    await windowManager.ensureInitialized();
+    const windowOptions = WindowOptions(
+      size: Size(420, 800),
+      minimumSize: Size(420, 800),
+      center: true,
+      title: 'Monopoly Banking',
+    );
+    await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  }
 
   FlutterError.onError = (details) {
     AppAuditLogger.instance.error(
@@ -21,9 +37,7 @@ Future<void> main() async {
         'silent': details.silent,
       },
     );
-    if (kDebugMode) {
-      FlutterError.dumpErrorToConsole(details);
-    }
+    FlutterError.dumpErrorToConsole(details);
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {

@@ -62,7 +62,10 @@ mixin _PlayerDialogs on State<PlayerScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () { SoundService.playClick(); Navigator.pop(dialogContext); },
+                  onPressed: () {
+                    SoundService.playClick();
+                    Navigator.pop(dialogContext);
+                  },
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
@@ -73,9 +76,13 @@ mixin _PlayerDialogs on State<PlayerScreen> {
                   onPressed: () async {
                     SoundService.playClick();
                     final amount = double.tryParse(amountCtrl.text) ?? 0;
-                    if (amount <= 0) { _showToast('Ingresa un monto v\u00e1lido.', kRed); return; }
+                    if (amount <= 0) {
+                      _showToast('Ingresa un monto v\u00e1lido.', kRed);
+                      return;
+                    }
                     if (!P2PService().wsTransport.clientConnectedNotifier.value) {
-                      _showToast('Con\u00e9ctate al banco primero.', kRed); return;
+                      _showToast('Con\u00e9ctate al banco primero.', kRed);
+                      return;
                     }
                     Navigator.pop(dialogContext);
                     try {
@@ -198,7 +205,10 @@ mixin _PlayerDialogs on State<PlayerScreen> {
                   ),
                   const SizedBox(height: 60),
                   ElevatedButton(
-                    onPressed: () { _self._confettiCtrl.play(); Navigator.pop(ctx); },
+                    onPressed: () {
+                      _self._confettiCtrl.play();
+                      Navigator.pop(ctx);
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accentColor,
                       foregroundColor: Colors.black,
@@ -241,11 +251,13 @@ mixin _PlayerDialogs on State<PlayerScreen> {
         backgroundColor: kBgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('\u00bfSalir al inicio?', style: TextStyle(color: kTextPrimary)),
-        content: const Text('Volver\u00e1s a la pantalla de selecci\u00f3n de roles.',
-            style: TextStyle(color: kTextSecondary)),
+        content: const Text('Volver\u00e1s a la pantalla de selecci\u00f3n de roles.', style: TextStyle(color: kTextSecondary)),
         actions: [
           TextButton(
-            onPressed: () { SoundService.playClick(); Navigator.pop(context); },
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(context);
+            },
             child: const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
           ),
           ElevatedButton(
@@ -276,11 +288,13 @@ mixin _PlayerDialogs on State<PlayerScreen> {
         backgroundColor: kBgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('\u00bfSalir al inicio?', style: TextStyle(color: kTextPrimary)),
-        content: const Text('Volver\u00e1s a la pantalla de selecci\u00f3n de roles.',
-            style: TextStyle(color: kTextSecondary)),
+        content: const Text('Volver\u00e1s a la pantalla de selecci\u00f3n de roles.', style: TextStyle(color: kTextSecondary)),
         actions: [
           TextButton(
-            onPressed: () { SoundService.playClick(); Navigator.pop(context); },
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(context);
+            },
             child: const Text('Cancelar', style: TextStyle(color: kTextSecondary)),
           ),
           ElevatedButton(
@@ -316,6 +330,7 @@ mixin _PlayerDialogs on State<PlayerScreen> {
         double getRate(int passes) {
           return switch (passes) { 1 => 0.05, 2 => 0.07, 3 => 0.10, 4 => 0.12, 5 => 0.15, _ => 0.05 };
         }
+
         final rate = getRate(selectedPasses);
         final expectedTotal = val > 0 ? val * rate * selectedPasses : 0;
         final wouldEmptyBalance = val > 0 && (wallet.balance - val) <= 0;
@@ -338,12 +353,15 @@ mixin _PlayerDialogs on State<PlayerScreen> {
                   controller: amountCtrl,
                   keyboardType: TextInputType.number,
                   onChanged: (_) => setStateSB(() {}),
-                  decoration: const InputDecoration(prefixText: '\$ ', filled: true, fillColor: kBgDark,
+                  decoration: const InputDecoration(
+                      prefixText: '\$ ',
+                      filled: true,
+                      fillColor: kBgDark,
                       border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)), borderSide: BorderSide.none)),
                 ),
                 if (wouldEmptyBalance) ...[
                   const SizedBox(height: 8),
-                  const Text('No puedes invertir todo tu saldo. Debe quedar al menos \$1 en tu cuenta.',
+                  Text('No puedes invertir todo tu saldo. Debe quedar al menos ${formatMoney(1)} en tu cuenta.',
                       style: TextStyle(color: kRed, fontSize: 11, height: 1.3)),
                 ],
                 const SizedBox(height: 20),
@@ -355,7 +373,10 @@ mixin _PlayerDialogs on State<PlayerScreen> {
                     final passes = index + 1;
                     final isSelected = selectedPasses == passes;
                     return GestureDetector(
-                      onTap: () { SoundService.playClick(); setStateSB(() => selectedPasses = passes); },
+                      onTap: () {
+                        SoundService.playClick();
+                        setStateSB(() => selectedPasses = passes);
+                      },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         padding: const EdgeInsets.all(12),
@@ -364,9 +385,11 @@ mixin _PlayerDialogs on State<PlayerScreen> {
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: isSelected ? brandColor : Colors.white10),
                         ),
-                        child: Text('$passes', style: TextStyle(
-                            color: isSelected ? (brandColor.computeLuminance() > 0.5 ? Colors.black : Colors.white) : Colors.white54,
-                            fontWeight: FontWeight.bold, fontSize: 16)),
+                        child: Text('$passes',
+                            style: TextStyle(
+                                color: isSelected ? (brandColor.computeLuminance() > 0.5 ? Colors.black : Colors.white) : Colors.white54,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16)),
                       ),
                     );
                   }),
@@ -381,7 +404,7 @@ mixin _PlayerDialogs on State<PlayerScreen> {
                       Text('Rendimiento por Pase: ${(rate * 100).round()}%', style: const TextStyle(color: Colors.white70)),
                       const SizedBox(height: 4),
                       Text('Ganancia Estimada: ${formatMoney(expectedTotal)}',
-                          style: const TextStyle(color: kGreenGlow, fontWeight: FontWeight.bold, fontSize: 16)),
+                          style: const TextStyle(color: kGreen, fontWeight: FontWeight.bold, fontSize: 16)),
                     ],
                   ),
                 ),
@@ -390,28 +413,35 @@ mixin _PlayerDialogs on State<PlayerScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: submitting ? null : () { SoundService.playClick(); Navigator.pop(context); },
-              child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
+                onPressed: submitting
+                    ? null
+                    : () {
+                        SoundService.playClick();
+                        Navigator.pop(context);
+                      },
+                child: const Text('Cancelar', style: TextStyle(color: Colors.white54))),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: brandColor,
                 foregroundColor: brandColor.computeLuminance() > 0.5 ? Colors.black : Colors.white,
               ),
-              onPressed: (submitting || wouldEmptyBalance) ? null : () async {
-                SoundService.playClick();
-                final finalVal = double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0;
-                if (finalVal > 0) {
-                  setStateSB(() => submitting = true);
-                  try {
-                    await _self._requestBankOperation({'operation': 'invest', 'amount': finalVal, 'passes': selectedPasses});
-                    if (context.mounted) Navigator.pop(context);
-                  } catch (e, s) {
-                    if (context.mounted) _safeShowFriendlyError(e, s);
-                  } finally {
-                    if (context.mounted) setStateSB(() => submitting = false);
-                  }
-                }
-              },
+              onPressed: (submitting || wouldEmptyBalance)
+                  ? null
+                  : () async {
+                      SoundService.playClick();
+                      final finalVal = double.tryParse(amountCtrl.text.replaceAll(',', '')) ?? 0;
+                      if (finalVal > 0) {
+                        setStateSB(() => submitting = true);
+                        try {
+                          await _self._requestBankOperation({'operation': 'invest', 'amount': finalVal, 'passes': selectedPasses});
+                          if (context.mounted) Navigator.pop(context);
+                        } catch (e, s) {
+                          if (context.mounted) _safeShowFriendlyError(e, s);
+                        } finally {
+                          if (context.mounted) setStateSB(() => submitting = false);
+                        }
+                      }
+                    },
               child: submitting ? const AppSpinner(size: 20, color: Colors.white) : const Text('Invertir'),
             ),
           ],
@@ -432,7 +462,10 @@ mixin _PlayerDialogs on State<PlayerScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () { SoundService.playClick(); Navigator.pop(context); },
+            onPressed: () {
+              SoundService.playClick();
+              Navigator.pop(context);
+            },
             child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
           ),
           ElevatedButton(

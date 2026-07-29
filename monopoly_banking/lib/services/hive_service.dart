@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -18,7 +20,11 @@ class HiveService {
   );
 
   static Future<void> init() async {
-    await Hive.initFlutter();
+    if (!kIsWeb && Platform.isWindows) {
+      await _initWindows();
+    } else {
+      await Hive.initFlutter();
+    }
 
     if (!Hive.isAdapterRegistered(SessionModelAdapter().typeId)) {
       Hive.registerAdapter(SessionModelAdapter());
@@ -61,6 +67,26 @@ class HiveService {
         encryptionCipher: HiveAesCipher(encryptionKey),
       );
     }
+  }
+
+  static Future<void> _initWindows() async {
+    try {
+      final appDir = await _getDesktopPath();
+      Hive.init(appDir.path);
+    } catch (_) {
+      final tempDir = Directory.systemTemp.createTempSync('monopoly_banking_');
+      Hive.init(tempDir.path);
+    }
+  }
+
+  static Future<Directory> _getDesktopPath() async {
+    final appDir = Directory(
+      '${Platform.environment['APPDATA']}\\monopoly_banking',
+    );
+    if (!appDir.existsSync()) {
+      appDir.createSync(recursive: true);
+    }
+    return appDir;
   }
 
   static Future<Uint8List> _getOrCreateKey() async {

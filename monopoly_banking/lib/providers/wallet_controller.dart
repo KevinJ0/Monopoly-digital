@@ -59,25 +59,21 @@ class WalletController extends ChangeNotifier {
   Future<void> applyBankState(Map<String, dynamic> payload) async {
     final session = _session;
     if (session == null || session.role == 'banco') {
-      debugPrint('[┊] APPLY_BANK EARLY: session is null or bank');
       return;
     }
 
     final bankTxId = payload['bankTxId'] as String?;
     if (bankTxId != null && HiveService.txBox.containsKey(bankTxId)) {
-      debugPrint('[┊] APPLY_BANK EARLY: bankTxId=$bankTxId already processed — syncing notifiers from session');
       _updateVaultNotifiers(session);
       notifyListeners();
       return;
     }
-    debugPrint('[┊] APPLY_BANK PROCESSING: bankTxId=$bankTxId');
 
     final rawBalanceValue = payload['balance'] as num?;
     if (rawBalanceValue == null || !rawBalanceValue.isFinite) return;
 
     final eventType = (payload['eventType'] as String?) ?? 'bank_sync';
     final isHandshake = eventType == 'handshake_initial' || eventType == 'handshake_reconnect';
-    debugPrint('[┊] APPLY_BANK eventType=$eventType isHandshake=$isHandshake isBankrupt=${payload['isBankrupt']} skipBankruptNotifier=${isHandshake ? 'YES' : 'NO'}');
     final previousBalance = session.balance;
     session.balance = rawBalanceValue.toDouble();
     session.vaultInvestedAmount =

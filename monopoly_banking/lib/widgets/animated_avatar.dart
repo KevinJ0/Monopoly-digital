@@ -73,31 +73,31 @@ class AnimatedAvatar extends StatelessWidget {
 
     if (!showIdle) return card;
 
-    double idleFloat = 3;
-    double idleDuration = 2000;
-    double idleScaleBegin = 0.97;
+    double idleFloat = 4;
+    double idleDuration = 1200;
+    double idleScaleBegin = 0.95;
     double idleScaleEnd = 1.0;
-    int idleScaleDuration = 3000;
+    int idleScaleDuration = 1800;
 
     switch (mood) {
       case AvatarMood.happy:
-        idleFloat = 5;
-        idleDuration = 1200;
-        idleScaleBegin = 1.0;
-        idleScaleEnd = 1.06;
-        idleScaleDuration = 1500;
-      case AvatarMood.excited:
-        idleFloat = 7;
+        idleFloat = 6;
         idleDuration = 800;
-        idleScaleBegin = 0.95;
+        idleScaleBegin = 1.0;
         idleScaleEnd = 1.08;
         idleScaleDuration = 1000;
+      case AvatarMood.excited:
+        idleFloat = 8;
+        idleDuration = 600;
+        idleScaleBegin = 0.94;
+        idleScaleEnd = 1.10;
+        idleScaleDuration = 700;
       case AvatarMood.sad:
-        idleFloat = 1;
-        idleDuration = 3000;
-        idleScaleBegin = 0.98;
-        idleScaleEnd = 0.95;
-        idleScaleDuration = 4000;
+        idleFloat = 2;
+        idleDuration = 2000;
+        idleScaleBegin = 0.97;
+        idleScaleEnd = 0.93;
+        idleScaleDuration = 2500;
       case AvatarMood.neutral:
         break;
     }

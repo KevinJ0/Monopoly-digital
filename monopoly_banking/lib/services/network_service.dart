@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 enum TransferState { idle, listening, waitingSender, holding, waitingReceiver }
@@ -68,7 +67,6 @@ class BancoServer {
         _broadcastPlayers();
       },
       onError: (e) {
-        debugPrint('BancoServer client error: $e');
         _clients.remove(client);
         _clientUsers.remove(client);
         _clientBuffers.remove(client);
@@ -100,8 +98,7 @@ class BancoServer {
         if (msg is Map<String, dynamic>) {
           _processMessage(client, msg);
         }
-      } catch (e) {
-        debugPrint('BancoServer json decode error: $e');
+      } catch (_) {
       }
     }
   }
@@ -164,8 +161,7 @@ class BancoServer {
     for (var c in _clients) {
       try {
         c.add(msgBytes);
-      } catch (e) {
-        debugPrint('BancoServer broadcast write error: $e');
+      } catch (_) {
       }
     }
   }
@@ -241,8 +237,7 @@ class BancoServer {
     for (var c in _clients) {
       try {
         c.add(data);
-      } catch (e) {
-        debugPrint('BancoServer _sendToAll write error: $e');
+      } catch (_) {
       }
     }
   }
@@ -287,8 +282,7 @@ class JugadorClient {
           }
         }
       }
-    } catch (e) {
-      debugPrint('JugadorClient network scan error: $e');
+    } catch (_) {
     }
 
     // Limitar a máximo 5 intentos para evitar timeouts largos
@@ -308,7 +302,6 @@ class JugadorClient {
               _buffer.clear();
             },
             onError: (e) {
-              debugPrint('JugadorClient socket error: $e');
               _socket = null;
               _buffer.clear();
             });
@@ -344,15 +337,13 @@ class JugadorClient {
             _messageController.add(msg);
           }
         }
-      } catch (e) {
-        debugPrint('JugadorClient json decode error: $e');
+      } catch (_) {
       }
     }
   }
 
   void requestTransfer(String toId, double amount, String myId) {
     if (_socket == null) {
-      debugPrint('JugadorClient: no socket connected');
       return;
     }
     final data = _encodeWithLength({
@@ -366,7 +357,6 @@ class JugadorClient {
 
   void confirmAction(String myId) {
     if (_socket == null) {
-      debugPrint('JugadorClient: no socket connected');
       return;
     }
     final data = _encodeWithLength({

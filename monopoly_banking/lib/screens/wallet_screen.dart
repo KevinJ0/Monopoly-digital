@@ -89,7 +89,6 @@ class _WalletScreenState extends State<WalletScreen>
   @override
   void initState() {
     super.initState();
-    debugPrint('[┊] WALLET_INIT_STATE (bank mode)');
     WidgetsBinding.instance.addObserver(this);
     _pulseCtrl = AnimationController(
       vsync: this,
@@ -122,7 +121,6 @@ class _WalletScreenState extends State<WalletScreen>
 
   @override
   void dispose() {
-    debugPrint('[┊] WALLET_DISPOSE isExiting=$_isExiting');
     for (final completer in _bankDeliveryAcks.values) {
       if (!completer.isCompleted) {
         completer.completeError(StateError('Pantalla cerrada'));

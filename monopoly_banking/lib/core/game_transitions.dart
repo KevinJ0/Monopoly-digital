@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class GameSlideRoute extends PageRouteBuilder {
   final Widget page;
@@ -111,9 +112,85 @@ Future<T?> showGameDialog<T>({
 }) {
   return Navigator.of(context, rootNavigator: useRootNavigator).push<T>(
     GameDialogRoute<T>(
-      builder: builder,
+      builder: (ctx) => _EnterKeyHandler(child: builder(ctx)),
       barrierDismissible: barrierDismissible,
       barrierColor: barrierColor,
     ),
   );
+}
+
+class _EnterKeyHandler extends StatefulWidget {
+  final Widget child;
+  const _EnterKeyHandler({required this.child});
+
+  @override
+  State<_EnterKeyHandler> createState() => _EnterKeyHandlerState();
+}
+
+class _EnterKeyHandlerState extends State<_EnterKeyHandler> {
+  final _focusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _handleKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.enter &&
+        event.logicalKey != LogicalKeyboardKey.numpadEnter) {
+      return;
+    }
+
+    // Walk child tree to find the first ElevatedButton (primary action)
+    ElevatedButton? primary;
+    void visit(Element el) {
+      if (primary != null) return;
+      if (el.widget is ElevatedButton) {
+        primary = el.widget as ElevatedButton;
+        return;
+      }
+      el.visitChildren(visit);
+    }
+    context.visitChildElements(visit);
+    if (primary != null && primary!.onPressed != null) {
+      primary!.onPressed!.call();
+      return;
+    }
+
+    // Fallback: find first TextButton with a callback
+    TextButton? fallback;
+    void visitFallback(Element el) {
+      if (fallback != null) return;
+      if (el.widget is TextButton) {
+        final btn = el.widget as TextButton;
+        if (btn.onPressed != null) fallback = btn;
+        return;
+      }
+      el.visitChildren(visitFallback);
+    }
+    context.visitChildElements(visitFallback);
+    fallback?.onPressed?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
+            event.logicalKey == LogicalKeyboardKey.numpadEnter;
+        if ((event is KeyDownEvent || event is KeyRepeatEvent) && isEnter) {
+          _handleKey(event);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: widget.child,
+    );
+  }
 }

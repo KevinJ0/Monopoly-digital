@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
 
 class TcpChannel {
   ServerSocket? _server;
@@ -30,8 +29,7 @@ class TcpChannel {
             _clientBuffers.remove(client);
             client.close();
           },
-          onError: (e) {
-            debugPrint('TcpChannel client error: $e');
+          onError: (_) {
             _clientBuffers.remove(client);
             client.close();
           },
@@ -55,29 +53,21 @@ class TcpChannel {
       final jsonBytes = buffer.extractMessage();
       if (jsonBytes == null) break;
 
-      try {
-        final decoded = jsonDecode(utf8.decode(jsonBytes));
+      final decoded = jsonDecode(utf8.decode(jsonBytes));
         if (decoded is Map<String, dynamic>) {
           _onDataController.add(decoded);
         }
-      } catch (e) {
-        debugPrint('TcpChannel json decode error: $e');
-      }
     }
   }
 
   Future<String?> _findLocalIp() async {
-    try {
-      final interfaces = await NetworkInterface.list();
-      for (final iface in interfaces) {
-        for (final addr in iface.addresses) {
-          if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
-            return addr.address;
-          }
+    final interfaces = await NetworkInterface.list();
+    for (final iface in interfaces) {
+      for (final addr in iface.addresses) {
+        if (addr.type == InternetAddressType.IPv4 && !addr.isLoopback) {
+          return addr.address;
         }
       }
-    } catch (e) {
-      debugPrint('TcpChannel findLocalIp error: $e');
     }
     return null;
   }
@@ -94,19 +84,13 @@ class TcpChannel {
       socket.add(lengthBytes);
       socket.add(jsonBytes);
       await socket.flush();
-    } catch (e) {
-      debugPrint('TcpChannel sendTo error: $e');
     } finally {
       await socket?.close();
     }
   }
 
   Future<void> stop() async {
-    try {
-      await _server?.close();
-    } catch (e) {
-      debugPrint('TcpChannel stop error: $e');
-    }
+    await _server?.close();
     _clientBuffers.clear();
     _server = null;
     _port = 0;

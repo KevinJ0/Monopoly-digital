@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart' as p;
 import 'package:monopoly_banking/core/constants.dart';
 import 'package:monopoly_banking/services/app_audit_logger.dart';
 import 'package:monopoly_banking/services/notification_service.dart';
@@ -26,7 +24,7 @@ class ErrorTranslatorService {
   factory ErrorTranslatorService() => _instance;
   ErrorTranslatorService._();
 
-  Database? _db;
+  final Map<String, FriendlyError> _cache = {};
   GenerativeModel? _model;
 
   // ⚠️ Pon tu API key de Google AI Studio aquí:
@@ -39,23 +37,6 @@ class ErrorTranslatorService {
   // ── Init ─────────────────────────────────────────────────────────
 
   Future<void> init() async {
-    final dbPath = p.join(await getDatabasesPath(), 'error_cache.db');
-    _db = await openDatabase(
-      dbPath,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE error_translations (
-            error_key   TEXT PRIMARY KEY,
-            raw_error   TEXT NOT NULL,
-            message     TEXT NOT NULL,
-            severity    TEXT NOT NULL,
-            created_at  TEXT NOT NULL
-          )
-        ''');
-      },
-    );
-
     if (_apiKey.isNotEmpty) {
       _model = GenerativeModel(
         model: 'gemini-2.0-flash',
@@ -116,36 +97,14 @@ class ErrorTranslatorService {
     return sha256.convert(bytes).toString();
   }
 
-  // ── Caché SQLite ─────────────────────────────────────────────────
+  // ── Caché en memoria ─────────────────────────────────────────────
 
   Future<FriendlyError?> _lookup(String key) async {
-    if (_db == null) return null;
-    final rows = await _db!.query(
-      'error_translations',
-      where: 'error_key = ?',
-      whereArgs: [key],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
-    return FriendlyError(
-      message: rows.first['message'] as String,
-      severity: _parseSeverity(rows.first['severity'] as String),
-    );
+    return _cache[key];
   }
 
   Future<void> _store(String key, String raw, FriendlyError friendly) async {
-    if (_db == null) return;
-    await _db!.insert(
-      'error_translations',
-      {
-        'error_key': key,
-        'raw_error': raw.length > 500 ? raw.substring(0, 500) : raw,
-        'message': friendly.message,
-        'severity': friendly.severity.name,
-        'created_at': DateTime.now().toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    _cache[key] = friendly;
   }
 
   // ── Gemini AI ────────────────────────────────────────────────────
@@ -256,15 +215,10 @@ Responde EXACTAMENTE así:
   }
 
   /// Limpia toda la caché de errores traducidos.
-  Future<void> clearCache() async => await _db?.delete('error_translations');
+  Future<void> clearCache() async => _cache.clear();
 
   /// Cantidad de errores traducidos almacenados.
-  Future<int> cacheSize() async {
-    if (_db == null) return 0;
-    final r =
-        await _db!.rawQuery('SELECT COUNT(*) as c FROM error_translations');
-    return Sqflite.firstIntValue(r) ?? 0;
-  }
+  Future<int> cacheSize() async => _cache.length;
 }
 
 // ─── Extension: mostrar errores desde cualquier widget ─────────────────

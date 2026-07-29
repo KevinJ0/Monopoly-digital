@@ -40,53 +40,38 @@ class WifiTransport extends P2PTransport {
     if (_isReceiving) return;
     _isReceiving = true;
 
-    _tcpDataSub = _tcp.onData.listen(
-      onData,
-      onError: (e) => debugPrint('WifiTransport tcp onData error: $e'),
-    );
+    _tcpDataSub = _tcp.onData.listen(onData);
 
-    try {
-      _udpSocket =
-          await RawDatagramSocket.bind(InternetAddress.anyIPv4, _discoveryPort);
-      _udpSocket!.broadcastEnabled = true;
+    _udpSocket =
+        await RawDatagramSocket.bind(InternetAddress.anyIPv4, _discoveryPort);
+    _udpSocket!.broadcastEnabled = true;
 
-      _udpSub = _udpSocket!.listen((event) {
-        if (event != RawSocketEvent.read) return;
-        final datagram = _udpSocket?.receive();
-        if (datagram == null) return;
-        try {
-          final msg = utf8.decode(datagram.data);
-          if (msg.startsWith(_discoveryMagic)) {
-            final parts = msg.split('|');
-            if (parts.length >= 3) {
-              final remoteIp = datagram.address.address;
-              final remotePort = int.tryParse(parts[1]) ?? 0;
-              if (remotePort > 0) {
-                _tcp.sendTo(
-                    remoteIp, remotePort, {'type': '_wifi_discovery_ack'});
-              }
-            }
+    _udpSub = _udpSocket!.listen((event) {
+      if (event != RawSocketEvent.read) return;
+      final datagram = _udpSocket?.receive();
+      if (datagram == null) return;
+      final msg = utf8.decode(datagram.data);
+      if (msg.startsWith(_discoveryMagic)) {
+        final parts = msg.split('|');
+        if (parts.length >= 3) {
+          final remoteIp = datagram.address.address;
+          final remotePort = int.tryParse(parts[1]) ?? 0;
+          if (remotePort > 0) {
+            _tcp.sendTo(
+                remoteIp, remotePort, {'type': '_wifi_discovery_ack'});
           }
-        } catch (e) {
-          debugPrint('WifiTransport discovery parse error: $e');
         }
-      });
-    } catch (e) {
-      debugPrint('WifiTransport UDP bind error: $e');
-    }
+      }
+    });
 
     _announceTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (!_isReceiving || _tcp.localIp == null) return;
       final msg = '$_discoveryMagic|${_tcp.port}|${_tcp.localIp}';
-      try {
-        _udpSocket?.send(
-          utf8.encode(msg),
-          InternetAddress('255.255.255.255'),
-          _discoveryPort,
-        );
-      } catch (e) {
-        debugPrint('WifiTransport announce error: $e');
-      }
+      _udpSocket?.send(
+        utf8.encode(msg),
+        InternetAddress('255.255.255.255'),
+        _discoveryPort,
+      );
     });
   }
 
@@ -96,7 +81,6 @@ class WifiTransport extends P2PTransport {
   Future<void> sendPayload(Map<String, dynamic> payload) async {
     final localIp = _tcp.localIp;
     if (localIp == null) {
-      debugPrint('WifiTransport sendPayload: localIp is null');
       return;
     }
 
@@ -119,29 +103,23 @@ class WifiTransport extends P2PTransport {
         if (event != RawSocketEvent.read) return;
         final datagram = udp?.receive();
         if (datagram == null) return;
-        try {
-          final response = utf8.decode(datagram.data);
-          if (response == '_wifi_discovery_ack') return;
-          if (response.startsWith(_discoveryMagic)) {
-            final parts = response.split('|');
-            if (parts.length >= 3) {
-              final remoteIp = parts[2];
-              final remotePort = int.tryParse(parts[1]) ?? 0;
-              if (remotePort > 0 && remoteIp != localIp) {
-                timer.cancel();
-                if (!completer.isCompleted) completer.complete();
-                _tcp.sendTo(remoteIp, remotePort, payload);
-              }
+        final response = utf8.decode(datagram.data);
+        if (response == '_wifi_discovery_ack') return;
+        if (response.startsWith(_discoveryMagic)) {
+          final parts = response.split('|');
+          if (parts.length >= 3) {
+            final remoteIp = parts[2];
+            final remotePort = int.tryParse(parts[1]) ?? 0;
+            if (remotePort > 0 && remoteIp != localIp) {
+              timer.cancel();
+              if (!completer.isCompleted) completer.complete();
+              _tcp.sendTo(remoteIp, remotePort, payload);
             }
           }
-        } catch (e) {
-          debugPrint('WifiTransport sendPayload parse error: $e');
         }
       });
 
       await completer.future;
-    } catch (e) {
-      debugPrint('WifiTransport sendPayload error: $e');
     } finally {
       sub?.cancel();
       udp?.close();
