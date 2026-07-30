@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/core/constants.dart';
+import 'package:money_manager/core/constants.dart';
 
 class ConnectedPlayerTile extends StatelessWidget {
   final String displayName;

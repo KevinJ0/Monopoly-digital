@@ -332,7 +332,7 @@ mixin _BankDialogs on State<BankScreen> {
               'El jugador necesita completar el handshake inicial.',
             );
           }
-          if (fixedAmount > account.balance) {
+          if (fixedAmount >= account.balance) {
             final proceed = await _confirmBankruptcy(
               playerId: playerId,
               availableBalance: account.balance,
@@ -359,6 +359,23 @@ mixin _BankDialogs on State<BankScreen> {
             NotificationService().show(
                 '$playerId en bancarrota. Expulsado de la partida.',
                 backgroundColor: kRed);
+            final winnerId = BankLedgerService().checkWinner();
+            if (winnerId != null) {
+              final winnerAccount = BankLedgerService().accountFor(winnerId);
+              if (winnerAccount != null) {
+                await P2PService().sendPayload({
+                  'type': 'winner',
+                  'targetPlayerId': winnerId,
+                  'targetInstallationId':
+                      winnerAccount.deviceInstallationId,
+                });
+              }
+              NotificationService().show(
+                '\u00a1$winnerId ha ganado la partida!',
+                backgroundColor: kGold,
+                duration: const Duration(seconds: 10),
+              );
+            }
             dialog.complete(
               '$playerId fue declarado en bancarrota y expulsado de la partida.',
             );
@@ -400,7 +417,7 @@ mixin _BankDialogs on State<BankScreen> {
               'El jugador necesita completar el handshake inicial.',
             );
           }
-          if (amount > account.balance) {
+          if (amount >= account.balance) {
             final proceed = await _confirmBankruptcy(
               playerId: playerId,
               availableBalance: account.balance,
@@ -428,6 +445,23 @@ mixin _BankDialogs on State<BankScreen> {
             NotificationService().show(
                 '$playerId en bancarrota. Expulsado de la partida.',
                 backgroundColor: kRed);
+            final winnerId = BankLedgerService().checkWinner();
+            if (winnerId != null) {
+              final winnerAccount = BankLedgerService().accountFor(winnerId);
+              if (winnerAccount != null) {
+                await P2PService().sendPayload({
+                  'type': 'winner',
+                  'targetPlayerId': winnerId,
+                  'targetInstallationId':
+                      winnerAccount.deviceInstallationId,
+                });
+              }
+              NotificationService().show(
+                '\u00a1$winnerId ha ganado la partida!',
+                backgroundColor: kGold,
+                duration: const Duration(seconds: 10),
+              );
+            }
             dialog.complete(
               '$playerId fue declarado en bancarrota y expulsado de la partida.',
             );
@@ -607,7 +641,7 @@ mixin _BankDialogs on State<BankScreen> {
                             'playerId': player.displayName,
                           });
                         } on TransportUnavailableException {
-                          // El jugador ya se desconectó — fue expulsado igual.
+                          // El jugador ya se desconectó â€” fue expulsado igual.
                         }
                       },
                       icon: const Icon(Icons.gavel_rounded, size: 18),

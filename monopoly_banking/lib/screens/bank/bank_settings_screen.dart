@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/bank_settings_service.dart';
-import 'package:monopoly_banking/core/game_transitions.dart';
-import 'package:monopoly_banking/screens/bank/custom_op_screen.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/services/bank_settings_service.dart';
+import 'package:money_manager/core/game_transitions.dart';
+import 'package:money_manager/screens/bank/custom_op_screen.dart';
 
 class BankSettingsScreen extends StatefulWidget {
   const BankSettingsScreen({super.key});
@@ -20,10 +20,8 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _initialCtrl = TextEditingController(
-        text: _settings.initialBalance.round().toString());
-    _passGoCtrl =
-        TextEditingController(text: _settings.passGoAmount.round().toString());
+    _initialCtrl = TextEditingController(text: _settings.initialBalance.round().toString());
+    _passGoCtrl = TextEditingController(text: _settings.passGoAmount.round().toString());
   }
 
   @override
@@ -34,10 +32,8 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
   }
 
   Future<void> _save() async {
-    final initial =
-        double.tryParse(_initialCtrl.text.replaceAll(',', '')) ?? 2000.0;
-    final passGo =
-        double.tryParse(_passGoCtrl.text.replaceAll(',', '')) ?? 200.0;
+    final initial = double.tryParse(_initialCtrl.text.replaceAll(',', '')) ?? 2000.0;
+    final passGo = double.tryParse(_passGoCtrl.text.replaceAll(',', '')) ?? 200.0;
     _settings.initialBalance = initial;
     _settings.passGoAmount = passGo;
     await _settings.save();
@@ -49,11 +45,7 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: kBgDark,
-        title: const Text('Configuración',
-            style: TextStyle(
-                color: kTextPrimary,
-                fontWeight: FontWeight.w700,
-                fontSize: 18)),
+        title: const Text('Configuración', style: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w700, fontSize: 18)),
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: kTextPrimary),
@@ -62,11 +54,7 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
         actions: [
           TextButton(
             onPressed: _save,
-            child: const Text('Guardar',
-                style: TextStyle(
-                    color: kGold,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15)),
+            child: const Text('Guardar', style: TextStyle(color: kGold, fontWeight: FontWeight.w800, fontSize: 15)),
           ),
         ],
       ),
@@ -92,11 +80,7 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
           children: [
             const Icon(Icons.tune_rounded, color: kGold, size: 20),
             const SizedBox(width: 10),
-            const Text('CONFIGURACIÓN GENERAL',
-                style: TextStyle(
-                    color: kTextSecondary,
-                    fontSize: 11,
-                    letterSpacing: 2)),
+            const Text('CONFIGURACIÓN GENERAL', style: TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2)),
           ],
         ),
         const SizedBox(height: 16),
@@ -154,15 +138,9 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: const TextStyle(
-                      color: kTextPrimary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13)),
+              Text(label, style: const TextStyle(color: kTextPrimary, fontWeight: FontWeight.w600, fontSize: 13)),
               const SizedBox(height: 2),
-              Text(subtitle,
-                  style: const TextStyle(
-                      color: kTextSecondary, fontSize: 11)),
+              Text(subtitle, style: const TextStyle(color: kTextSecondary, fontSize: 11)),
             ],
           ),
         ),
@@ -174,16 +152,13 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             textAlign: TextAlign.center,
-            style: const TextStyle(
-                color: kGold, fontSize: 18, fontWeight: FontWeight.w800),
+            style: const TextStyle(color: kGold, fontSize: 18, fontWeight: FontWeight.w800),
             decoration: InputDecoration(
               prefixText: '\$ ',
-              prefixStyle: const TextStyle(
-                  color: kGold, fontSize: 18, fontWeight: FontWeight.w800),
+              prefixStyle: const TextStyle(color: kGold, fontSize: 18, fontWeight: FontWeight.w800),
               filled: true,
               fillColor: Colors.black26,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: const BorderSide(color: kBorder),
@@ -209,22 +184,16 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
       children: [
         Row(
           children: [
-            const Icon(Icons.add_circle_outline_rounded,
-                color: kGold, size: 20),
+            const Icon(Icons.add_circle_outline_rounded, color: kGold, size: 20),
             const SizedBox(width: 10),
-            const Text('OPERACIONES PERSONALIZADAS',
-                style: TextStyle(
-                    color: kTextSecondary,
-                    fontSize: 11,
-                    letterSpacing: 2)),
+            const Text('OPERACIONES PERSONALIZADAS', style: TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2)),
           ],
         ),
         const SizedBox(height: 16),
         ..._settings.customOps.asMap().entries.map((entry) {
           final i = entry.key;
           final op = entry.value;
-          final iconData =
-              BankSettingsService.availableIcons[op.iconKey] ?? Icons.payments_rounded;
+          final iconData = BankSettingsService.availableIcons[op.iconKey] ?? Icons.payments_rounded;
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Dismissible(
@@ -236,8 +205,7 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
                   builder: (ctx) => AlertDialog(
                     backgroundColor: kBgCard,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    title: const Text('Eliminar operación',
-                        style: TextStyle(color: kTextPrimary)),
+                    title: const Text('Eliminar operación', style: TextStyle(color: kTextPrimary)),
                     content: Text(
                       '¿Eliminar "${op.name}"?',
                       style: const TextStyle(color: kTextSecondary),
@@ -302,25 +270,18 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
                                 Text(op.name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        color: kTextPrimary,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14)),
+                                    style: const TextStyle(color: kTextPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
                                 const SizedBox(height: 2),
                                 Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: (op.isGive ? kGreen : kRed)
-                                            .withValues(alpha: 0.15),
+                                        color: (op.isGive ? kGreen : kRed).withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(
-                                        op.isGive
-                                            ? '+${formatMoney(op.amount)}'
-                                            : '-${formatMoney(op.amount)}',
+                                        op.isGive ? '+${formatMoney(op.amount)}' : '-${formatMoney(op.amount)}',
                                         style: TextStyle(
                                           color: op.isGive ? kGreen : kRed,
                                           fontSize: 11,
@@ -331,8 +292,7 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
                                     const SizedBox(width: 6),
                                     Text(
                                       op.isGive ? 'Dar' : 'Quitar',
-                                      style: const TextStyle(
-                                          color: kTextSecondary, fontSize: 11),
+                                      style: const TextStyle(color: kTextSecondary, fontSize: 11),
                                     ),
                                   ],
                                 ),
@@ -341,8 +301,7 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
                           ),
                           IconButton(
                             onPressed: () => _deleteCustomOp(i),
-                            icon: const Icon(Icons.delete_outline_rounded,
-                                color: kRed, size: 20),
+                            icon: const Icon(Icons.delete_outline_rounded, color: kRed, size: 20),
                             splashRadius: 20,
                             tooltip: 'Eliminar',
                           ),
@@ -361,14 +320,12 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
           child: OutlinedButton.icon(
             onPressed: _addCustomOp,
             icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Agregar operación',
-                style: TextStyle(fontWeight: FontWeight.w700)),
+            label: const Text('Agregar operación', style: TextStyle(fontWeight: FontWeight.w700)),
             style: OutlinedButton.styleFrom(
               foregroundColor: kGold,
               side: const BorderSide(color: kGold),
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
           ),
         ),
@@ -404,8 +361,7 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: kBgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Eliminar operación',
-            style: TextStyle(color: kTextPrimary)),
+        title: const Text('Eliminar operación', style: TextStyle(color: kTextPrimary)),
         content: Text(
           '¿Eliminar "${op.name}"?',
           style: const TextStyle(color: kTextSecondary),
@@ -427,5 +383,4 @@ class _BankSettingsScreenState extends State<BankSettingsScreen> {
       await _settings.save();
     }
   }
-
 }

@@ -1,6 +1,6 @@
-# monopoly_banking
+# Money Manager
 
-A new Flutter project.
+A Flutter-based offline P2P banking app for board games.
 
 ## Getting Started
 

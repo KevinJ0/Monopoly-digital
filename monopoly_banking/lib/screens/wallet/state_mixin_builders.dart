@@ -171,7 +171,7 @@ mixin _WalletBuilders on State<WalletScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           SizedBox(height: 24),
-                          Icon(Icons.receipt_long_rounded, color: Color(0xFF4B5563), size: 48),
+                          Icon(Icons.receipt_long_rounded, color: kTextSecondary, size: 48),
                           SizedBox(height: 12),
                           Text(
                             'Sin transacciones a\u00fan',
@@ -314,7 +314,7 @@ mixin _WalletBuilders on State<WalletScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Banco Monopoly',
+                            'Money Manager',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(

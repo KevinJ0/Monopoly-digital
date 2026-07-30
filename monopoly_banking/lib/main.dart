@@ -18,7 +18,7 @@ Future<void> main() async {
       size: Size(420, 800),
       minimumSize: Size(420, 800),
       center: true,
-      title: 'Monopoly Banking',
+      title: 'Money Manager',
     );
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
@@ -60,5 +60,5 @@ Future<void> main() async {
     rethrow;
   }
 
-  runApp(const MonopolyApp());
+  runApp(const MoneyManagerApp());
 }

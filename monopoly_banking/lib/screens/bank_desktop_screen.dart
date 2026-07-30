@@ -4,31 +4,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/core/game_transitions.dart';
-import 'package:monopoly_banking/models/transaction_model.dart';
-import 'package:monopoly_banking/providers/session_provider.dart';
-import 'package:monopoly_banking/providers/stats_provider.dart';
-import 'package:monopoly_banking/providers/wallet_controller.dart';
-import 'package:monopoly_banking/screens/bank_screen.dart';
-import 'package:monopoly_banking/screens/wallet_screen.dart';
-import 'package:monopoly_banking/screens/bank/bank_settings_screen.dart';
-import 'package:monopoly_banking/services/app_audit_logger.dart';
-import 'package:monopoly_banking/services/bank_ledger_service.dart';
-import 'package:monopoly_banking/services/bank_settings_service.dart';
-import 'package:monopoly_banking/services/error_translator_service.dart';
-import 'package:monopoly_banking/services/notification_service.dart';
-import 'package:monopoly_banking/services/p2p_service.dart';
-import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/services/foreground_service.dart';
-import 'package:monopoly_banking/services/transports/p2p_transport.dart';
-import 'package:monopoly_banking/services/transports/ws_models.dart';
-import 'package:monopoly_banking/widgets/animated_players_backdrop.dart';
-import 'package:monopoly_banking/widgets/app_spinner.dart';
-import 'package:monopoly_banking/widgets/premium_dialog.dart';
-import 'package:monopoly_banking/widgets/transaction_tile.dart';
-import 'package:monopoly_banking/widgets/transport_selector.dart';
-import 'package:monopoly_banking/widgets/player_info_widget.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/core/game_transitions.dart';
+import 'package:money_manager/models/transaction_model.dart';
+import 'package:money_manager/providers/session_provider.dart';
+import 'package:money_manager/providers/stats_provider.dart';
+import 'package:money_manager/providers/wallet_controller.dart';
+import 'package:money_manager/screens/bank_screen.dart';
+import 'package:money_manager/screens/wallet_screen.dart';
+import 'package:money_manager/screens/bank/bank_settings_screen.dart';
+import 'package:money_manager/services/app_audit_logger.dart';
+import 'package:money_manager/services/bank_ledger_service.dart';
+import 'package:money_manager/services/bank_settings_service.dart';
+import 'package:money_manager/services/error_translator_service.dart';
+import 'package:money_manager/services/notification_service.dart';
+import 'package:money_manager/services/p2p_service.dart';
+import 'package:money_manager/services/sound_service.dart';
+import 'package:money_manager/services/foreground_service.dart';
+import 'package:money_manager/services/transports/p2p_transport.dart';
+import 'package:money_manager/services/transports/ws_models.dart';
+import 'package:money_manager/widgets/animated_players_backdrop.dart';
+import 'package:money_manager/widgets/app_spinner.dart';
+import 'package:money_manager/widgets/premium_dialog.dart';
+import 'package:money_manager/widgets/transaction_tile.dart';
+import 'package:money_manager/widgets/transport_selector.dart';
+import 'package:money_manager/widgets/player_info_widget.dart';
 
 import 'wallet/ws_bank_panel.dart';
 import 'wallet/connection_panel.dart';
@@ -262,6 +262,24 @@ class _DesktopLayoutState extends State<_DesktopLayout> {
                             'targetPlayerId': player.displayName,
                             'playerId': player.displayName,
                           });
+                          final winnerId = BankLedgerService().checkWinner();
+                          if (winnerId != null) {
+                            final winnerAccount =
+                                BankLedgerService().accountFor(winnerId);
+                            if (winnerAccount != null) {
+                              await P2PService().sendPayload({
+                                'type': 'winner',
+                                'targetPlayerId': winnerId,
+                                'targetInstallationId':
+                                    winnerAccount.deviceInstallationId,
+                              });
+                            }
+                            NotificationService().show(
+                              '\u00a1$winnerId ha ganado la partida!',
+                              backgroundColor: kGold,
+                              duration: const Duration(seconds: 10),
+                            );
+                          }
                         },
                         icon: const Icon(Icons.gavel_rounded, size: 18),
                         label: const Text('Sacar del juego', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -371,7 +389,7 @@ class _DesktopLayoutState extends State<_DesktopLayout> {
     final wallet = context.watch<WalletController>();
     final stats = context.watch<StatsProvider>();
     final bankColor = session.color;
-    final displayName = session.name.isNotEmpty ? session.name : 'Banco Monopoly';
+    final displayName = session.name.isNotEmpty ? session.name : 'Money Manager';
     final history = wallet.history;
 
     final filteredHistory = (() {

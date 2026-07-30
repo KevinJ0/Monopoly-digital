@@ -30,7 +30,7 @@ class AppAuditLogger {
   Future<File> _file() async {
     final directory = await getApplicationDocumentsDirectory();
     return File(
-        '${directory.path}${Platform.pathSeparator}monopoly_audit.log');
+        '${directory.path}${Platform.pathSeparator}money_manager_audit.log');
   }
 
   void _write(String entry) {
@@ -93,7 +93,7 @@ class AppAuditLogger {
     final ms = duration.inMilliseconds;
     final buf = StringBuffer(
         '[$ts][${op?.category ?? '?'}][END  ] ${op?.action ?? '?'} (${ms}ms)');
-    if (result != null) buf.write(' → $result');
+    if (result != null) buf.write(' â†’ $result');
     if (error != null) buf.write('\n  ERROR: $error');
     if (stack != null) buf.write('\n  STACK: $stack');
     buf.write('\n');
@@ -111,7 +111,7 @@ class AppAuditLogger {
   }
 
   /// Registra un error/exception de forma estructurada.
-  /// Útil para capturar errores globales o errores traducidos al usuario.
+  /// Ãštil para capturar errores globales o errores traducidos al usuario.
   void error(String module, Object error,
       {StackTrace? stack, Map<String, dynamic>? data}) {
     event(
@@ -137,3 +137,4 @@ class AppAuditLogger {
     if (await file.exists()) await file.writeAsString('', flush: true);
   }
 }
+

@@ -1,9 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/bank_settings_service.dart';
-import 'package:monopoly_banking/widgets/animated_entry.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/services/bank_settings_service.dart';
+import 'package:money_manager/widgets/animated_entry.dart';
 
 class CustomOpScreen extends StatefulWidget {
   final CustomOperation? existing;

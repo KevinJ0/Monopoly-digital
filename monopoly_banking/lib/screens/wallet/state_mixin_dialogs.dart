@@ -196,6 +196,24 @@ mixin _WalletDialogs on State<WalletScreen> {
                             'targetPlayerId': player.displayName,
                             'playerId': player.displayName,
                           });
+                          final winnerId = BankLedgerService().checkWinner();
+                          if (winnerId != null) {
+                            final winnerAccount =
+                                BankLedgerService().accountFor(winnerId);
+                            if (winnerAccount != null) {
+                              await P2PService().sendPayload({
+                                'type': 'winner',
+                                'targetPlayerId': winnerId,
+                                'targetInstallationId':
+                                    winnerAccount.deviceInstallationId,
+                              });
+                            }
+                            NotificationService().show(
+                              '\u00a1$winnerId ha ganado la partida!',
+                              backgroundColor: kGold,
+                              duration: const Duration(seconds: 10),
+                            );
+                          }
                         },
                         icon: const Icon(Icons.gavel_rounded, size: 18),
                         label: const Text(

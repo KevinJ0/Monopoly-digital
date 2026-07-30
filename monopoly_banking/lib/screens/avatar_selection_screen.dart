@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/widgets/animated_entry.dart';
-import 'package:monopoly_banking/widgets/monopoly_background.dart';
-import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/services/sound_service.dart';
+import 'package:money_manager/widgets/animated_entry.dart';
+import 'package:money_manager/widgets/money_manager_background.dart';
+import 'package:money_manager/widgets/player_color_backdrop.dart';
 
 const _avatars = [
-  '🎩',
+  '🏦',
   '🚗',
-  '🐶',
+  '🐕',
   '⚓',
   '🎸',
   '👢',
   '💰',
-  '🛳️',
-  '🐱',
+  '⛵',
+  '🐈',
   '👑',
   '💎',
   '🤖',
@@ -33,15 +33,15 @@ const _avatars = [
 ];
 
 const _avatarLabels = {
-  '🎩': 'Sombrero',
+  '🏦': 'Banco',
   '🚗': 'Auto',
-  '🐶': 'Perro',
+  '🐕': 'Perro',
   '⚓': 'Ancla',
   '🎸': 'Guitarra',
   '👢': 'Bota',
   '💰': 'Dinero',
-  '🛳️': 'Yate',
-  '🐱': 'Gato',
+  '⛵': 'Yate',
+  '🐈': 'Gato',
   '👑': 'Corona',
   '💎': 'Diamante',
   '🤖': 'Robot',
@@ -162,7 +162,7 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
             ),
           ],
         ),
-        body: MonopolyBackground(
+        body: MoneyManagerBackground(
           child: PlayerColorBackdrop(
             color: _accent,
             child: FadeTransition(
@@ -357,3 +357,4 @@ class _AvatarSelectionScreenState extends State<AvatarSelectionScreen>
     );
   }
 }
+

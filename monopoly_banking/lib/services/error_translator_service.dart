@@ -2,12 +2,12 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/app_audit_logger.dart';
-import 'package:monopoly_banking/services/notification_service.dart';
-import 'package:monopoly_banking/core/game_transitions.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/services/app_audit_logger.dart';
+import 'package:money_manager/services/notification_service.dart';
+import 'package:money_manager/core/game_transitions.dart';
 
-// ─── Modelo ────────────────────────────────────────────────────────────
+// â”€â”€â”€ Modelo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 enum ErrorSeverity { info, warning, error, critical }
 
@@ -17,7 +17,7 @@ class FriendlyError {
   const FriendlyError({required this.message, required this.severity});
 }
 
-// ─── Servicio principal ────────────────────────────────────────────────
+// â”€â”€â”€ Servicio principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class ErrorTranslatorService {
   static final ErrorTranslatorService _instance = ErrorTranslatorService._();
@@ -27,14 +27,14 @@ class ErrorTranslatorService {
   final Map<String, FriendlyError> _cache = {};
   GenerativeModel? _model;
 
-  // ⚠️ Pon tu API key de Google AI Studio aquí:
+  // âš ï¸ Pon tu API key de Google AI Studio aquí:
   // https://aistudio.google.com/app/apikey
   static const _apiKey = String.fromEnvironment(
     'GEMINI_API_KEY',
     defaultValue: '',
   );
 
-  // ── Init ─────────────────────────────────────────────────────────
+  // â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<void> init() async {
     if (_apiKey.isNotEmpty) {
@@ -49,7 +49,7 @@ class ErrorTranslatorService {
     }
   }
 
-  // ── API pública ──────────────────────────────────────────────────
+  // â”€â”€ API pública â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Traduce un error técnico a lenguaje humano.
   /// Primero busca en caché SQLite; si no existe, llama a Gemini y lo guarda.
@@ -79,15 +79,15 @@ class ErrorTranslatorService {
     return friendly;
   }
 
-  // ── Normalización ────────────────────────────────────────────────
+  // â”€â”€ Normalización â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Elimina partes dinámicas (direcciones de memoria, timestamps, IDs)
   /// para que errores equivalentes compartan la misma key.
   String _normalizeAndHash(String raw) {
     var normalized = raw
-        .replaceAll(RegExp(r'0x[0-9a-fA-F]+'), '0x…')
-        .replaceAll(RegExp(r'#\d+'), '#…')
-        .replaceAll(RegExp(r'\d{10,}'), '…')
+        .replaceAll(RegExp(r'0x[0-9a-fA-F]+'), '0x\u2026')
+        .replaceAll(RegExp(r'#\d+'), '#\u2026')
+        .replaceAll(RegExp(r'\d{10,}'), '\u2026')
         .replaceAll(RegExp(r"Instance of '[^']+'"), 'Instance')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim()
@@ -97,7 +97,7 @@ class ErrorTranslatorService {
     return sha256.convert(bytes).toString();
   }
 
-  // ── Caché en memoria ─────────────────────────────────────────────
+  // â”€â”€ Caché en memoria â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<FriendlyError?> _lookup(String key) async {
     return _cache[key];
@@ -107,7 +107,7 @@ class ErrorTranslatorService {
     _cache[key] = friendly;
   }
 
-  // ── Gemini AI ────────────────────────────────────────────────────
+  // â”€â”€ Gemini AI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   Future<FriendlyError> _askAI(String raw, StackTrace? stack) async {
     if (_model == null) return _fallback(raw);
@@ -118,7 +118,7 @@ class ErrorTranslatorService {
           : '';
 
       final prompt = '''
-Eres un asistente de una app de Monopoly digital. Traduce errores técnicos
+Eres un asistente de una app de MONEY MANAGER digital. Traduce errores técnicos
 a lenguaje que cualquier persona entienda. La app usa pagos virtuales
 y conexiones entre celulares.
 
@@ -149,7 +149,7 @@ Responde EXACTAMENTE así:
     }
   }
 
-  // ── Fallback sin IA ──────────────────────────────────────────────
+  // â”€â”€ Fallback sin IA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   FriendlyError _fallback(String raw) {
     final lower = raw.toLowerCase();
@@ -169,34 +169,34 @@ Responde EXACTAMENTE así:
         lower.contains('network')) {
       return const FriendlyError(
         message:
-            '🌐 No se pudo conectar. Verifica que ambos dispositivos estén en la misma red.',
+            '\u{1F310} No se pudo conectar. Verifica que ambos dispositivos estén en la misma red.',
         severity: ErrorSeverity.warning,
       );
     }
     if (lower.contains('permission') || lower.contains('denied')) {
       return const FriendlyError(
-        message: '🔒 La app necesita un permiso. Revisa los ajustes.',
+        message: '\u{1F512} La app necesita un permiso. Revisa los ajustes.',
         severity: ErrorSeverity.error,
       );
     }
     if (lower.contains('timeout')) {
       return const FriendlyError(
         message:
-            '⏱️ Tardó demasiado. Intenta de nuevo acercando los teléfonos.',
+            '\u{23F1}\u{FE0F} Tardó demasiado. Intenta de nuevo acercando los teléfonos.',
         severity: ErrorSeverity.warning,
       );
     }
     if (lower.contains('database') || lower.contains('sql')) {
       return const FriendlyError(
         message:
-            '💾 Error al guardar datos. Reinicia la app si el problema persiste.',
+            '\u{1F4BE} Error al guardar datos. Reinicia la app si el problema persiste.',
         severity: ErrorSeverity.error,
       );
     }
 
     return const FriendlyError(
       message:
-          '⚠️ Algo salió mal. Intenta de nuevo. Si persiste, reinicia la app.',
+          '\u{26A0}\u{FE0F} Algo salió mal. Intenta de nuevo. Si persiste, reinicia la app.',
       severity: ErrorSeverity.error,
     );
   }
@@ -221,12 +221,12 @@ Responde EXACTAMENTE así:
   Future<int> cacheSize() async => _cache.length;
 }
 
-// ─── Extension: mostrar errores desde cualquier widget ─────────────────
+// â”€â”€â”€ Extension: mostrar errores desde cualquier widget â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 extension FriendlyErrorDisplay on BuildContext {
   /// Traduce el error y lo muestra según severidad:
-  /// - info/warning → SnackBar
-  /// - error/critical → Dialog
+  /// - info/warning â†’ SnackBar
+  /// - error/critical â†’ Dialog
   Future<void> showFriendlyError(dynamic error, [StackTrace? stack]) async {
     final friendly = await ErrorTranslatorService().translate(error, stack);
     if (!mounted) return;
@@ -286,7 +286,7 @@ extension FriendlyErrorDisplay on BuildContext {
   }
 }
 
-// ─── Wrapper para try/catch automático ─────────────────────────────────
+// â”€â”€â”€ Wrapper para try/catch automático â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Ejecuta [action] y si falla, traduce el error y lo muestra al usuario.
 /// Retorna el resultado o null si hubo error.
@@ -305,3 +305,4 @@ Future<T?> guardedCall<T>(
     return null;
   }
 }
+

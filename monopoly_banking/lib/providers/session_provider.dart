@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/models/session_model.dart';
-import 'package:monopoly_banking/providers/stats_provider.dart';
-import 'package:monopoly_banking/providers/wallet_controller.dart';
-import 'package:monopoly_banking/services/hive_service.dart';
-import 'package:monopoly_banking/services/bank_ledger_service.dart';
-import 'package:monopoly_banking/services/p2p_service.dart';
+import 'package:money_manager/models/session_model.dart';
+import 'package:money_manager/providers/stats_provider.dart';
+import 'package:money_manager/providers/wallet_controller.dart';
+import 'package:money_manager/services/hive_service.dart';
+import 'package:money_manager/services/bank_ledger_service.dart';
+import 'package:money_manager/services/p2p_service.dart';
 
 class SessionProvider extends ChangeNotifier {
   static const _playerBankSessionKey = 'player_bank_session_id_v1';
@@ -105,7 +105,7 @@ class SessionProvider extends ChangeNotifier {
     _role = role;
     _avatarId = avatarId;
     _colorId = colorId;
-    _name = name ?? (role == 'banco' ? 'Banco Monopoly' : '');
+    _name = name ?? (role == 'banco' ? 'Money Manager' : '');
     _isHandshakeDone = isHandshakeDone;
 
     final initialTier = _tierIndexForBalance(initialBalance);

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/p2p_service.dart';
-import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/services/notification_service.dart';
-import 'package:monopoly_banking/core/game_transitions.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/services/p2p_service.dart';
+import 'package:money_manager/services/sound_service.dart';
+import 'package:money_manager/services/notification_service.dart';
+import 'package:money_manager/core/game_transitions.dart';
 
 class WsBankPanel extends StatefulWidget {
   final VoidCallback? onReiniciarWs;

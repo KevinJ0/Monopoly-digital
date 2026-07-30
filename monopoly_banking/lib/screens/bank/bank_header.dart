@@ -15,13 +15,12 @@ class _BankHeader extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: kGold.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.account_balance_rounded,
-                color: kGold, size: 28),
+            child: const Text('\u{1F3E6}', style: TextStyle(fontSize: 28)),
           ),
           const SizedBox(width: 14),
           const Expanded(
@@ -29,7 +28,7 @@ class _BankHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Banco Monopoly',
+                  'Money Manager',
                   style: TextStyle(
                       color: kGold, fontWeight: FontWeight.w800, fontSize: 16),
                 ),

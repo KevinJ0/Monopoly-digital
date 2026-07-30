@@ -1,4 +1,4 @@
-// Microsoft Visual C++ generated resource script.
+﻿// Microsoft Visual C++ generated resource script.
 //
 #pragma code_page(65001)
 #include "resource.h"
@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.monopoly" "\0"
-            VALUE "FileDescription", "monopoly_banking" "\0"
+            VALUE "CompanyName", "com.moneymanager" "\0"
+            VALUE "FileDescription", "money_manager" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "monopoly_banking" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.monopoly. All rights reserved." "\0"
-            VALUE "OriginalFilename", "monopoly_banking.exe" "\0"
-            VALUE "ProductName", "monopoly_banking" "\0"
+            VALUE "InternalName", "money_manager" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.moneymanager. All rights reserved." "\0"
+            VALUE "OriginalFilename", "money_manager.exe" "\0"
+            VALUE "ProductName", "money_manager" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
@@ -119,3 +119,4 @@ END
 
 /////////////////////////////////////////////////////////////////////////////
 #endif    // not APSTUDIO_INVOKED
+

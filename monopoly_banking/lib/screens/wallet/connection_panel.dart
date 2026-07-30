@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/p2p_service.dart';
-import 'package:monopoly_banking/services/transports/ws_models.dart';
-import 'package:monopoly_banking/screens/wallet/ws_connect_button.dart';
-import 'package:monopoly_banking/screens/wallet/connected_player_tile.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/services/p2p_service.dart';
+import 'package:money_manager/services/transports/ws_models.dart';
+import 'package:money_manager/screens/wallet/ws_connect_button.dart';
+import 'package:money_manager/screens/wallet/connected_player_tile.dart';
 
 class ConnectionPanel extends StatelessWidget {
   final Color color;

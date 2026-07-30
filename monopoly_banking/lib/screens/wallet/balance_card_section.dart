@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
-import 'package:monopoly_banking/providers/wallet_controller.dart';
-import 'package:monopoly_banking/screens/wallet/premium_card.dart';
+import 'package:money_manager/providers/wallet_controller.dart';
+import 'package:money_manager/screens/wallet/premium_card.dart';
 
 class BalanceCardSection extends StatelessWidget {
   final double balance;

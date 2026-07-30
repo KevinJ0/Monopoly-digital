@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/services/transports/p2p_transport.dart';
-import 'package:monopoly_banking/services/transports/tcp_channel.dart';
+import 'package:money_manager/services/transports/p2p_transport.dart';
+import 'package:money_manager/services/transports/tcp_channel.dart';
 
 class WifiTransport extends P2PTransport {
   @override
@@ -19,7 +19,7 @@ class WifiTransport extends P2PTransport {
   bool get isEnabled => true;
 
   static const int _discoveryPort = 43210;
-  static const String _discoveryMagic = 'MONOPOLY_P2P';
+  static const String _discoveryMagic = 'MONEY_MANAGER_P2P';
 
   final _tcp = TcpChannel();
 
@@ -151,3 +151,4 @@ class WifiTransport extends P2PTransport {
     _tcp.dispose();
   }
 }
+

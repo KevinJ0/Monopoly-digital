@@ -80,6 +80,10 @@ mixin _PlayerDialogs on State<PlayerScreen> {
                       _showToast('Ingresa un monto v\u00e1lido.', kRed);
                       return;
                     }
+                    if (wallet.balance - amount <= 0) {
+                      _showToast('No puedes transferir todo tu saldo. Debe quedar al menos ${formatMoney(1)} en tu cuenta.', kRed);
+                      return;
+                    }
                     if (!P2PService().wsTransport.clientConnectedNotifier.value) {
                       _showToast('Con\u00e9ctate al banco primero.', kRed);
                       return;
@@ -250,8 +254,8 @@ mixin _PlayerDialogs on State<PlayerScreen> {
       child: AlertDialog(
         backgroundColor: kBgCard,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('\u00bfSalir al inicio?', style: TextStyle(color: kTextPrimary)),
-        content: const Text('Volver\u00e1s a la pantalla de selecci\u00f3n de roles.', style: TextStyle(color: kTextSecondary)),
+        title: const Text('¿Salir al inicio?', style: TextStyle(color: kTextPrimary)),
+        content: const Text('Volver a la pantalla de selección de roles.', style: TextStyle(color: kTextSecondary)),
         actions: [
           TextButton(
             onPressed: () {
@@ -425,7 +429,7 @@ mixin _PlayerDialogs on State<PlayerScreen> {
                 backgroundColor: brandColor,
                 foregroundColor: brandColor.computeLuminance() > 0.5 ? Colors.black : Colors.white,
               ),
-              onPressed: (submitting || wouldEmptyBalance)
+              onPressed: (submitting || wouldEmptyBalance || val <= 0)
                   ? null
                   : () async {
                       SoundService.playClick();

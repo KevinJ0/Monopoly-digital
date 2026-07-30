@@ -28,6 +28,9 @@ mixin _PlayerIncoming on State<PlayerScreen> {
         } finally {
           _self._userRequestedWsDisconnect = false;
         }
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).maybePop();
+        }
         await session.clearSession();
         if (mounted) {
           NotificationService().show(
@@ -158,6 +161,17 @@ mixin _PlayerIncoming on State<PlayerScreen> {
         if (!_isPayloadForPlayer(payload, session.name)) return;
         _self._stopWsClient();
         await wallet.applyBankState(payload);
+      } else if (type == 'winner') {
+        if (!_isPayloadForPlayer(payload, session.name)) return;
+        _self._userRequestedWsDisconnect = true;
+        await P2PService().wsTransport.stop();
+        if (!mounted) return;
+        _self._safeSetState(() {});
+        Navigator.of(context).pushReplacement(
+          GameFadeRoute(
+            page: WinnerScreen(playerName: session.name),
+          ),
+        );
       } else if (type == 'kick') {
         if (!_isPayloadForPlayer(payload, session.name)) return;
         if (!_self._hasBeenKicked) {

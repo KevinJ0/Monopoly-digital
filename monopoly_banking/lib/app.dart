@@ -1,29 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/core/theme.dart';
-import 'package:monopoly_banking/providers/balance_tween_controller.dart';
-import 'package:monopoly_banking/providers/session_provider.dart';
-import 'package:monopoly_banking/widgets/app_spinner.dart';
-import 'package:monopoly_banking/providers/stats_provider.dart';
-import 'package:monopoly_banking/providers/wallet_controller.dart';
-import 'package:monopoly_banking/screens/role_selection_screen.dart';
-import 'package:monopoly_banking/screens/player_screen.dart';
-import 'package:monopoly_banking/screens/bank_home_screen.dart';
-import 'package:monopoly_banking/screens/splash_screen.dart';
-import 'package:monopoly_banking/services/notification_service.dart';
-import 'package:monopoly_banking/services/bank_settings_service.dart';
-import 'package:monopoly_banking/services/bank_ledger_service.dart';
-import 'package:monopoly_banking/services/hive_service.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/core/theme.dart';
+import 'package:money_manager/providers/balance_tween_controller.dart';
+import 'package:money_manager/providers/session_provider.dart';
+import 'package:money_manager/widgets/app_spinner.dart';
+import 'package:money_manager/providers/stats_provider.dart';
+import 'package:money_manager/providers/wallet_controller.dart';
+import 'package:money_manager/screens/role_selection_screen.dart';
+import 'package:money_manager/screens/player_screen.dart';
+import 'package:money_manager/screens/bank_home_screen.dart';
+import 'package:money_manager/screens/splash_screen.dart';
+import 'package:money_manager/services/notification_service.dart';
+import 'package:money_manager/services/bank_settings_service.dart';
+import 'package:money_manager/services/bank_ledger_service.dart';
+import 'package:money_manager/services/hive_service.dart';
 
-class MonopolyApp extends StatefulWidget {
-  const MonopolyApp({super.key});
+class MoneyManagerApp extends StatefulWidget {
+  const MoneyManagerApp({super.key});
 
   @override
-  State<MonopolyApp> createState() => _MonopolyAppState();
+  State<MoneyManagerApp> createState() => _MoneyManagerAppState();
 }
 
-class _MonopolyAppState extends State<MonopolyApp> {
+class _MoneyManagerAppState extends State<MoneyManagerApp> {
   late final StatsProvider _stats;
   late final WalletController _wallet;
   late final SessionProvider _session;
@@ -64,9 +64,9 @@ class _AppShellState extends State<_AppShell> {
   Widget build(BuildContext context) {
     return MaterialApp(
       scaffoldMessengerKey: NotificationService().scaffoldMessengerKey,
-      title: 'Monopoly Banking',
+      title: 'Money Manager',
       debugShowCheckedModeBanner: false,
-      theme: monopolyTheme(),
+      theme: moneyManagerTheme(),
       home: const _RootRouter(),
     );
   }

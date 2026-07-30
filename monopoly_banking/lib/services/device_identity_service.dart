@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:monopoly_banking/services/hive_service.dart';
+import 'package:money_manager/services/hive_service.dart';
 import 'package:uuid/uuid.dart';
 
 class DeviceIdentityService {

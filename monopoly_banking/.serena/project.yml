@@ -1,5 +1,5 @@
-# the name by which the project can be referenced within Serena
-project_name: "monopoly_banking"
+﻿# the name by which the project can be referenced within Serena
+project_name: "money_manager"
 
 
 # list of languages for which language servers are started; choose from:
@@ -118,16 +118,16 @@ added_modes:
 # initial prompt for the project. It will always be given to the LLM upon activating the project
 # (contrary to the memories, which are loaded on demand).
 initial_prompt: |
-  Proyecto: monopoly_banking - App de banca digital para Monopoly (offline P2P).
+  Proyecto: money_manager - App de banca digital para Money Manager (offline P2P).
 
   Subagentes disponibles (modos):
-  - flutter-runner: Compilación, ejecución, testeo y deploy
+  - flutter-runner: CompilaciÃ³n, ejecuciÃ³n, testeo y deploy
   - p2p-networking: BLE, NFC, TCP sockets
   - ui-designer: Pantallas, widgets, animaciones
   - data-layer: Hive, modelos, persistencia
-  - bank-logic: Lógica de transferencias, vault, wallet
+  - bank-logic: LÃ³gica de transferencias, vault, wallet
 
-  Actívalos con: --add-mode <nombre> o --mode <nombre>
+  ActÃ­valos con: --add-mode <nombre> o --mode <nombre>
 
 # time budget (seconds) per tool call for the retrieval of additional symbol information
 # such as docstrings or parameter information.
@@ -135,7 +135,7 @@ initial_prompt: |
 # If null or missing, use the setting from the global configuration.
 symbol_info_budget:
 
-# list of regex patterns which, when matched, mark a memory entry as read‑only.
+# list of regex patterns which, when matched, mark a memory entry as readâ€‘only.
 # Extends the list from the global configuration, merging the two lists.
 read_only_memory_patterns: []
 
@@ -146,3 +146,4 @@ read_only_memory_patterns: []
 # Extends the list from the global configuration, merging the two lists.
 # Example: ["_archive/.*", "_episodes/.*"]
 ignored_memory_patterns: []
+

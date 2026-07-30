@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/models/transaction_model.dart';
-import 'package:monopoly_banking/services/bank_settings_service.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/models/transaction_model.dart';
+import 'package:money_manager/services/bank_settings_service.dart';
 
 class TransactionTile extends StatelessWidget {
   final TransactionModel tx;
@@ -50,7 +50,7 @@ class TransactionTile extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          tx.counterpartyId?.trim().isNotEmpty == true ? '${tx.counterpartyId} · ${_formatDate(tx.timestamp)}' : _formatDate(tx.timestamp),
+          tx.counterpartyId?.trim().isNotEmpty == true ? '${tx.counterpartyId} Â· ${_formatDate(tx.timestamp)}' : _formatDate(tx.timestamp),
           style: const TextStyle(color: kTextSecondary, fontSize: 12),
         ),
         trailing: Text(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/p2p_service.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/services/p2p_service.dart';
 
 const _kPlayerColors = [
   Color(0xFFE53935),

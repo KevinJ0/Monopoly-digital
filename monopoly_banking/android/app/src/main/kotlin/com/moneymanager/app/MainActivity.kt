@@ -1,4 +1,4 @@
-package com.monopoly.monopoly_banking
+﻿package com.moneymanager.app
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
@@ -44,7 +44,7 @@ class MainActivity : FlutterActivity() {
         val messenger = flutterEngine.dartExecutor.binaryMessenger
 
         // BLE channel
-        MethodChannel(messenger, "com.monopoly/ble")
+        MethodChannel(messenger, "com.moneymanager/ble")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "requestBlePermissions" -> {
@@ -83,7 +83,7 @@ class MainActivity : FlutterActivity() {
                         val charUuid = call.argument<String>("charUuid") ?: ""
                         bleServer?.stop()
                         releaseWakeLock()
-                        bleServer = BleServer(this, MethodChannel(messenger, "com.monopoly/ble"))
+                        bleServer = BleServer(this, MethodChannel(messenger, "com.moneymanager/ble"))
                         bleServer?.start(serviceUuid, charUuid)
                         acquireWakeLock()
                         result.success(null)
@@ -155,7 +155,7 @@ class MainActivity : FlutterActivity() {
                                     data = android.net.Uri.parse("package:$packageName")
                                 })
                             } catch (e: Exception) {
-                                Log.e("MainActivity", "Error solicitando ignorar optimización", e)
+                                Log.e("MainActivity", "Error solicitando ignorar optimizaciÃ³n", e)
                             }
                         }
                         result.success(true)
@@ -173,7 +173,7 @@ class MainActivity : FlutterActivity() {
 
         // Canal completamente aislado para las pruebas BLE. No comparte la
         // instancia GATT ni los callbacks con el transporte del juego.
-        val bleDebugChannel = MethodChannel(messenger, "com.monopoly/ble_debug")
+        val bleDebugChannel = MethodChannel(messenger, "com.moneymanager/ble_debug")
         bleDebugChannel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "requestBlePermissions" -> result.success(requestBlePermissions())
@@ -244,7 +244,7 @@ class MainActivity : FlutterActivity() {
                                 data = android.net.Uri.parse("package:$packageName")
                             })
                         } catch (e: Exception) {
-                            Log.e("MainActivity", "Error solicitando ignorar optimización", e)
+                            Log.e("MainActivity", "Error solicitando ignorar optimizaciÃ³n", e)
                         }
                     }
                     result.success(true)
@@ -268,7 +268,7 @@ class MainActivity : FlutterActivity() {
                 @Suppress("DEPRECATION")
                 adapter.disable()
             }
-            // Esperar hasta que el adaptador esté apagado (máximo 4s)
+            // Esperar hasta que el adaptador estÃ© apagado (mÃ¡ximo 4s)
             var attempts = 0
             while (adapter.isEnabled && attempts < 20) {
                 Thread.sleep(200)
@@ -315,7 +315,7 @@ class MainActivity : FlutterActivity() {
                         success = refreshMethod.invoke(gatt) as Boolean
                         Log.d("MainActivity", "refresh() en $deviceId: $success")
                     } catch (e: Exception) {
-                        Log.e("MainActivity", "Error refrescando caché GATT", e)
+                        Log.e("MainActivity", "Error refrescando cachÃ© GATT", e)
                     }
                     gatt.disconnect()
                 } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
@@ -367,7 +367,7 @@ class MainActivity : FlutterActivity() {
         try {
             if (wakeLock == null) {
                 val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MonopolyBle::WakeLock")
+                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MoneyManagerBle::WakeLock")
                 wakeLock?.setReferenceCounted(false)
             }
             if (wakeLock?.isHeld == false) {
@@ -420,3 +420,4 @@ class MainActivity : FlutterActivity() {
         super.onDestroy()
     }
 }
+

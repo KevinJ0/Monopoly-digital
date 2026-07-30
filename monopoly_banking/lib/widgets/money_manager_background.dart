@@ -1,17 +1,17 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/core/constants.dart';
+import 'package:money_manager/core/constants.dart';
 
-class MonopolyBackground extends StatefulWidget {
+class MoneyManagerBackground extends StatefulWidget {
   final Widget child;
 
-  const MonopolyBackground({super.key, required this.child});
+  const MoneyManagerBackground({super.key, required this.child});
 
   @override
-  State<MonopolyBackground> createState() => _MonopolyBackgroundState();
+  State<MoneyManagerBackground> createState() => _MoneyManagerBackgroundState();
 }
 
-class _MonopolyBackgroundState extends State<MonopolyBackground>
+class _MoneyManagerBackgroundState extends State<MoneyManagerBackground>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   int _cycle = 0;
@@ -44,7 +44,7 @@ class _MonopolyBackgroundState extends State<MonopolyBackground>
       animation: _ctrl,
       builder: (context, _) {
         return CustomPaint(
-          painter: _MonopolyGridPainter(animationValue: _ctrl.value + _cycle),
+          painter: _MoneyManagerGridPainter(animationValue: _ctrl.value + _cycle),
           child: widget.child,
         );
       },
@@ -100,9 +100,9 @@ const _emojis = [
   _FloatingEmoji(emoji: '\u{1F3C1}', size: 22, opacity: 0.16, speedX: -0.06, speedY: -0.10, rotationSpeed: -0.3, startX: 0.3, startY: 0.5),
 ];
 
-class _MonopolyGridPainter extends CustomPainter {
+class _MoneyManagerGridPainter extends CustomPainter {
   final double animationValue;
-  _MonopolyGridPainter({required this.animationValue});
+  _MoneyManagerGridPainter({required this.animationValue});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -171,5 +171,5 @@ class _MonopolyGridPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MonopolyGridPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _MoneyManagerGridPainter oldDelegate) => true;
 }

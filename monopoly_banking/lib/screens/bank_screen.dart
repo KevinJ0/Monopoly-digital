@@ -3,22 +3,22 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/bank_ledger_service.dart';
-import 'package:monopoly_banking/services/p2p_service.dart';
-import 'package:monopoly_banking/services/transports/p2p_transport.dart';
-import 'package:monopoly_banking/services/transports/ws_models.dart';
-import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/services/notification_service.dart';
-import 'package:monopoly_banking/services/app_audit_logger.dart';
-import 'package:monopoly_banking/services/bank_settings_service.dart';
-import 'package:monopoly_banking/core/game_transitions.dart';
-import 'package:monopoly_banking/widgets/animated_entry.dart';
-import 'package:monopoly_banking/widgets/player_info_widget.dart';
-import 'package:monopoly_banking/widgets/app_spinner.dart';
-import 'package:monopoly_banking/screens/bank/bank_settings_screen.dart';
-import 'package:monopoly_banking/services/error_translator_service.dart';
-import 'package:monopoly_banking/services/foreground_service.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/services/bank_ledger_service.dart';
+import 'package:money_manager/services/p2p_service.dart';
+import 'package:money_manager/services/transports/p2p_transport.dart';
+import 'package:money_manager/services/transports/ws_models.dart';
+import 'package:money_manager/services/sound_service.dart';
+import 'package:money_manager/services/notification_service.dart';
+import 'package:money_manager/services/app_audit_logger.dart';
+import 'package:money_manager/services/bank_settings_service.dart';
+import 'package:money_manager/core/game_transitions.dart';
+import 'package:money_manager/widgets/animated_entry.dart';
+import 'package:money_manager/widgets/player_info_widget.dart';
+import 'package:money_manager/widgets/app_spinner.dart';
+import 'package:money_manager/screens/bank/bank_settings_screen.dart';
+import 'package:money_manager/services/error_translator_service.dart';
+import 'package:money_manager/services/foreground_service.dart';
 
 part 'bank/operation_dialog_controller.dart';
 part 'bank/operation_loading_visual.dart';
@@ -54,10 +54,6 @@ class _BankScreenState extends State<BankScreen>
   final Map<String, Completer<Map<String, dynamic>>> _pendingDeliveryAcks = {};
   late final AnimationController _slideCtrl;
   late final Animation<Offset> _slide;
-  String? _historyFilterPlayer;
-  String? _historyFilterType;
-  bool _historySortAscending = false;
-  String _historySortBy = 'date';
   List<_OpOption>? _cachedOps;
 
   List<_OpOption> get _operations {

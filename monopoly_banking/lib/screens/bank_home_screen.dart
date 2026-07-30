@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/providers/session_provider.dart';
-import 'package:monopoly_banking/screens/bank_desktop_screen.dart';
-import 'package:monopoly_banking/screens/wallet_screen.dart';
-import 'package:monopoly_banking/screens/bank_screen.dart';
-import 'package:monopoly_banking/services/bank_ledger_service.dart';
-import 'package:monopoly_banking/services/bank_settings_service.dart';
-import 'package:monopoly_banking/widgets/animated_players_backdrop.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/providers/session_provider.dart';
+import 'package:money_manager/screens/bank_desktop_screen.dart';
+import 'package:money_manager/screens/wallet_screen.dart';
+import 'package:money_manager/screens/bank_screen.dart';
+import 'package:money_manager/services/bank_ledger_service.dart';
+import 'package:money_manager/services/bank_settings_service.dart';
+import 'package:money_manager/widgets/animated_players_backdrop.dart';
 
 class BankHomeScreen extends StatefulWidget {
   const BankHomeScreen({super.key});

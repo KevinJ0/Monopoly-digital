@@ -1,7 +1,7 @@
-# Monopoly Banking - Architecture Overview
+﻿# Money Manager - Architecture Overview
 
 ## Description
-Offline P2P Monopoly banking app. Players connect to a central "Bank" device via TCP sockets over Wi-Fi (no internet required). Supports NFC and BLE as alternative P2P transport.
+Offline P2P Money Manager app. Players connect to a central "Bank" device via TCP sockets over Wi-Fi (no internet required). Supports NFC and BLE as alternative P2P transport.
 
 ## Roles
 - **Bank (Banco)**: Hosts a TCP server on port 8080, manages all player balances, processes transfers. Uses `BancoLogic`.
@@ -10,47 +10,47 @@ Offline P2P Monopoly banking app. Players connect to a central "Bank" device via
 ## Project Structure (lib/)
 ```
 lib/
-├── main.dart              # Entry point, initializes Hive, Sound, ErrorTranslator
-├── app.dart               # MaterialApp, providers, root routing (splash -> role/wallet)
-├── core/
-│   └── constants.dart     # Colors, money symbol, initial balance constants
-├── models/
-│   ├── session_model.dart      # Hive-encrypted session (balance, role, vault, tier)
-│   ├── transaction_model.dart  # Hive-encrypted transaction record
-│   └── usuario_model.dart      # Legacy bank user model (JSON file based)
-├── providers/
-│   ├── session_provider.dart       # Session creation/restore/clear, handshake
-│   ├── wallet_controller.dart      # Balance ops, vault investment, tier system, haptics
-│   ├── stats_provider.dart         # Transaction volume/count tracking
-│   └── balance_tween_controller.dart # Animated balance transitions
-├── screens/
-│   ├── splash_screen.dart          # Animated splash with confetti
-│   ├── role_selection_screen.dart  # Role picker (Bank/Client), avatar & color selection
-│   ├── bank_screen.dart            # Bank dashboard (player list, transfers)
-│   ├── wallet_screen.dart          # Client wallet (balance, vault, chart, history)
-│   ├── player_discovery_screen.dart # NFC/BLE discovery UI
-│   └── nfc_test_screen.dart        # NFC debug/test screen
-├── services/
-│   ├── banco_logic.dart            # TCP server (ServerSocket), user management
-│   ├── cliente_logic.dart          # TCP client (Socket), auto-reconnect
-│   ├── p2p_service.dart            # Unified P2P: NFC first, BLE fallback
-│   ├── nfc_service.dart            # NFC reader/writer (HCE)
-│   ├── ble_service.dart            # BLE scan/connect/advertise
-│   ├── hive_service.dart           # Hive + FlutterSecureStorage init, encryption
-│   ├── sound_service.dart          # Sound effects pool
-│   ├── voz_service.dart            # Text-to-speech (flutter_tts)
-│   ├── biometria_service.dart      # Fingerprint/biometric auth
-│   ├── error_translator_service.dart # Maps exceptions to user-friendly messages
-│   └── network_service.dart        # Network connectivity check
-└── widgets/
-    ├── animated_entry.dart         # Staggered fade+slide entry animation
-    ├── odometer_widget.dart        # Rolling number counter widget
-    ├── premium_dialog.dart         # Tier upgrade celebration dialog
-    └── transaction_tile.dart       # Transaction history list tile
+â”œâ”€â”€ main.dart              # Entry point, initializes Hive, Sound, ErrorTranslator
+â”œâ”€â”€ app.dart               # MaterialApp, providers, root routing (splash -> role/wallet)
+â”œâ”€â”€ core/
+â”‚   â””â”€â”€ constants.dart     # Colors, money symbol, initial balance constants
+â”œâ”€â”€ models/
+â”‚   â”œâ”€â”€ session_model.dart      # Hive-encrypted session (balance, role, vault, tier)
+â”‚   â”œâ”€â”€ transaction_model.dart  # Hive-encrypted transaction record
+â”‚   â””â”€â”€ usuario_model.dart      # Legacy bank user model (JSON file based)
+â”œâ”€â”€ providers/
+â”‚   â”œâ”€â”€ session_provider.dart       # Session creation/restore/clear, handshake
+â”‚   â”œâ”€â”€ wallet_controller.dart      # Balance ops, vault investment, tier system, haptics
+â”‚   â”œâ”€â”€ stats_provider.dart         # Transaction volume/count tracking
+â”‚   â””â”€â”€ balance_tween_controller.dart # Animated balance transitions
+â”œâ”€â”€ screens/
+â”‚   â”œâ”€â”€ splash_screen.dart          # Animated splash with confetti
+â”‚   â”œâ”€â”€ role_selection_screen.dart  # Role picker (Bank/Client), avatar & color selection
+â”‚   â”œâ”€â”€ bank_screen.dart            # Bank dashboard (player list, transfers)
+â”‚   â”œâ”€â”€ wallet_screen.dart          # Client wallet (balance, vault, chart, history)
+â”‚   â”œâ”€â”€ player_discovery_screen.dart # NFC/BLE discovery UI
+â”‚   â””â”€â”€ nfc_test_screen.dart        # NFC debug/test screen
+â”œâ”€â”€ services/
+â”‚   â”œâ”€â”€ banco_logic.dart            # TCP server (ServerSocket), user management
+â”‚   â”œâ”€â”€ cliente_logic.dart          # TCP client (Socket), auto-reconnect
+â”‚   â”œâ”€â”€ p2p_service.dart            # Unified P2P: NFC first, BLE fallback
+â”‚   â”œâ”€â”€ nfc_service.dart            # NFC reader/writer (HCE)
+â”‚   â”œâ”€â”€ ble_service.dart            # BLE scan/connect/advertise
+â”‚   â”œâ”€â”€ hive_service.dart           # Hive + FlutterSecureStorage init, encryption
+â”‚   â”œâ”€â”€ sound_service.dart          # Sound effects pool
+â”‚   â”œâ”€â”€ voz_service.dart            # Text-to-speech (flutter_tts)
+â”‚   â”œâ”€â”€ biometria_service.dart      # Fingerprint/biometric auth
+â”‚   â”œâ”€â”€ error_translator_service.dart # Maps exceptions to user-friendly messages
+â”‚   â””â”€â”€ network_service.dart        # Network connectivity check
+â””â”€â”€ widgets/
+    â”œâ”€â”€ animated_entry.dart         # Staggered fade+slide entry animation
+    â”œâ”€â”€ odometer_widget.dart        # Rolling number counter widget
+    â”œâ”€â”€ premium_dialog.dart         # Tier upgrade celebration dialog
+    â””â”€â”€ transaction_tile.dart       # Transaction history list tile
 ```
 
 ## State Management
-- **Provider** (via `package:provider`) with `MultiProvider` in `MonopolyApp`.
+- **Provider** (via `package:provider`) with `MultiProvider` in `Money ManagerApp`.
 - `WalletController` and `SessionProvider` extend `ChangeNotifier`.
 - `BalanceTweenController` is a plain `Provider` (not ChangeNotifier) for animating balance changes.
 
@@ -81,3 +81,4 @@ lib/
 - `confetti` - Celebrations
 - `sqflite` - Available for future use
 - `google_generative_ai` - Available for future AI features
+

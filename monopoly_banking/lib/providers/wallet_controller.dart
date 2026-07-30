@@ -2,13 +2,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/models/session_model.dart';
-import 'package:monopoly_banking/models/transaction_model.dart';
-import 'package:monopoly_banking/providers/stats_provider.dart';
-import 'package:monopoly_banking/services/hive_service.dart';
-import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/services/notification_service.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/models/session_model.dart';
+import 'package:money_manager/models/transaction_model.dart';
+import 'package:money_manager/providers/stats_provider.dart';
+import 'package:money_manager/services/hive_service.dart';
+import 'package:money_manager/services/sound_service.dart';
+import 'package:money_manager/services/notification_service.dart';
 import 'package:uuid/uuid.dart';
 
 enum TxType { received, sent, passGo, largeTransfer }

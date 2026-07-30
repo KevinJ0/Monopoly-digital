@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:monopoly_banking/services/hive_service.dart';
-import 'package:monopoly_banking/services/transports/p2p_transport.dart';
-import 'package:monopoly_banking/services/transports/ws_transport.dart';
-import 'package:monopoly_banking/services/transports/wifi_transport.dart';
+import 'package:money_manager/services/hive_service.dart';
+import 'package:money_manager/services/transports/p2p_transport.dart';
+import 'package:money_manager/services/transports/ws_transport.dart';
+import 'package:money_manager/services/transports/wifi_transport.dart';
 
 typedef P2PPayloadHandler = void Function(Map<String, dynamic> payload);
 

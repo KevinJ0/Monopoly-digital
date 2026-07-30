@@ -5,15 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/providers/session_provider.dart';
-import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/widgets/animated_entry.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/providers/session_provider.dart';
+import 'package:money_manager/services/sound_service.dart';
+import 'package:money_manager/widgets/animated_entry.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
-import 'package:monopoly_banking/services/error_translator_service.dart';
-import 'package:monopoly_banking/core/game_transitions.dart';
-import 'package:monopoly_banking/screens/ws_debug_screen.dart';
+import 'package:money_manager/widgets/player_color_backdrop.dart';
+import 'package:money_manager/services/error_translator_service.dart';
+import 'package:money_manager/core/game_transitions.dart';
+import 'package:money_manager/screens/ws_debug_screen.dart';
 
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
@@ -124,7 +124,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('¿Salir de la app?', style: TextStyle(color: kTextPrimary)),
         content: const Text(
-          'Se cerrará Monopoly Banking.',
+          'Se cerrará Money Manager.',
           style: TextStyle(color: kTextSecondary),
         ),
         actions: [
@@ -138,7 +138,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
           ElevatedButton(
             onPressed: () {
               SoundService.playClick();
-              Navigator.pop(ctx, true);
+              SystemNavigator.pop();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: kRed,
@@ -182,7 +182,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
                   animation: _bgAnimCtrl,
                   builder: (context, child) {
                     return CustomPaint(
-                      painter: _MonopolyBackgroundPainter(
+                      painter: _MoneyManagerBackgroundPainter(
                         animationValue: _bgAnimCtrl.value + _bgCycle,
                       ),
                     );
@@ -297,8 +297,8 @@ class _RoleButton extends StatefulWidget {
   @override
   State<_RoleButton> createState() => _RoleButtonState();
 }
-class _RoleButtonState extends State<_RoleButton>
-    with TickerProviderStateMixin {
+
+class _RoleButtonState extends State<_RoleButton> with TickerProviderStateMixin {
   late final AnimationController _scaleCtrl;
   final GlobalKey _buttonKey = GlobalKey();
   bool _isExpanding = false;
@@ -328,8 +328,7 @@ class _RoleButtonState extends State<_RoleButton>
     await Future.delayed(const Duration(milliseconds: 160));
     if (!mounted) return;
 
-    final renderBox =
-        _buttonKey.currentContext?.findRenderObject() as RenderBox?;
+    final renderBox = _buttonKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null || !renderBox.attached) {
       widget.onTap();
       return;
@@ -484,8 +483,7 @@ class _ExpandOverlay extends StatefulWidget {
   State<_ExpandOverlay> createState() => _ExpandOverlayState();
 }
 
-class _ExpandOverlayState extends State<_ExpandOverlay>
-    with TickerProviderStateMixin {
+class _ExpandOverlayState extends State<_ExpandOverlay> with TickerProviderStateMixin {
   late final AnimationController _expandCtrl;
   late final AnimationController _fadeCtrl;
   late final Animation<double> _progress;
@@ -540,22 +538,19 @@ class _ExpandOverlayState extends State<_ExpandOverlay>
           widget.startRect.left + widget.startRect.width / 2,
           widget.startRect.top + widget.startRect.height / 2,
         );
-        final screenCenter =
-            Offset(screenSize.width / 2, screenSize.height / 2);
+        final screenCenter = Offset(screenSize.width / 2, screenSize.height / 2);
 
         final moveProgress = (t / 0.2).clamp(0.0, 1.0);
         final expandProgress = ((t - 0.2) / 0.8).clamp(0.0, 1.0);
 
-        final currentCenter =
-            Offset.lerp(startCenter, screenCenter, moveProgress)!;
+        final currentCenter = Offset.lerp(startCenter, screenCenter, moveProgress)!;
         final currentSize = lerpDouble(
           math.max(widget.startRect.width, widget.startRect.height),
           maxDim,
           expandProgress,
         )!;
         final borderRadius = lerpDouble(14, maxDim / 2, expandProgress)!;
-        final iconSize =
-            lerpDouble(32.0, screenSize.width * 0.2, expandProgress)!;
+        final iconSize = lerpDouble(32.0, screenSize.width * 0.2, expandProgress)!;
         const bgAlpha = 0.5;
 
         return Opacity(
@@ -575,8 +570,7 @@ class _ExpandOverlayState extends State<_ExpandOverlay>
                       gradient: LinearGradient(
                         colors: [
                           widget.color,
-                          widget.color
-                              .withValues(alpha: lerpDouble(0.55, 1.0, expandProgress)!),
+                          widget.color.withValues(alpha: lerpDouble(0.55, 1.0, expandProgress)!),
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -584,16 +578,14 @@ class _ExpandOverlayState extends State<_ExpandOverlay>
                       borderRadius: BorderRadius.circular(borderRadius),
                       boxShadow: [
                         BoxShadow(
-                          color: widget.color
-                            .withValues(alpha: 0.35 * (1 - expandProgress)),
-                        blurRadius: 12 * (1 - expandProgress),
-                        spreadRadius: 1 * (1 - expandProgress),
+                          color: widget.color.withValues(alpha: 0.35 * (1 - expandProgress)),
+                          blurRadius: 12 * (1 - expandProgress),
+                          spreadRadius: 1 * (1 - expandProgress),
                         ),
                       ],
                     ),
                     child: Center(
-                      child: Icon(widget.icon,
-                          color: Colors.white, size: iconSize),
+                      child: Icon(widget.icon, color: Colors.white, size: iconSize),
                     ),
                   ),
                 ),
@@ -653,10 +645,10 @@ const _emojis = [
   _FloatingEmoji(emoji: '\u{1F3C1}', size: 22, opacity: 0.16, speedX: -0.06, speedY: -0.10, rotationSpeed: -0.3, startX: 0.3, startY: 0.5),
 ];
 
-class _MonopolyBackgroundPainter extends CustomPainter {
+class _MoneyManagerBackgroundPainter extends CustomPainter {
   final double animationValue;
 
-  _MonopolyBackgroundPainter({required this.animationValue});
+  _MoneyManagerBackgroundPainter({required this.animationValue});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -716,7 +708,7 @@ class _MonopolyBackgroundPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MonopolyBackgroundPainter oldDelegate) {
+  bool shouldRepaint(covariant _MoneyManagerBackgroundPainter oldDelegate) {
     return (oldDelegate.animationValue - animationValue).abs() > 0.001;
   }
 }
@@ -775,7 +767,7 @@ class _HeaderWidget extends StatelessWidget {
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
-                      'MONOPOLY',
+                      'MONEY MANAGER',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: titleSize,

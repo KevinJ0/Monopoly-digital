@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/bank_settings_service.dart';
-import 'package:monopoly_banking/services/transports/ws_models.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/services/bank_settings_service.dart';
+import 'package:money_manager/services/transports/ws_models.dart';
 
 class PlayerInfoView extends StatelessWidget {
   final WsPlayer player;
@@ -68,7 +68,7 @@ class PlayerInfoView extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      player.avatarId.isNotEmpty ? player.avatarId : '👤',
+                      player.avatarId.isNotEmpty ? player.avatarId : 'ðŸ‘¤',
                       style: const TextStyle(fontSize: 24),
                     ),
                   ),
@@ -103,7 +103,7 @@ class PlayerInfoView extends StatelessWidget {
           const SizedBox(height: 16),
           _buildStatsGrid(),
           const SizedBox(height: 16),
-          _buildSectionHeader('Últimas Transacciones'),
+          _buildSectionHeader('Ãšltimas Transacciones'),
           ...transactions.map((tx) => _buildTxTile(tx)),
         ],
       ),
@@ -121,7 +121,7 @@ class PlayerInfoView extends StatelessWidget {
       leading: Icon(icon, color: _txColor(type), size: 20),
       title: Text(label, style: const TextStyle(color: kTextPrimary, fontSize: 13)),
       subtitle: Text(
-        '${type.startsWith('withdraw') || type.startsWith('charge') ? '-' : '+'}${formatMoney(amount)}  →  ${formatMoney(balanceAfter)}',
+        '${type.startsWith('withdraw') || type.startsWith('charge') ? '-' : '+'}${formatMoney(amount)}  â†’  ${formatMoney(balanceAfter)}',
         style: const TextStyle(color: kTextSecondary, fontSize: 11),
       ),
     );

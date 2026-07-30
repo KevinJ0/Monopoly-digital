@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/services/hive_service.dart';
+import 'package:money_manager/services/hive_service.dart';
 
 class CustomOperation {
   final String id;

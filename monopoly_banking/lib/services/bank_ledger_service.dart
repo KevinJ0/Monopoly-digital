@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 
-import 'package:monopoly_banking/models/transaction_model.dart';
-import 'package:monopoly_banking/services/bank_settings_service.dart';
-import 'package:monopoly_banking/services/hive_service.dart';
+import 'package:money_manager/models/transaction_model.dart';
+import 'package:money_manager/services/bank_settings_service.dart';
+import 'package:money_manager/services/hive_service.dart';
 
 class BankLedgerException implements Exception {
   final String message;
@@ -205,6 +205,21 @@ class BankLedgerService {
 
   void _invalidateTxCache() {
     _cachedTransactions = null;
+  }
+
+  List<BankPlayerAccount> get activeAccounts {
+    return _readAccounts().entries
+        .map((e) => BankPlayerAccount.fromMap(e.key, e.value))
+        .where((a) => !a.bankrupt)
+        .toList();
+  }
+
+  String? checkWinner() {
+    final active = activeAccounts;
+    if (active.length == 1) {
+      return active.first.playerId;
+    }
+    return null;
   }
 
   BankPlayerAccount? accountFor(String playerId) {

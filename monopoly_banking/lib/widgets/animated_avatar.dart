@@ -43,24 +43,13 @@ class AnimatedAvatar extends StatelessWidget {
                   ],
                 )
               : null,
-          color: isSelected
-              ? effectiveGlow.withValues(alpha: 0.12)
-              : Colors.white.withValues(alpha: 0.06),
+          color: isSelected ? effectiveGlow.withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected
-                ? effectiveGlow.withValues(alpha: 0.8)
-                : Colors.white.withValues(alpha: 0.08),
+            color: isSelected ? effectiveGlow.withValues(alpha: 0.8) : Colors.white.withValues(alpha: 0.08),
             width: isSelected ? 2 : 1,
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                      color: effectiveGlow.withValues(alpha: 0.5),
-                      blurRadius: 20,
-                      spreadRadius: 3)
-                ]
-              : null,
+          boxShadow: isSelected ? [BoxShadow(color: effectiveGlow.withValues(alpha: 0.5), blurRadius: 20, spreadRadius: 3)] : null,
         ),
         child: Center(
           child: Text(
@@ -104,11 +93,7 @@ class AnimatedAvatar extends StatelessWidget {
 
     return card
         .animate(onPlay: (controller) => controller.repeat(reverse: true))
-        .moveY(
-            begin: -idleFloat,
-            end: idleFloat,
-            duration: idleDuration.ms,
-            curve: Curves.easeInOut)
+        .moveY(begin: -idleFloat, end: idleFloat, duration: idleDuration.ms, curve: Curves.easeInOut)
         .scale(
             begin: Offset(idleScaleBegin, idleScaleBegin),
             end: Offset(idleScaleEnd, idleScaleEnd),

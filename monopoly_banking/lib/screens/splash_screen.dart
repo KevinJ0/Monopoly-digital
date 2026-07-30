@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/widgets/app_spinner.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/widgets/app_spinner.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});

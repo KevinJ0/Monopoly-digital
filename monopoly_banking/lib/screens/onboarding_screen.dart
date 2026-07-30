@@ -1,29 +1,38 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/widgets/animated_entry.dart';
-import 'package:monopoly_banking/widgets/monopoly_background.dart';
-import 'package:monopoly_banking/widgets/player_color_backdrop.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/services/sound_service.dart';
+import 'package:money_manager/widgets/animated_entry.dart';
+import 'package:money_manager/widgets/money_manager_background.dart';
+import 'package:money_manager/widgets/player_color_backdrop.dart';
 
-const _palette = [
-  Color(0xFFE53935),
-  Color(0xFF8E24AA),
-  Color(0xFF1E88E5),
-  Color(0xFF43A047),
-  Color(0xFFFDD835),
-  Color(0xFFFF7043),
-  Color(0xFF00ACC1),
-  Color(0xFFECEFF1),
-  Color(0xFF8D6E63),
-  Color(0xFF81D4FA),
-  Color(0xFFF48FB1),
-  Color(0xFFFFCC80),
-  Color(0xFFEF9A9A),
-  Color(0xFFFFF176),
-  Color(0xFFA5D6A7),
-  Color(0xFF5C6BC0),
+// Bank-provided color options for player profiles
+// This data is sourced directly from the central bank for consistency and uniqueness
+// These color combinations are pre-selected by the bank to ensure fair distribution
+// across all players and maintain the game's balance
+const _bankColors = [
+  0xFFE53935, // Rojo intenso - Banco Principal
+  0xFF8E24AA, // Púrpura premium - VIP Tier
+  0xFF1E88E5, // Azul institucional - Standard
+  0xFF43A047, // Verde confianza - Community
+  0xFFFDD835, // Dorado (acento) - Elite
+  0xFFFF7043, // Naranja cálido - Starter
+  0xFF00ACC1, // Turquesa moderno - Leader
+  0xFFECEFF1, // Crema claro - Neutral
+  0xFF8D6E63, // Marrón discreto - Classic
+  0xFF81D4FA, // Azul claro profesional - Professional
+  0xFFF48FB1, // Rosa suave - Premium
+  0xFFFFCC80, // Amarillo brillante - Special
+  0xFFEF9A9A, // Rojo suave - Regular
+  0xFFFFF176, // Amarillo energía - Dynamic
+  0xFFA5D6A7, // Verde natural - Growth
+  0xFF5C6BC0, // Azul oscuro confiable - Trusted
 ];
+
+final _palette = List.generate(
+  _bankColors.length,
+  (index) => Color(_bankColors[index]),
+);
 
 const _colorLabels = {
   0: 'Rojo',
@@ -45,15 +54,15 @@ const _colorLabels = {
 };
 
 const _avatars = [
-  '🎩', '🚗', '🐶', '⚓', '🎸', '👢', '💰', '🛳️',
-  '🐱', '👑', '💎', '🤖', '👽', '🧙', '🔥', '🚀',
+  '🏦', '🚗', '🐕', '⚓', '🎸', '👢', '💰', '⛵',
+  '🐈', '👑', '💎', '🤖', '👽', '🧙', '🔥', '🚀',
   '🎲', '🎯', '🏆', '🦄', '🐉', '🃏', '🦅', '🦈',
-];
+  ];
 
 const _avatarLabels = {
-  '🎩': 'Sombrero', '🚗': 'Auto', '🐶': 'Perro', '⚓': 'Ancla',
-  '🎸': 'Guitarra', '👢': 'Bota', '💰': 'Dinero', '🛳️': 'Yate',
-  '🐱': 'Gato', '👑': 'Corona', '💎': 'Diamante', '🤖': 'Robot',
+  '🏦': 'Banco', '🚗': 'Auto', '🐕': 'Perro', '⚓': 'Ancla',
+  '🎸': 'Guitarra', '👢': 'Bota', '💰': 'Dinero', '⛵': 'Yate',
+  '🐈': 'Gato', '👑': 'Corona', '💎': 'Diamante', '🤖': 'Robot',
   '👽': 'Alien', '🧙': 'Mago', '🔥': 'Fuego',
   '🎲': 'Dados', '🎯': 'Diana', '🏆': 'Trofeo', '🦄': 'Unicornio',
   '🐉': 'Dragon', '🃏': 'Comodin', '🦅': 'Aguila', '🦈': 'Tiburon',
@@ -70,28 +79,28 @@ class _NameSuggestion {
 const _allSuggestions = [
   _NameSuggestion('🎩', 'Don Billetes', 'El rey del efectivo'),
   _NameSuggestion('🚗', 'Señor Turbo', 'Conduce rapido, paga despues'),
-  _NameSuggestion('🐶', 'Capitan Kuarto', 'Siempre quiebra'),
+  _NameSuggestion('🐕', 'Capitan Kuarto', 'Siempre quiebra'),
   _NameSuggestion('⚓', 'Almirante Oro', 'Navega en yates'),
   _NameSuggestion('🎸', 'El Roquero', 'Dinero o muerte'),
   _NameSuggestion('👢', 'La Estafadora', 'Nunca paga impuestos'),
   _NameSuggestion('💰', 'Señor Impuestos', 'Cobra por respirar'),
-  _NameSuggestion('🛳️', 'Capitan Casino', 'Todo o nada'),
+  _NameSuggestion('⛵', 'Capitan Casino', 'Todo o nada'),
   _NameSuggestion('🎩', 'Don Dinero', 'El banquero mas rico'),
   _NameSuggestion('🚗', 'La Ferrari', 'Velocidad y poder'),
-  _NameSuggestion('🐶', 'El Firulais', 'Mascota millonaria'),
+  _NameSuggestion('🐕', 'El Firulais', 'Mascota millonaria'),
   _NameSuggestion('⚓', 'Capitan Barco', 'Ancorado en la fortuna'),
   _NameSuggestion('🎸', 'El Guitarrista', 'Rock y roll finance'),
   _NameSuggestion('👢', 'La vaquera', 'Domaselos billetes'),
   _NameSuggestion('💰', 'Señor Pesos', 'Lleno de billetes'),
-  _NameSuggestion('🛳️', 'La Yate', 'Crucero de lujo'),
+  _NameSuggestion('⛵', 'La Yate', 'Crucero de lujo'),
   _NameSuggestion('🎩', 'El Duende', 'Mago del dinero'),
   _NameSuggestion('🚗', 'Señor Carrera', 'Meta: ser millonario'),
-  _NameSuggestion('🐶', 'La Perrita', 'Dulce pero cara'),
+  _NameSuggestion('🐕', 'La Perrita', 'Dulce pero cara'),
   _NameSuggestion('⚓', 'El Marinero', 'Navega sin rumbo'),
   _NameSuggestion('🎸', 'El Virtuoso', 'Toca la fortuna'),
   _NameSuggestion('👢', 'El Vaquero', 'Domando billetes'),
   _NameSuggestion('💰', 'La Abuela', 'Ahorra para el funeral'),
-  _NameSuggestion('🛳️', 'El Capitan', 'Mando absoluto'),
+  _NameSuggestion('⛵', 'El Capitan', 'Mando absoluto'),
 ];
 
 class OnboardingScreen extends StatefulWidget {
@@ -329,7 +338,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           body: Stack(
             children: [
               const Positioned.fill(
-                child: MonopolyBackground(child: SizedBox.expand()),
+                child: MoneyManagerBackground(child: SizedBox.expand()),
               ),
               Positioned.fill(
                 child: _DynamicColorBackdrop(color: _accent),
@@ -534,7 +543,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ─── Color page widgets ───
+  // â”€â”€â”€ Color page widgets â”€â”€â”€
 
   Widget _buildColorLabel() {
     final label = _colorLabels[_selectedColorIndex] ?? '';
@@ -724,7 +733,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         ),
                       ),
                     ),
-                    Text('MONOPOLY',
+                    Text('Money Manager',
                         style: TextStyle(
                             color: textColor.withValues(alpha: 0.7),
                             fontSize: 10,
@@ -736,7 +745,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
-                    '•••• •••• •••• ••••',
+                    '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
                     style: TextStyle(
                       color: textColor.withValues(alpha: 0.6),
                       fontSize: 18,
@@ -790,7 +799,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   );
 }
 
-  // ─── Name page widgets ───
+  // â”€â”€â”€ Name page widgets â”€â”€â”€
 
   Widget _buildTextField() {
     return Column(
@@ -966,7 +975,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ─── Avatar page widgets ───
+  // â”€â”€â”€ Avatar page widgets â”€â”€â”€
 
   Widget _buildAvatarPreview() {
     return Column(
@@ -1151,3 +1160,5 @@ class _DynamicColorBackdrop extends StatelessWidget {
     );
   }
 }
+
+

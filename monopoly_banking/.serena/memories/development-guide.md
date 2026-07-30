@@ -1,4 +1,4 @@
-# Monopoly Banking - Development Guide
+﻿# Money Manager - Development Guide
 
 ## Requirements
 - Flutter SDK >=3.4.0 <4.0.0
@@ -9,7 +9,7 @@
 ## Setup
 ```bash
 # Clone and navigate to project
-cd monopoly_banking
+cd money_manager
 
 # Install dependencies
 flutter pub get
@@ -77,3 +77,4 @@ flutter build appbundle
 - **NFC not working**: Enable NFC in device settings. Some emulators lack NFC support.
 - **BLE issues**: Android requires location permission for BLE scanning.
 - **Build errors**: Run `flutter clean` then `flutter pub get`.
+

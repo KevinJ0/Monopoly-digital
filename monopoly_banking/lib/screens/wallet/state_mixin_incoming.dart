@@ -68,7 +68,7 @@ mixin _WalletIncoming on State<WalletScreen> {
                 name: storedName,
                 avatarId: deviceAccount.avatarId.isNotEmpty
                     ? deviceAccount.avatarId
-                    : (payload['avatarId'] ?? '👤'),
+                    : (payload['avatarId'] ?? 'ðŸ‘¤'),
                 colorId: deviceAccount.colorId.isNotEmpty
                     ? deviceAccount.colorId
                     : (payload['colorId'] ?? '0'),
@@ -80,11 +80,11 @@ mixin _WalletIncoming on State<WalletScreen> {
               'targetInstallationId': deviceInstallationId,
               'avatarId': deviceAccount.avatarId.isNotEmpty
                   ? deviceAccount.avatarId
-                  : (payload['avatarId'] ?? '👤'),
+                  : (payload['avatarId'] ?? 'ðŸ‘¤'),
               'colorId': deviceAccount.colorId.isNotEmpty
                   ? deviceAccount.colorId
                   : (payload['colorId'] ?? '0'),
-              'gameId': 'monopoly',
+              'gameId': 'MONEY MANAGER',
               'name': deviceAccount.playerId,
               'eventType': 'handshake_restore',
               'amount': 0,
@@ -134,7 +134,7 @@ mixin _WalletIncoming on State<WalletScreen> {
             'targetInstallationId': existingAccount.deviceInstallationId,
             'avatarId': payload['avatarId'] ?? session.avatarId,
             'colorId': payload['colorId'] ?? session.colorId,
-            'gameId': 'monopoly',
+            'gameId': 'MONEY MANAGER',
             'name': payload['name'] ?? session.name,
             'eventType': 'handshake_restore',
             'amount': 0,
@@ -172,7 +172,7 @@ mixin _WalletIncoming on State<WalletScreen> {
             'targetInstallationId': deviceInstallationId,
             'avatarId': payload['avatarId'] ?? session.avatarId,
             'colorId': payload['colorId'] ?? session.colorId,
-            'gameId': 'monopoly',
+            'gameId': 'MONEY MANAGER',
             'name': payload['name'] ?? session.name,
             'bankTxId': result.transactionId,
             'eventType': result.eventType,
@@ -212,7 +212,7 @@ mixin _WalletIncoming on State<WalletScreen> {
             'targetInstallationId': deviceId,
             'avatarId': avatarId,
             'colorId': colorId,
-            'gameId': 'monopoly',
+            'gameId': 'MONEY MANAGER',
             'name': name,
             'bankTxId': result.transactionId,
             'eventType': result.eventType,
@@ -354,12 +354,19 @@ mixin _WalletIncoming on State<WalletScreen> {
     required TransportType transportType,
     String? targetInstallationId,
   }) async {
+    bool isBankrupt = false;
+    if (targetInstallationId != null) {
+      final account =
+          BankLedgerService().accountForDeviceId(targetInstallationId);
+      isBankrupt = account?.bankrupt ?? false;
+    }
     final payload = <String, dynamic>{
       'type': 'kick',
       'targetPlayerId': playerId,
       if (targetInstallationId != null) 'targetInstallationId': targetInstallationId,
       'playerId': playerId,
       'eventType': 'device_banned',
+      if (isBankrupt) 'isBankrupt': true,
     };
     P2PService().setTransport(transportType);
     await P2PService().sendPayload(payload);
@@ -380,7 +387,15 @@ mixin _WalletIncoming on State<WalletScreen> {
       return;
     }
     final amount = (payload['amount'] as num?)?.toDouble() ?? 0;
-    if (!amount.isFinite || amount <= 0) return;
+    if (!amount.isFinite || amount <= 0) {
+      await _sendBankError(
+        sourcePlayerId,
+        'El monto de la transferencia debe ser mayor a 0.',
+        transportType: TransportType.ws,
+        requestId: requestId,
+      );
+      return;
+    }
 
     final fromName = sourcePlayerId;
     late final BankLedgerResult held;
@@ -712,3 +727,4 @@ mixin _WalletIncoming on State<WalletScreen> {
     });
   }
 }
+

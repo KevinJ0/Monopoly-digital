@@ -5,15 +5,13 @@ mixin _BankBuilders on State<BankScreen> {
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: kBgDark,
         title: const Text(
           'Operaciones',
-          style: TextStyle(
-              color: kTextPrimary, fontWeight: FontWeight.w700, fontSize: 18),
+          style: TextStyle(color: kTextPrimary, fontWeight: FontWeight.w700, fontSize: 18),
         ),
         centerTitle: true,
         actions: [
@@ -25,66 +23,66 @@ mixin _BankBuilders on State<BankScreen> {
         ],
       ),
       body: SlideTransition(
-          position: _self._slide,
-          child: FadeTransition(
-            opacity: _self._slideCtrl,
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(
-                    20,
-                    20,
-                    20,
-                    MediaQuery.viewPaddingOf(context).bottom + 148,
-                  ),
-                  child: Form(
-                    key: _self._formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const AnimatedEntry(
-                          delay: Duration(milliseconds: 100),
-                          child: _BankHeader(),
-                        ),
-                        const SizedBox(height: 24),
+        position: _self._slide,
+        child: FadeTransition(
+          opacity: _self._slideCtrl,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  20,
+                  20,
+                  MediaQuery.viewPaddingOf(context).bottom + 148,
+                ),
+                child: Form(
+                  key: _self._formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const AnimatedEntry(
+                        delay: Duration(milliseconds: 100),
+                        child: _BankHeader(),
+                      ),
+                      const SizedBox(height: 24),
+                      AnimatedEntry(
+                        delay: const Duration(milliseconds: 180),
+                        child: _buildConnectedPlayersList(),
+                      ),
+                      const SizedBox(height: 24),
+                      AnimatedEntry(
+                        delay: const Duration(milliseconds: 190),
+                        child: _buildSpecialOperations(),
+                      ),
+                      const SizedBox(height: 24),
+                      AnimatedEntry(
+                        delay: const Duration(milliseconds: 200),
+                        child: _buildOpSelector(),
+                      ),
+                      const SizedBox(height: 24),
+                      if (_self._selectedOp != 'passGo')
                         AnimatedEntry(
-                          delay: const Duration(milliseconds: 180),
-                          child: _buildConnectedPlayersList(),
+                          delay: const Duration(milliseconds: 300),
+                          child: _buildAmountField(),
                         ),
-                        const SizedBox(height: 24),
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 190),
-                          child: _buildSpecialOperations(),
-                        ),
-                        const SizedBox(height: 24),
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 200),
-                          child: _buildOpSelector(),
-                        ),
-                        const SizedBox(height: 24),
-                        if (_self._selectedOp != 'passGo')
-                          AnimatedEntry(
-                            delay: const Duration(milliseconds: 300),
-                            child: _buildAmountField(),
-                          ),
-                        const SizedBox(height: 28),
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 400),
-                          child: _buildQuickAmounts(),
-                        ),
-                        const SizedBox(height: 32),
-                        AnimatedEntry(
-                          delay: const Duration(milliseconds: 500),
-                          child: _buildSendButton(),
-                        ),
-                      ],
-                    ),
+                      const SizedBox(height: 28),
+                      AnimatedEntry(
+                        delay: const Duration(milliseconds: 400),
+                        child: _buildQuickAmounts(),
+                      ),
+                      const SizedBox(height: 32),
+                      AnimatedEntry(
+                        delay: const Duration(milliseconds: 500),
+                        child: _buildSendButton(),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
           ),
+        ),
       ),
     );
   }
@@ -95,8 +93,7 @@ mixin _BankBuilders on State<BankScreen> {
       children: [
         const Text(
           'OPERACIÓN',
-          style:
-              TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
+          style: TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
         ),
         const SizedBox(height: 12),
         ...(_self._operations.map((op) => _buildOpTile(op))),
@@ -125,8 +122,7 @@ mixin _BankBuilders on State<BankScreen> {
         ),
         child: Row(
           children: [
-            Icon(op.icon,
-                color: selected ? op.color : kTextSecondary, size: 20),
+            Icon(op.icon, color: selected ? op.color : kTextSecondary, size: 20),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -156,8 +152,7 @@ mixin _BankBuilders on State<BankScreen> {
   }
 
   Widget _buildAmountField() {
-    final isFixedOp = _self._selectedOp == 'passGo' ||
-        _self._selectedOp.startsWith('custom:');
+    final isFixedOp = _self._selectedOp == 'passGo' || _self._selectedOp.startsWith('custom:');
     if (isFixedOp) {
       final fixedAmount = _self._fixedAmountForSelectedOp();
       return _buildFixedAmountDisplay(fixedAmount);
@@ -167,8 +162,7 @@ mixin _BankBuilders on State<BankScreen> {
       children: [
         const Text(
           'MONTO',
-          style:
-              TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
+          style: TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
         ),
         const SizedBox(height: 10),
         TextFormField(
@@ -176,18 +170,15 @@ mixin _BankBuilders on State<BankScreen> {
           onTap: () => SoundService.playClick(),
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: const TextStyle(
-              color: kTextPrimary, fontSize: 24, fontWeight: FontWeight.w700),
+          style: const TextStyle(color: kTextPrimary, fontSize: 24, fontWeight: FontWeight.w700),
           decoration: InputDecoration(
             prefixText: '\$ ',
-            prefixStyle: const TextStyle(
-                color: kGreen, fontSize: 24, fontWeight: FontWeight.w700),
+            prefixStyle: const TextStyle(color: kGreen, fontSize: 24, fontWeight: FontWeight.w700),
             hintText: '0',
             hintStyle: const TextStyle(color: kBorder, fontSize: 24),
             filled: true,
             fillColor: kBgCard,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(16),
               borderSide: const BorderSide(color: kBorder),
@@ -225,8 +216,7 @@ mixin _BankBuilders on State<BankScreen> {
       children: [
         const Text(
           'MONTO FIJO',
-          style:
-              TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
+          style: TextStyle(color: kTextSecondary, fontSize: 11, letterSpacing: 2),
         ),
         const SizedBox(height: 10),
         Container(
@@ -240,9 +230,7 @@ mixin _BankBuilders on State<BankScreen> {
           child: Row(
             children: [
               Icon(
-                isGive
-                    ? Icons.add_circle_outline_rounded
-                    : Icons.remove_circle_outline_rounded,
+                isGive ? Icons.add_circle_outline_rounded : Icons.remove_circle_outline_rounded,
                 color: color,
                 size: 28,
               ),
@@ -263,8 +251,7 @@ mixin _BankBuilders on State<BankScreen> {
   }
 
   Widget _buildQuickAmounts() {
-    if (_self._selectedOp == 'passGo' ||
-        _self._selectedOp.startsWith('custom:')) {
+    if (_self._selectedOp == 'passGo' || _self._selectedOp.startsWith('custom:')) {
       return const SizedBox();
     }
     const presets = [50, 100, 200, 500, 1000, 2000];
@@ -304,271 +291,11 @@ mixin _BankBuilders on State<BankScreen> {
           ),
           style: ElevatedButton.styleFrom(
             backgroundColor: op.color,
-            foregroundColor:
-                op.color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            foregroundColor: op.color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             elevation: 0,
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTransactionHistory() {
-    final ledger = BankLedgerService();
-    final all = ledger.transactionHistory;
-    final playerNames = ledger.playerNamesFromHistory;
-    final typeValues = ledger.typeValuesFromHistory;
-    var filtered = all.where((tx) {
-      if (_self._historyFilterPlayer != null &&
-          tx['playerId'] != _self._historyFilterPlayer) {
-        return false;
-      }
-      if (_self._historyFilterType != null &&
-          tx['type'] != _self._historyFilterType) {
-        return false;
-      }
-      return true;
-    }).toList();
-    filtered.sort((a, b) {
-      int cmp;
-      if (_self._historySortBy == 'amount') {
-        cmp = ((a['amount'] as num?)?.toDouble() ?? 0)
-            .compareTo((b['amount'] as num?)?.toDouble() ?? 0);
-      } else {
-        final ta = a['timestamp'] as String? ?? '';
-        final tb = b['timestamp'] as String? ?? '';
-        cmp = ta.compareTo(tb);
-      }
-      return _self._historySortAscending ? cmp : -cmp;
-    });
-    final displayed = filtered.take(50).toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Text(
-              'HISTORIAL',
-              style: TextStyle(
-                  color: kTextSecondary, fontSize: 11, letterSpacing: 2),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: kBgCard,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '${filtered.length}',
-                style: const TextStyle(color: kTextSecondary, fontSize: 11),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: kBgCard,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: kBorder),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String?>(
-                    isExpanded: true,
-                    value: _self._historyFilterPlayer,
-                    hint: const Text('Todos los jugadores',
-                        style: TextStyle(color: kTextSecondary, fontSize: 12)),
-                    dropdownColor: kBgCard,
-                    items: [
-                      const DropdownMenuItem(
-                        value: null,
-                        child: Text('Todos los jugadores',
-                            style: TextStyle(color: kTextPrimary, fontSize: 12)),
-                      ),
-                      ...playerNames.map((name) => DropdownMenuItem(
-                            value: name,
-                            child: Text(name,
-                                style: const TextStyle(
-                                    color: kTextPrimary, fontSize: 12)),
-                          )),
-                    ],
-                    onChanged: (v) =>
-                        setState(() => _self._historyFilterPlayer = v),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: kBgCard,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: kBorder),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String?>(
-                    isExpanded: true,
-                    value: _self._historyFilterType,
-                    hint: const Text('Todos los tipos',
-                        style: TextStyle(color: kTextSecondary, fontSize: 12)),
-                    dropdownColor: kBgCard,
-                    items: [
-                      const DropdownMenuItem(
-                        value: null,
-                        child: Text('Todos los tipos',
-                            style: TextStyle(color: kTextPrimary, fontSize: 12)),
-                      ),
-                      ...typeValues.map((t) => DropdownMenuItem(
-                            value: t,
-                            child: Text(_txLabel(t),
-                                style: const TextStyle(
-                                    color: kTextPrimary, fontSize: 12)),
-                          )),
-                    ],
-                    onChanged: (v) =>
-                        setState(() => _self._historyFilterType = v),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: kBgCard,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: kBorder),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    isExpanded: true,
-                    value: _self._historySortBy,
-                    dropdownColor: kBgCard,
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'date',
-                        child: Text('Ordenar por fecha',
-                            style: TextStyle(
-                                color: kTextPrimary, fontSize: 12)),
-                      ),
-                      DropdownMenuItem(
-                        value: 'amount',
-                        child: Text('Ordenar por monto',
-                            style: TextStyle(
-                                color: kTextPrimary, fontSize: 12)),
-                      ),
-                    ],
-                    onChanged: (v) =>
-                        setState(() => _self._historySortBy = v!),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => setState(
-                  () => _self._historySortAscending = !_self._historySortAscending),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: kBgCard,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: kBorder),
-                ),
-                child: Icon(
-                  _self._historySortAscending
-                      ? Icons.arrow_upward_rounded
-                      : Icons.arrow_downward_rounded,
-                  color: kTextSecondary,
-                  size: 18,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (displayed.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: kBgCard.withValues(alpha: 0.5),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Text(
-              'Sin transacciones',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: kTextSecondary, fontSize: 12),
-            ),
-          )
-        else
-          ...displayed.map((tx) => _buildHistoryTile(tx)),
-      ],
-    );
-  }
-
-  Widget _buildHistoryTile(Map<String, dynamic> tx) {
-    final type = tx['type'] as String? ?? '';
-    final amount = (tx['amount'] as num?)?.toDouble() ?? 0;
-    final playerId = tx['playerId'] as String? ?? '';
-    final timestamp = tx['timestamp'] as String? ?? '';
-    final dt = DateTime.tryParse(timestamp);
-    final time = dt != null ? _format12h(dt) : '';
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: kBgCard.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Icon(_txIcon(type), size: 16, color: _txColor(type)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _txLabel(type),
-                  style: const TextStyle(
-                      color: kTextPrimary, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  playerId,
-                  style: const TextStyle(color: kTextSecondary, fontSize: 10),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            formatMoney(amount),
-            style: TextStyle(
-              color: _txColor(type),
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            time,
-            style: const TextStyle(color: kTextSecondary, fontSize: 10),
-          ),
-        ],
       ),
     );
   }
@@ -594,8 +321,7 @@ mixin _BankBuilders on State<BankScreen> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.groups_rounded,
-                        color: kGreen, size: 18),
+                    const Icon(Icons.groups_rounded, color: kGreen, size: 18),
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
@@ -711,26 +437,16 @@ mixin _BankBuilders on State<BankScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildSectionHeader('Dispositivo'),
-          _detailRow('Nombre',
-              player.name.isNotEmpty ? player.name : '-'),
-          _detailRow(
-              'Conexi\u00f3n', 'WiFi Direct'),
+          _detailRow('Nombre', player.name.isNotEmpty ? player.name : '-'),
+          _detailRow('Conexi\u00f3n', 'WiFi Direct'),
           _detailRow('ID', player.id),
-          _detailRow(
-              'ID Instalaci\u00f3n',
-              player.deviceInstallationId.isNotEmpty
-                  ? player.deviceInstallationId
-                  : '-'),
+          _detailRow('ID Instalaci\u00f3n', player.deviceInstallationId.isNotEmpty ? player.deviceInstallationId : '-'),
           const SizedBox(height: 12),
           _buildSectionHeader('Estado'),
-          _detailRow('Handshake',
-              player.playing ? 'Completado' : 'Pendiente'),
-          _detailRow('Conectado',
-              player.connected ? 'S\u00ed' : 'No'),
+          _detailRow('Handshake', player.playing ? 'Completado' : 'Pendiente'),
+          _detailRow('Conectado', player.connected ? 'S\u00ed' : 'No'),
           const SizedBox(height: 12),
-          _detailRow(
-              '\u00daltima actividad',
-              _format12h(player.lastSeen)),
+          _detailRow('\u00daltima actividad', _format12h(player.lastSeen)),
         ],
       ),
     );
@@ -833,85 +549,6 @@ mixin _BankBuilders on State<BankScreen> {
     );
   }
 
-  String _txLabel(String type) {
-    if (type.startsWith('custom_')) {
-      final customId = type.substring('custom_'.length);
-      final match = BankSettingsService()
-          .customOps
-          .where((c) => c.id == customId)
-          .firstOrNull;
-      return match?.name ?? type;
-    }
-    return switch (type) {
-      'payment' || 'bank_payment_sent' => 'Pago al jugador',
-      'charge' || 'bank_charge_received' => 'Cobro al jugador',
-      'passGo' || 'bank_pass_go_sent' => 'Pas\u00f3 por GO',
-      'handshake_initial' || 'bank_player_joined' => 'Jugador vinculado',
-      'handshake_reconnect' || 'handshake_restore' || 'bank_player_reconnected' => 'Jugador reconectado',
-      'bankruptcy' || 'bank_bankruptcy' => 'Bancarrota',
-      'investment_opened' || 'bank_investment_opened' => 'Inversi\u00f3n iniciada',
-      'investment_completed' || 'bank_investment_completed' => 'Inversi\u00f3n completada',
-      'investment_early_withdrawal' || 'bank_investment_early_withdrawal' => 'Retiro de inversi\u00f3n',
-      'transfer_held' || 'bank_transfer_held' => 'Transferencia retenida',
-      'transfer_received' || 'bank_transfer_received' || 'bank_transfer_delivered' => 'Transferencia recibida',
-      'transfer_cancelled' || 'bank_transfer_cancelled' => 'Transferencia devuelta',
-      'sync_credit' || 'sync_debit' || 'bank_sync_credit' || 'bank_sync_debit' => 'Sincronizaci\u00f3n',
-      _ => type,
-    };
-  }
-
-  IconData _txIcon(String type) {
-    if (type.startsWith('custom_')) {
-      final customId = type.substring('custom_'.length);
-      final match = BankSettingsService()
-          .customOps
-          .where((c) => c.id == customId)
-          .firstOrNull;
-      if (match != null) {
-        return BankSettingsService.availableIcons[match.iconKey] ??
-            Icons.payments_rounded;
-      }
-      return Icons.payments_rounded;
-    }
-    return switch (type) {
-      'payment' || 'bank_payment_sent' => Icons.arrow_downward_rounded,
-      'charge' || 'bank_charge_received' => Icons.arrow_upward_rounded,
-      'passGo' || 'bank_pass_go_sent' => Icons.flag_rounded,
-      'handshake_initial' || 'bank_player_joined' => Icons.handshake_rounded,
-      'handshake_reconnect' || 'handshake_restore' || 'bank_player_reconnected' => Icons.handshake_rounded,
-      'bankruptcy' || 'bank_bankruptcy' => Icons.gavel_rounded,
-      'investment_opened' || 'bank_investment_opened' => Icons.trending_up_rounded,
-      'investment_completed' || 'bank_investment_completed' => Icons.trending_up_rounded,
-      'investment_early_withdrawal' || 'bank_investment_early_withdrawal' => Icons.trending_up_rounded,
-      'transfer_held' || 'bank_transfer_held' => Icons.lock_outline_rounded,
-      'transfer_received' || 'bank_transfer_received' || 'bank_transfer_delivered' => Icons.arrow_downward_rounded,
-      'transfer_cancelled' || 'bank_transfer_cancelled' => Icons.replay_rounded,
-      'sync_credit' || 'sync_debit' || 'bank_sync_credit' || 'bank_sync_debit' => Icons.sync_rounded,
-      _ => Icons.swap_horiz_rounded,
-    };
-  }
-
-  Color _txColor(String type) {
-    if (type.startsWith('custom_')) {
-      final customId = type.substring('custom_'.length);
-      final match = BankSettingsService()
-          .customOps
-          .where((c) => c.id == customId)
-          .firstOrNull;
-      if (match != null) {
-        return match.isGive ? kGreen : kRed;
-      }
-      return kGold;
-    }
-    return switch (type) {
-      'payment' || 'bank_payment_sent' || 'passGo' || 'bank_pass_go_sent' || 'transfer_received' || 'bank_transfer_received' || 'bank_transfer_delivered' => kGreen,
-      'charge' || 'bank_charge_received' || 'bankruptcy' || 'bank_bankruptcy' => kRed,
-      'transfer_held' || 'bank_transfer_held' => kGold,
-      'transfer_cancelled' || 'bank_transfer_cancelled' || 'transfer_delivered' => Colors.orange,
-      _ => kGold,
-    };
-  }
-
   Widget _buildSpecialOperations() {
     return ValueListenableBuilder<int>(
       valueListenable: BankLedgerService().heldTransfersCount,
@@ -933,8 +570,7 @@ mixin _BankBuilders on State<BankScreen> {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: Colors.orange.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
@@ -982,8 +618,7 @@ mixin _BankBuilders on State<BankScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.hourglass_top_rounded,
-                  color: Colors.orange.withValues(alpha: 0.8), size: 18),
+              Icon(Icons.hourglass_top_rounded, color: Colors.orange.withValues(alpha: 0.8), size: 18),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1024,8 +659,7 @@ mixin _BankBuilders on State<BankScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.orange,
                     side: const BorderSide(color: Colors.orange),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
               ),
@@ -1038,8 +672,7 @@ mixin _BankBuilders on State<BankScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: kGreen,
                     side: const BorderSide(color: kGreen),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
               ),
@@ -1059,7 +692,11 @@ mixin _BankBuilders on State<BankScreen> {
   }
 
   String _format12h(DateTime dt) {
-    final h = dt.hour == 0 ? 12 : dt.hour > 12 ? dt.hour - 12 : dt.hour;
+    final h = dt.hour == 0
+        ? 12
+        : dt.hour > 12
+            ? dt.hour - 12
+            : dt.hour;
     final m = dt.minute.toString().padLeft(2, '0');
     final ampm = dt.hour < 12 ? 'AM' : 'PM';
     return '$h:$m $ampm';
@@ -1074,10 +711,8 @@ mixin _BankBuilders on State<BankScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: kBgCard,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Devolver dinero',
-              style: TextStyle(color: kTextPrimary)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Devolver dinero', style: TextStyle(color: kTextPrimary)),
           content: Text(
             'Se devolverán ${formatMoney(ht.amount)} a ${ht.fromPlayerId}.',
             style: const TextStyle(color: kTextSecondary),
@@ -1144,10 +779,8 @@ mixin _BankBuilders on State<BankScreen> {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: kBgCard,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text('Entregar dinero',
-              style: TextStyle(color: kTextPrimary)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Entregar dinero', style: TextStyle(color: kTextPrimary)),
           content: Text(
             'Se entregarán ${formatMoney(ht.amount)} a $receiverName.',
             style: const TextStyle(color: kTextSecondary, height: 1.35),
@@ -1211,12 +844,8 @@ mixin _BankBuilders on State<BankScreen> {
             type: 'transfer_delivered',
             counterpartyId: receiverName,
           );
-          final senderPlayer = P2PService()
-              .wsTransport
-              .connectedPlayersNotifier
-              .value
-              .where((p) => p.connected && p.name == ht.fromPlayerId)
-              .firstOrNull;
+          final senderPlayer =
+              P2PService().wsTransport.connectedPlayersNotifier.value.where((p) => p.connected && p.name == ht.fromPlayerId).firstOrNull;
           if (senderPlayer != null) {
             await _self._sendToConnectedPlayer(senderNote.toClientPayload());
           }
@@ -1250,8 +879,7 @@ class _QuickAmountChip extends StatefulWidget {
   State<_QuickAmountChip> createState() => _QuickAmountChipState();
 }
 
-class _QuickAmountChipState extends State<_QuickAmountChip>
-    with SingleTickerProviderStateMixin {
+class _QuickAmountChipState extends State<_QuickAmountChip> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _scale;
 
@@ -1297,14 +925,10 @@ class _QuickAmountChipState extends State<_QuickAmountChip>
           ),
           child: Text(
             formatMoney(widget.amount),
-            style: const TextStyle(
-                color: kTextSecondary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600),
+            style: const TextStyle(color: kTextSecondary, fontSize: 13, fontWeight: FontWeight.w600),
           ),
         ),
       ),
     );
   }
 }
-

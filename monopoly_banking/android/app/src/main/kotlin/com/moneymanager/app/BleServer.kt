@@ -1,4 +1,4 @@
-package com.monopoly.monopoly_banking
+﻿package com.moneymanager.app
 
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothGatt
@@ -138,7 +138,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
                     mainHandler.post {
                         channel.invokeMethod("bleClientUnsubscribed", deviceInfo(device))
                     }
-                    Log.d(TAG, "Cliente ${device.address} canceló suscripción")
+                    Log.d(TAG, "Cliente ${device.address} cancelÃ³ suscripciÃ³n")
                 }
                 if (responseNeeded) {
                     gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, null)
@@ -228,7 +228,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
             return
         }
         if (!isStarted) {
-            Log.w(TAG, "startAdvertising: servidor no está marcado como iniciado")
+            Log.w(TAG, "startAdvertising: servidor no estÃ¡ marcado como iniciado")
             return
         }
 
@@ -256,7 +256,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
             }
 
             override fun onStartFailure(errorCode: Int) {
-                Log.e(TAG, "BLE advertising falló: errorCode=$errorCode")
+                Log.e(TAG, "BLE advertising fallÃ³: errorCode=$errorCode")
                 isAdvertisingActive = false
                 channel.invokeMethod(
                     "bleServerAdvertisingFailed",
@@ -304,7 +304,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
         for ((device, sendTime) in notificationsInFlight) {
             if (now - sendTime > 3000) {
                 staleKeys.add(device)
-                Log.w(TAG, "Notificación atascada para ${device.address} (>3s), liberando canal")
+                Log.w(TAG, "NotificaciÃ³n atascada para ${device.address} (>3s), liberando canal")
             }
         }
         for (d in staleKeys) notificationsInFlight.remove(d)
@@ -317,7 +317,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
                 if (staleKeys.contains(device)) {
                     // Ya fue liberado, continuar
                 } else {
-                    Log.w(TAG, "Notificación anterior aún pendiente para ${device.address}")
+                    Log.w(TAG, "NotificaciÃ³n anterior aÃºn pendiente para ${device.address}")
                     continue
                 }
             }
@@ -333,7 +333,7 @@ class BleServer(private val context: Context, private val channel: MethodChannel
                 }
                 if (result) {
                     notificationsInFlight[device] = now
-                    Log.d(TAG, "Notificación enviada a ${device.address}")
+                    Log.d(TAG, "NotificaciÃ³n enviada a ${device.address}")
                     sent = true
                 } else {
                     Log.w(TAG, "Fallo al notificar a ${device.address}")
@@ -441,3 +441,4 @@ class BleServer(private val context: Context, private val channel: MethodChannel
         bluetoothManager = null
     }
 }
+

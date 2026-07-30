@@ -1,11 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/providers/session_provider.dart';
-import 'package:monopoly_banking/services/p2p_service.dart';
-import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/widgets/app_spinner.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/providers/session_provider.dart';
+import 'package:money_manager/services/p2p_service.dart';
+import 'package:money_manager/services/sound_service.dart';
+import 'package:money_manager/widgets/app_spinner.dart';
 import 'package:provider/provider.dart';
 
 class BankruptcyScreen extends StatefulWidget {

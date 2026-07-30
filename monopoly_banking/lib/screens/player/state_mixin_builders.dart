@@ -43,7 +43,7 @@ mixin _PlayerBuilders on State<PlayerScreen> {
       child: Scaffold(
         backgroundColor: kBgDark,
         extendBodyBehindAppBar: true,
-        body: MonopolyBackground(
+        body: MoneyManagerBackground(
           child: PlayerColorBackdrop(
             color: displayColor,
             child: AnimatedSwitcher(
@@ -299,10 +299,6 @@ mixin _PlayerBuilders on State<PlayerScreen> {
             gravity: 0.1,
           ),
         ),
-        if (_self._showWelcome)
-          Positioned.fill(
-            child: _buildWelcomeOverlay(displayAvatar, displayColor, displayName),
-          ),
         if (_self._inReconnectionGrace && playerReady)
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
@@ -395,10 +391,6 @@ mixin _PlayerBuilders on State<PlayerScreen> {
             gravity: 0.1,
           ),
         ),
-        if (_self._showWelcome)
-          Positioned.fill(
-            child: _buildWelcomeOverlay(displayAvatar, displayColor, displayName),
-          ),
         if (_self._inReconnectionGrace)
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
@@ -891,72 +883,8 @@ mixin _PlayerBuilders on State<PlayerScreen> {
     );
   }
 
-  Future<void> _triggerWelcomeAnimation(String? name) async {
-    _self._showWelcome = true;
-    if (mounted) setState(() {});
-    _self._welcomeCtrl.forward(from: 0);
-  }
-
-  Future<void> _hideWelcome() async {
-    await _self._welcomeCtrl.reverse();
-    if (mounted) setState(() => _self._showWelcome = false);
-  }
-
   String _compact(double val) {
     return formatMoney(val);
-  }
-
-  Widget _buildWelcomeOverlay(String avatarId, Color color, String name) {
-    return GestureDetector(
-      onTap: () {
-        SoundService.playClick();
-        _hideWelcome();
-      },
-      child: Container(
-        color: Colors.black.withValues(alpha: 0.85),
-        width: double.infinity,
-        height: double.infinity,
-        child: Center(
-          child: FadeTransition(
-            opacity: _self._welcomeOpacity,
-            child: ScaleTransition(
-              scale: _self._welcomeScale,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: color.withValues(alpha: 0.5), width: 2),
-                      boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 40, spreadRadius: 10)],
-                    ),
-                    child: AnimatedAvatar(emoji: avatarId, size: 104, glowColor: color, showIdle: true),
-                  ),
-                  const SizedBox(height: 32),
-                  Text(
-                    '\u00a1BIENVENIDO!',
-                    style: TextStyle(color: color, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 4),
-                  ),
-                  Text(
-                    name.toUpperCase(),
-                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 48),
-                  IconButton(
-                    onPressed: () {
-                      SoundService.playClick();
-                      _hideWelcome();
-                    },
-                    icon: const Icon(Icons.check_circle_rounded, color: Colors.white, size: 64),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildWalletHistoryControls(List<TransactionModel> history) {

@@ -5,11 +5,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:sensors_plus/sensors_plus.dart';
-import 'package:monopoly_banking/providers/wallet_controller.dart';
-import 'package:monopoly_banking/widgets/odometer_widget.dart';
-import 'package:monopoly_banking/screens/wallet/card_styles.dart';
-import 'package:monopoly_banking/screens/wallet/shimmer_card.dart';
-import 'package:monopoly_banking/screens/wallet/carbon_fiber_painter.dart';
+import 'package:money_manager/providers/wallet_controller.dart';
+import 'package:money_manager/widgets/odometer_widget.dart';
+import 'package:money_manager/screens/wallet/card_styles.dart';
+import 'package:money_manager/screens/wallet/shimmer_card.dart';
+import 'package:money_manager/screens/wallet/carbon_fiber_painter.dart';
 
 class PremiumCreditCard extends StatefulWidget {
   final double balance;
@@ -592,7 +592,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text('MONOPOLY BANK', style: TextStyle(color: goldLight, fontSize: 9, letterSpacing: 3, fontWeight: FontWeight.w800)),
+                      const Text('MONEY MANAGER', style: TextStyle(color: goldLight, fontSize: 9, letterSpacing: 3, fontWeight: FontWeight.w800)),
                       const Text('VIP BLACK EDITION', style: TextStyle(color: goldMid, fontSize: 8, letterSpacing: 2.5, fontWeight: FontWeight.w700)),
                     ]),
                     Icon(Icons.diamond_rounded, color: goldLight, size: 30),
@@ -703,7 +703,7 @@ class _PremiumCreditCardState extends State<PremiumCreditCard> {
                       color: color,
                       fontSize: fontSize,
                       fontFamily: 'Courier',
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w500,
                       shadows: [
                         Shadow(color: Colors.black38, offset: const Offset(0, 1.5), blurRadius: 0.5),
                         Shadow(color: Colors.white10, offset: const Offset(0, -0.5), blurRadius: 0),

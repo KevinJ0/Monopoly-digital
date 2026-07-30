@@ -1,5 +1,5 @@
-name: monopoly_banking
-description: Monopoly digital banking app - offline P2P.
+name: money_manager
+description: Money Manager - app de banca digital P2P.
 publish_to: "none"
 version: 1.0.0+1
 
@@ -15,21 +15,15 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   provider: ^6.1.5
   uuid: ^4.5.3
-  encrypt: ^5.0.3
   path_provider: ^2.1.5
   audioplayers: ^6.6.0
   confetti: 0.7.0
-  fl_chart: 0.71.0
   flutter_animate: ^4.5.2
   google_generative_ai: ^0.4.6
   crypto: ^3.0.6
-  google_fonts: ^6.1.0
+
   sensors_plus: ^7.1.0
-  flutter_riverpod: ^2.6.1
-  go_router: ^14.8.1
-  intl: ^0.19.0
   logger: ^2.5.0
-  flutter_dotenv: ^5.2.1
   qr_flutter: ^4.1.0
   qr_code_scanner: ^1.0.1
   mobile_scanner: ^6.0.5
@@ -49,6 +43,32 @@ flutter:
   assets:
     - assets/sounds/
     - assets/icon/
+    - assets/fonts/
+  fonts:
+    - family: Fredoka
+      fonts:
+        - asset: assets/fonts/Fredoka-300.ttf
+          weight: 300
+        - asset: assets/fonts/Fredoka-400.ttf
+          weight: 400
+        - asset: assets/fonts/Fredoka-500.ttf
+          weight: 500
+        - asset: assets/fonts/Fredoka-600.ttf
+          weight: 600
+        - asset: assets/fonts/Fredoka-700.ttf
+          weight: 700
+    - family: Nunito
+      fonts:
+        - asset: assets/fonts/Nunito-300.ttf
+          weight: 300
+        - asset: assets/fonts/Nunito-400.ttf
+          weight: 400
+        - asset: assets/fonts/Nunito-600.ttf
+          weight: 600
+        - asset: assets/fonts/Nunito-700.ttf
+          weight: 700
+        - asset: assets/fonts/Nunito-800.ttf
+          weight: 800
 
 flutter_launcher_icons:
   android: true

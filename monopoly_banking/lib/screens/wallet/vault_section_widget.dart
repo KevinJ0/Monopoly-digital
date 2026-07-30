@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/providers/wallet_controller.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/providers/wallet_controller.dart';
 
 class VaultSectionWidget extends StatelessWidget {
   final Color color;

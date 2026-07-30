@@ -1,0 +1,634 @@
+[ +145 ms] Artifact Instance of 'MaterialFonts' is not required, skipping update.
+[   +2 ms] Artifact Instance of 'GradleWrapper' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[   +2 ms] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[   +1 ms] Artifact Instance of 'FlutterSdk' is not required, skipping update.
+[        ] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[   +2 ms] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[   +1 ms] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FontSubsetArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'PubDependencies' is not required, skipping update.
+[   +1 ms] executing: [C:\flutter/] git -c log.showSignature=false log HEAD -n 1 --pretty=format:%ad --date=iso
+[ +181 ms] Exit code 0 from: git -c log.showSignature=false log HEAD -n 1 --pretty=format:%ad --date=iso
+[        ] 2026-07-08 15:02:06 -0700
+[  +29 ms] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterEngineStamp' is not required, skipping update.
+[        ] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[   +2 ms] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[  +74 ms] executing: C:\Users\Kevin\AppData\Local\Android\sdk\platform-tools\adb.exe devices -l
+[ +146 ms] List of devices attached
+[  +17 ms] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[   +7 ms] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[   +1 ms] Artifact Instance of 'FlutterEngineStamp' is not required, skipping update.
+[   +4 ms] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[  +78 ms] Skipping pub get: version match.
+[  +81 ms] Found plugin flutter_native_splash at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_native_splash-2.4.8\
+[  +98 ms] Found plugin window_manager at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\window_manager-0.5.2\
+[   +3 ms] Found plugin screen_retriever at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever-0.2.2\
+[   +1 ms] Found plugin screen_retriever_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever_windows-0.2.2\
+[   +5 ms] Found plugin screen_retriever_macos at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever_macos-0.2.2\
+[   +2 ms] Found plugin screen_retriever_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever_linux-0.2.2\
+[   +2 ms] Found plugin sensors_plus at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\sensors_plus-7.1.0\
+[   +6 ms] Found plugin qr_code_scanner at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\qr_code_scanner-1.0.1\
+[   +6 ms] Found plugin path_provider at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider-2.1.6\
+[   +1 ms] Found plugin path_provider_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_windows-2.3.0\
+[   +4 ms] Found plugin path_provider_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_linux-2.2.2\
+[   +3 ms] Found plugin path_provider_foundation at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_foundation-2.6.0\
+[   +8 ms] Found plugin path_provider_android at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_android-2.3.1\
+[   +1 ms] Found plugin jni_flutter at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\jni_flutter-1.0.1\
+[   +1 ms] Found plugin jni at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\jni-1.0.0\
+[   +2 ms] Found plugin mobile_scanner at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\mobile_scanner-6.0.11\
+[   +9 ms] Found plugin flutter_secure_storage at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage-9.2.4\
+[   +1 ms] Found plugin flutter_secure_storage_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_windows-3.1.2\
+[   +5 ms] Found plugin flutter_secure_storage_web at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_web-1.2.1\
+[   +2 ms] Found plugin flutter_secure_storage_macos at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_macos-3.1.3\
+[   +1 ms] Found plugin flutter_secure_storage_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_linux-1.2.3\
+[   +1 ms] Found plugin flutter_background_service at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_background_service-5.1.0\
+[   +5 ms] Found plugin flutter_background_service_ios at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_background_service_ios-5.0.3\
+[   +1 ms] Found plugin flutter_background_service_android at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_background_service_android-6.3.1\
+[   +5 ms] Found plugin audioplayers at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers-6.8.1\
+[   +2 ms] Found plugin audioplayers_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_windows-4.4.1\
+[   +4 ms] Found plugin audioplayers_web at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_web-5.3.0\
+[   +2 ms] Found plugin audioplayers_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_linux-4.3.0\
+[   +2 ms] Found plugin audioplayers_darwin at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_darwin-6.5.0\
+[   +2 ms] Found plugin audioplayers_android at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_android-5.3.0\
+[  +64 ms] Found plugin flutter_native_splash at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_native_splash-2.4.8\
+[  +53 ms] Found plugin window_manager at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\window_manager-0.5.2\
+[   +1 ms] Found plugin screen_retriever at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever-0.2.2\
+[   +1 ms] Found plugin screen_retriever_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever_windows-0.2.2\
+[   +8 ms] Found plugin screen_retriever_macos at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever_macos-0.2.2\
+[   +2 ms] Found plugin screen_retriever_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever_linux-0.2.2\
+[   +3 ms] Found plugin sensors_plus at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\sensors_plus-7.1.0\
+[   +9 ms] Found plugin qr_code_scanner at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\qr_code_scanner-1.0.1\
+[   +5 ms] Found plugin path_provider at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider-2.1.6\
+[   +3 ms] Found plugin path_provider_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_windows-2.3.0\
+[   +8 ms] Found plugin path_provider_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_linux-2.2.2\
+[   +3 ms] Found plugin path_provider_foundation at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_foundation-2.6.0\
+[   +5 ms] Found plugin path_provider_android at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_android-2.3.1\
+[   +1 ms] Found plugin jni_flutter at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\jni_flutter-1.0.1\
+[   +1 ms] Found plugin jni at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\jni-1.0.0\
+[   +4 ms] Found plugin mobile_scanner at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\mobile_scanner-6.0.11\
+[   +5 ms] Found plugin flutter_secure_storage at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage-9.2.4\
+[   +1 ms] Found plugin flutter_secure_storage_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_windows-3.1.2\
+[   +3 ms] Found plugin flutter_secure_storage_web at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_web-1.2.1\
+[   +1 ms] Found plugin flutter_secure_storage_macos at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_macos-3.1.3\
+[   +1 ms] Found plugin flutter_secure_storage_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_linux-1.2.3\
+[   +4 ms] Found plugin flutter_background_service at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_background_service-5.1.0\
+[   +2 ms] Found plugin flutter_background_service_ios at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_background_service_ios-5.0.3\
+[   +1 ms] Found plugin flutter_background_service_android at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_background_service_android-6.3.1\
+[   +4 ms] Found plugin audioplayers at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers-6.8.1\
+[   +2 ms] Found plugin audioplayers_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_windows-4.4.1\
+[   +2 ms] Found plugin audioplayers_web at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_web-5.3.0\
+[   +4 ms] Found plugin audioplayers_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_linux-4.3.0\
+[   +1 ms] Found plugin audioplayers_darwin at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_darwin-6.5.0\
+[   +1 ms] Found plugin audioplayers_android at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_android-5.3.0\
+[   +7 ms] Generating C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\android\app\src\main\java\io\flutter\plugins\GeneratedPluginRegistrant.java
+[  +13 ms] Skipping generating GeneratedPluginRegistrant.java because it is up-to-date.
+[   +4 ms] Skipping generating generated_plugin_registrant.h because it is up-to-date.
+[   +4 ms] Skipping generating generated_plugin_registrant.cc because it is up-to-date.
+[   +2 ms] Skipping generating generated_plugins.cmake because it is up-to-date.
+[   +2 ms] Skipping generating generated_plugin_registrant.h because it is up-to-date.
+[   +1 ms] Skipping generating generated_plugin_registrant.cc because it is up-to-date.
+[   +1 ms] Skipping generating generated_plugins.cmake because it is up-to-date.
+[   +2 ms] Skipping generating GeneratedPluginRegistrant.h because it is up-to-date.
+[   +4 ms] Skipping generating GeneratedPluginRegistrant.m because it is up-to-date.
+[ +116 ms] Initializing file store
+[  +11 ms] Skipping target: gen_localizations
+[   +4 ms] gen_dart_plugin_registrant: Starting due to {InvalidatedReasonKind.inputChanged: The following inputs have updated contents: C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\.dart_tool\package_config.json,C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\.dart_tool\flutter_build\dart_plugin_registrant.dart}
+[  +43 ms] Found plugin flutter_native_splash at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_native_splash-2.4.8\
+[  +48 ms] Found plugin window_manager at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\window_manager-0.5.2\
+[   +1 ms] Found plugin screen_retriever at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever-0.2.2\
+[   +1 ms] Found plugin screen_retriever_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever_windows-0.2.2\
+[   +5 ms] Found plugin screen_retriever_macos at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever_macos-0.2.2\
+[   +1 ms] Found plugin screen_retriever_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\screen_retriever_linux-0.2.2\
+[   +2 ms] Found plugin sensors_plus at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\sensors_plus-7.1.0\
+[   +5 ms] Found plugin qr_code_scanner at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\qr_code_scanner-1.0.1\
+[   +3 ms] Found plugin path_provider at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider-2.1.6\
+[   +1 ms] Found plugin path_provider_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_windows-2.3.0\
+[   +5 ms] Found plugin path_provider_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_linux-2.2.2\
+[   +3 ms] Found plugin path_provider_foundation at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_foundation-2.6.0\
+[   +4 ms] Found plugin path_provider_android at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\path_provider_android-2.3.1\
+[   +1 ms] Found plugin jni_flutter at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\jni_flutter-1.0.1\
+[   +1 ms] Found plugin jni at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\jni-1.0.0\
+[   +1 ms] Found plugin mobile_scanner at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\mobile_scanner-6.0.11\
+[   +8 ms] Found plugin flutter_secure_storage at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage-9.2.4\
+[   +1 ms] Found plugin flutter_secure_storage_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_windows-3.1.2\
+[   +3 ms] Found plugin flutter_secure_storage_web at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_web-1.2.1\
+[   +1 ms] Found plugin flutter_secure_storage_macos at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_macos-3.1.3\
+[   +1 ms] Found plugin flutter_secure_storage_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_secure_storage_linux-1.2.3\
+[   +3 ms] Found plugin flutter_background_service at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_background_service-5.1.0\
+[   +2 ms] Found plugin flutter_background_service_ios at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_background_service_ios-5.0.3\
+[   +1 ms] Found plugin flutter_background_service_android at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_background_service_android-6.3.1\
+[   +3 ms] Found plugin audioplayers at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers-6.8.1\
+[   +1 ms] Found plugin audioplayers_windows at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_windows-4.4.1\
+[   +1 ms] Found plugin audioplayers_web at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_web-5.3.0\
+[   +1 ms] Found plugin audioplayers_linux at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_linux-4.3.0\
+[   +1 ms] Found plugin audioplayers_darwin at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_darwin-6.5.0\
+[   +4 ms] Found plugin audioplayers_android at C:\Users\Kevin\AppData\Local\Pub\Cache\hosted\pub.dev\audioplayers_android-5.3.0\
+[   +6 ms] Skipping generating dart_plugin_registrant.dart because it is up-to-date.
+[        ] gen_dart_plugin_registrant: Complete
+[   +2 ms] Skipping target: _composite
+[   +1 ms] complete
+[   +8 ms] Launching lib\main.dart on Windows in debug mode...
+[   +4 ms] C:\flutter\bin\cache\dart-sdk\bin\dartaotruntime.exe C:\flutter\bin\cache\dart-sdk\bin\snapshots\frontend_server_aot.dart.snapshot --sdk-root C:\flutter\bin\cache\artifacts\engine\common\flutter_patched_sdk/ --incremental --target=flutter --experimental-emit-debug-metadata -DFLUTTER_VERSION=3.44.6 -DFLUTTER_CHANNEL=stable -DFLUTTER_GIT_URL=https://github.com/flutter/flutter.git -DFLUTTER_FRAMEWORK_REVISION=ee80f08bbf -DFLUTTER_ENGINE_REVISION=83675ed276 -DFLUTTER_DART_VERSION=3.12.2 --output-dill C:\Users\Kevin\AppData\Local\Temp\flutter_tools.9c64ef10\flutter_tool.568c7e5f\app.dill --packages C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\.dart_tool\package_config.json -Ddart.vm.profile=false -Ddart.vm.product=false --enable-asserts --track-widget-creation --filesystem-scheme org-dartlang-root --initialize-from-dill build\1440e92da5fcea1003b944440c5fd1be.cache.dill.track.dill --source file:///C:/Users/Kevin/Desktop/Proyectos/Monopoly%20digital/monopoly_banking/.dart_tool/flutter_build/dart_plugin_registrant.dart --source package:flutter/src/dart_plugin_registrant.dart -Dflutter.dart_plugin_registrant=file:///C:/Users/Kevin/Desktop/Proyectos/Monopoly%20digital/monopoly_banking/.dart_tool/flutter_build/dart_plugin_registrant.dart --verbosity=error --enable-experiment=alternative-invalidation-strategy
+[  +34 ms] executing: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe -format json -products * -utf8 -latest -version 16 -requires Microsoft.VisualStudio.Workload.NativeDesktop Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.CMake.Project
+[ +117 ms] Exit code 0 from: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe -format json -products * -utf8 -latest -version 16 -requires Microsoft.VisualStudio.Workload.NativeDesktop Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.CMake.Project
+[   +1 ms] [
+             {
+               "instanceId": "605766b6",
+               "installDate": "2023-11-15T18:24:39Z",
+               "installationName": "VisualStudio/17.14.17+36603.0",
+               "installationPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community",
+               "installationVersion": "17.14.36603.0",
+               "productId": "Microsoft.VisualStudio.Product.Community",
+               "productPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\devenv.exe",
+               "state": 4294967295,
+               "isComplete": true,
+               "isLaunchable": true,
+               "isPrerelease": false,
+               "isRebootRequired": false,
+               "displayName": "Visual Studio Community 2022",
+               "description": "Powerful IDE, free for students, open-source contributors, and individuals",
+               "channelId": "VisualStudio.17.Release",
+               "channelUri": "https://aka.ms/vs/17/release/channel",
+               "enginePath": "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\resources\\app\\ServiceHub\\Services\\Microsoft.VisualStudio.Setup.Service",
+               "installedChannelId": "VisualStudio.17.Release",
+               "installedChannelUri": "https://aka.ms/vs/17/release/channel",
+               "releaseNotes": "https://docs.microsoft.com/en-us/visualstudio/releases/2022/release-notes-v17.14#17.14.17",
+               "resolvedInstallationPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community",
+               "thirdPartyNotices": "https://go.microsoft.com/fwlink/?LinkId=661288",
+               "updateDate": "2025-10-20T13:49:23.3189352Z",
+               "catalog": {
+                 "buildBranch": "d17.14",
+                 "buildVersion": "17.14.36603.0",
+                 "id": "VisualStudio/17.14.17+36603.0",
+                 "localBuild": "build-lab",
+                 "manifestName": "VisualStudio",
+                 "manifestType": "installer",
+                 "productDisplayVersion": "17.14.17",
+                 "productLine": "Dev17",
+                 "productLineVersion": "2022",
+                 "productMilestone": "RTW",
+                 "productMilestoneIsPreRelease": "False",
+                 "productName": "Visual Studio",
+                 "productPatchVersion": "17",
+                 "productPreReleaseMilestoneSuffix": "1.0",
+                 "productSemanticVersion": "17.14.17+36603.0",
+                 "requiredEngineVersion": "3.14.2086.54749"
+               },
+               "properties": {
+                 "appLocalWPF": "false",
+                 "campaignId": "2030:c81fa796dbc64e729722ebd0f94d3844",
+                 "channelManifestId": "VisualStudio.17.Release/17.14.17+36603.0",
+                 "nickname": "",
+                 "setupEngineFilePath": "C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer\\setup.exe"
+               }
+             }
+           ]
+[   +5 ms] Building Windows application...
+[   +9 ms] <- compile package:money_manager/main.dart
+[   +1 ms] executing: C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe -S C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\windows -B C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64 -G Visual Studio 17 2022 -A x64 -DFLUTTER_TARGET_PLATFORM=windows-x64
+[ +242 ms] -- Selecting Windows SDK version 10.0.26100.0 to target Windows 10.0.19045.
+[ +130 ms] -- Nuget.exe not found, trying to download or use cached version.
+[+9848 ms] Feeds used:
+[        ]   C:\Users\Kevin\.nuget\packages\
+[        ]   https://api.nuget.org/v3/index.json
+[        ]   C:\Program Files\DevExpress 25.2\Components\System\Components\Packages
+[        ]   C:\Program Files\DevExpress 26.1\Components\System\Components\Packages
+[        ]   C:\Program Files (x86)\Microsoft SDKs\NuGetPackages\
+[  +95 ms] Package "Microsoft.Windows.ImplementationLibrary.1.0.260126.7" is already installed.
+[ +154 ms] -- Configuring done (10.3s)
+[+1143 ms] -- Generating done (1.1s)
+[  +17 ms] -- Build files have been written to: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64
+[  +13 ms] executing: C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe --build C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64 --config Debug --target INSTALL --verbose
+[ +140 ms] Change Dir: 'C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64'
+[   +2 ms] Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" INSTALL.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=17.0 /v:n
+[ +351 ms] MSBuild version 17.14.23+b0019275e for .NET Framework
+[ +104 ms] Build started 7/30/2026 10:44:50 AM.
+[ +483 ms] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\INSTALL.vcxproj" on node 1 (default targets).
+[        ] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\INSTALL.vcxproj" (1) is building "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\ZERO_CHECK.vcxproj" (2) on node 1 (default targets).
+[        ] PrepareForBuild:
+[        ]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +5 ms] InitializeBuildStatus:
+[        ]   Creating "x64\Debug\ZERO_CHECK\ZERO_CHECK.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[        ]   Touching "x64\Debug\ZERO_CHECK\ZERO_CHECK.tlog\unsuccessfulbuild".
+[  +15 ms] CustomBuild:
+[        ]   All outputs are up-to-date.
+[  +35 ms] FinalizeBuildStatus:
+[        ]   Deleting file "x64\Debug\ZERO_CHECK\ZERO_CHECK.tlog\unsuccessfulbuild".
+[        ]   Touching "x64\Debug\ZERO_CHECK\ZERO_CHECK.tlog\ZERO_CHECK.lastbuildstate".
+[   +1 ms] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\ZERO_CHECK.vcxproj" (default targets).
+[ +138 ms] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\INSTALL.vcxproj" (1) is building "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\ALL_BUILD.vcxproj" (3) on node 1 (default targets).
+[        ] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\ALL_BUILD.vcxproj" (3) is building "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\audioplayers_windows\audioplayers_windows_plugin.vcxproj" (4) on node 1 (default targets).
+[        ] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\audioplayers_windows\audioplayers_windows_plugin.vcxproj" (4) is building "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\flutter\flutter_assemble.vcxproj" (5) on node 1 (default targets).
+[        ] PrepareForBuild:
+[        ]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +8 ms] InitializeBuildStatus:
+[        ]   Creating "x64\Debug\flutter_assemble\flutter_assemble.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[        ]   Touching "x64\Debug\flutter_assemble\flutter_assemble.tlog\unsuccessfulbuild".
+[   +5 ms] CustomBuild:
+[        ]   "The build of 'C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\CMakeFiles\154d3329584ce141df07c87f43049aa0\flutter_assemble.rule' depends on 'C:\USERS\KEVIN\DESKTOP\PROYECTOS\MONOPOLY DIGITAL\MONOPOLY_BANKING\WINDOWS\FLUTTER\EPHEMERAL\FLUTTER_WINDOWS.DLL' which is produced by the build of 'C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\CMakeFiles\1039fc8c6d9ac4eb1af14f5eb8cda258\flutter_windows.dll.rule'. The items cannot be built in parallel."
+[ +103 ms]   Generating C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/windows/flutter/ephemeral/flutter_windows.dll, C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/windows/flutter/ephemeral/flutter_export.h, C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/windows/flutter/ephemeral/flutter_windows.h, C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/windows/flutter/ephemeral/flutter_messenger.h, C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/windows/flutter/ephemeral/flutter_plugin_registrar.h, C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/windows/flutter/ephemeral/flutter_texture_registrar.h, C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/windows/flutter/ephemeral/cpp_client_wrapper/core_implementations.cc, C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/windows/flutter/ephemeral/cpp_client_wrapper/standard_codec.cc, C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/windows/flutter/ephemeral/cpp_client_wrapper/plugin_registrar.cc, C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/windows/flutter/ephemeral/cpp_client_wrapper/flutter_engine.cc, C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/windows/flutter/ephemeral/cpp_client_wrapper/flutter_view_controller.cc, _phony_
+[+3425 ms]   [ +123 ms] Artifact Instance of 'MaterialFonts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'GradleWrapper' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ]   [   +1 ms] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FlutterSdk' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ]   [   +1 ms] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FontSubsetArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'PubDependencies' is not required, skipping update.
+[        ]   [  +11 ms] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FlutterEngineStamp' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[        ]   [   +2 ms] Artifact Instance of 'WindowsEngineArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[  +58 ms]   [  +61 ms] Artifact Instance of 'MaterialFonts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'GradleWrapper' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'AndroidGenSnapshotArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'AndroidInternalBuildArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IOSEngineArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FlutterWebSdk' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FlutterEngineStamp' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'LegacyCanvasKitRemover' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FlutterSdk' is not required, skipping update.
+[   +1 ms]   [   +3 ms] Artifact Instance of 'MacOSEngineArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'LinuxEngineArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'LinuxFuchsiaSDKArtifacts' is not required, skipping update.
+[   +1 ms]   [   +2 ms] Artifact Instance of 'MacOSFuchsiaSDKArtifacts' is not required, skipping update.
+[        ]   [   +1 ms] Artifact Instance of 'FlutterRunnerSDKArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FlutterRunnerDebugSymbols' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'IosUsbArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'FontSubsetArtifacts' is not required, skipping update.
+[        ]   [        ] Artifact Instance of 'PubDependencies' is not required, skipping update.
+[  +27 ms]   [  +27 ms] Initializing file store
+[  +25 ms]   [  +25 ms] Done initializing file store
+[  +89 ms]   [  +89 ms] Skipping target: dart_build
+[   +2 ms]   [   +2 ms] Skipping target: gen_dart_plugin_registrant
+[+3835 ms]   [+3835 ms] Skipping target: unpack_windows
+[   +1 ms]   [   +1 ms] Skipping target: install_code_assets
+[   +1 ms]   [        ] Skipping target: gen_localizations
+[+2016 ms]   [+2016 ms] Skipping target: kernel_snapshot_program
+[  +25 ms]   [  +16 ms] invalidated build due to missing files: C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\DOES_NOT_EXIST_RERUN_FOR_WILDCARD345469446
+[ +664 ms]   [ +672 ms] debug_bundle_windows-x64_assets: Starting due to {InvalidatedReasonKind.inputMissing: The following inputs were missing: C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\DOES_NOT_EXIST_RERUN_FOR_WILDCARD345469446}
+[ +398 ms]   [ +397 ms] Manifest contained wildcard assets. Inserting missing file into build graph to force rerun. for more information see #56466.
+[  +42 ms]   [  +23 ms] impellerc command: [C:\flutter\bin\cache\artifacts\engine\windows-x64\impellerc.exe, --sksl, --runtime-stage-gles, --runtime-stage-gles3, --runtime-stage-vulkan, --iplr, --sl=C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\flutter_assets\shaders/ink_sparkle.frag, --spirv=C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\flutter_assets\shaders/ink_sparkle.frag.spirv, --input=C:\flutter\packages\flutter\lib\src\material\shaders\ink_sparkle.frag, --input-type=frag, --include=C:\flutter\packages\flutter\lib\src\material\shaders, --include=C:\flutter\bin\cache\artifacts\engine\windows-x64\shader_lib]
+[  +11 ms]   [  +31 ms] impellerc command: [C:\flutter\bin\cache\artifacts\engine\windows-x64\impellerc.exe, --sksl, --runtime-stage-gles, --runtime-stage-gles3, --runtime-stage-vulkan, --iplr, --sl=C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\flutter_assets\shaders/stretch_effect.frag, --spirv=C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\flutter_assets\shaders/stretch_effect.frag.spirv, --input=C:\flutter\packages\flutter\lib\src\material\shaders\stretch_effect.frag, --input-type=frag, --include=C:\flutter\packages\flutter\lib\src\material\shaders, --include=C:\flutter\bin\cache\artifacts\engine\windows-x64\shader_lib]
+[+1374 ms]   [+1373 ms] debug_bundle_windows-x64_assets: Complete
+[+1034 ms]   [+1034 ms] Persisting file store
+[  +24 ms]   [  +20 ms] Done persisting file store
+[  +36 ms]   [  +39 ms] build succeeded.
+[   +1 ms]   [   +2 ms] "flutter assemble" took 9,698ms.
+[  +96 ms]   [  +96 ms] Running 1 shutdown hook
+[   +1 ms]   [        ] Shutdown hooks complete
+[        ]   [        ] exiting with code 0
+[ +232 ms] FinalizeBuildStatus:
+[   +1 ms]   Deleting file "x64\Debug\flutter_assemble\flutter_assemble.tlog\unsuccessfulbuild".
+[        ]   Touching "x64\Debug\flutter_assemble\flutter_assemble.tlog\flutter_assemble.lastbuildstate".
+[        ] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\flutter\flutter_assemble.vcxproj" (default targets).
+[  +53 ms] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\audioplayers_windows\audioplayers_windows_plugin.vcxproj" (4) is building "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\flutter\flutter_wrapper_plugin.vcxproj" (6) on node 1 (default targets).
+[        ] PrepareForBuild:
+[        ]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +1 ms] InitializeBuildStatus:
+[        ]   Creating "flutter_wrapper_plugin.dir\Debug\flutter_.1C3D2165.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[        ]   Touching "flutter_wrapper_plugin.dir\Debug\flutter_.1C3D2165.tlog\unsuccessfulbuild".
+[   +2 ms] CustomBuild:
+[   +4 ms]   All outputs are up-to-date.
+[ +102 ms] ClCompile:
+[        ]   All outputs are up-to-date.
+[  +45 ms] Lib:
+[        ]   All outputs are up-to-date.
+[   +1 ms]   flutter_wrapper_plugin.vcxproj -> C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\flutter\Debug\flutter_wrapper_plugin.lib
+[  +32 ms] FinalizeBuildStatus:
+[   +1 ms]   Deleting file "flutter_wrapper_plugin.dir\Debug\flutter_.1C3D2165.tlog\unsuccessfulbuild".
+[        ]   Touching "flutter_wrapper_plugin.dir\Debug\flutter_.1C3D2165.tlog\flutter_wrapper_plugin.lastbuildstate".
+[        ] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\flutter\flutter_wrapper_plugin.vcxproj" (default targets).
+[  +13 ms] PrepareForBuild:
+[        ]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +4 ms] InitializeBuildStatus:
+[        ]   Creating "audioplayers_windows_plugin.dir\Debug\audiopla.97E6FCC5.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[        ]   Touching "audioplayers_windows_plugin.dir\Debug\audiopla.97E6FCC5.tlog\unsuccessfulbuild".
+[   +3 ms] CustomBuild:
+[        ]   All outputs are up-to-date.
+[  +35 ms] ClCompile:
+[        ]   All outputs are up-to-date.
+[  +44 ms] Link:
+[        ]   All outputs are up-to-date.
+[   +6 ms]   audioplayers_windows_plugin.vcxproj -> C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\audioplayers_windows\Debug\audioplayers_windows_plugin.dll
+[  +13 ms] FinalizeBuildStatus:
+[   +1 ms]   Deleting file "audioplayers_windows_plugin.dir\Debug\audiopla.97E6FCC5.tlog\unsuccessfulbuild".
+[        ]   Touching "audioplayers_windows_plugin.dir\Debug\audiopla.97E6FCC5.tlog\audioplayers_windows_plugin.lastbuildstate".
+[   +1 ms] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\audioplayers_windows\audioplayers_windows_plugin.vcxproj" (default targets).
+[  +43 ms] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\ALL_BUILD.vcxproj" (3) is building "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\flutter_secure_storage_windows\flutter_secure_storage_windows_plugin.vcxproj" (7) on node 1 (default targets).
+[        ] PrepareForBuild:
+[   +2 ms]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +2 ms] InitializeBuildStatus:
+[        ]   Creating "flutter_secure_storage_windows_plugin.dir\Debug\flutter_.1878F219.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[        ]   Touching "flutter_secure_storage_windows_plugin.dir\Debug\flutter_.1878F219.tlog\unsuccessfulbuild".
+[   +2 ms] CustomBuild:
+[        ]   All outputs are up-to-date.
+[  +13 ms] ClCompile:
+[   +1 ms]   All outputs are up-to-date.
+[  +14 ms] Link:
+[        ]   All outputs are up-to-date.
+[   +1 ms]   flutter_secure_storage_windows_plugin.vcxproj -> C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\flutter_secure_storage_windows\Debug\flutter_secure_storage_windows_plugin.dll
+[  +16 ms] FinalizeBuildStatus:
+[        ]   Deleting file "flutter_secure_storage_windows_plugin.dir\Debug\flutter_.1878F219.tlog\unsuccessfulbuild".
+[        ]   Touching "flutter_secure_storage_windows_plugin.dir\Debug\flutter_.1878F219.tlog\flutter_secure_storage_windows_plugin.lastbuildstate".
+[        ] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\flutter_secure_storage_windows\flutter_secure_storage_windows_plugin.vcxproj" (default targets).
+[  +32 ms] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\ALL_BUILD.vcxproj" (3) is building "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\flutter\flutter_wrapper_app.vcxproj" (8) on node 1 (default targets).
+[        ] PrepareForBuild:
+[        ]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +3 ms] InitializeBuildStatus:
+[        ]   Creating "flutter_wrapper_app.dir\Debug\flutter_.E839DDF3.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[        ]   Touching "flutter_wrapper_app.dir\Debug\flutter_.E839DDF3.tlog\unsuccessfulbuild".
+[   +7 ms] CustomBuild:
+[        ]   All outputs are up-to-date.
+[  +18 ms] ClCompile:
+[        ]   All outputs are up-to-date.
+[   +5 ms] Lib:
+[        ]   All outputs are up-to-date.
+[        ]   flutter_wrapper_app.vcxproj -> C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\flutter\Debug\flutter_wrapper_app.lib
+[  +13 ms] FinalizeBuildStatus:
+[        ]   Deleting file "flutter_wrapper_app.dir\Debug\flutter_.E839DDF3.tlog\unsuccessfulbuild".
+[        ]   Touching "flutter_wrapper_app.dir\Debug\flutter_.E839DDF3.tlog\flutter_wrapper_app.lastbuildstate".
+[   +1 ms] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\flutter\flutter_wrapper_app.vcxproj" (default targets).
+[  +40 ms] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\ALL_BUILD.vcxproj" (3) is building "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\jni\shared\jni.vcxproj" (9) on node 1 (default targets).
+[        ] PrepareForBuild:
+[        ]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +1 ms] InitializeBuildStatus:
+[        ]   Creating "jni.dir\Debug\jni.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[        ]   Touching "jni.dir\Debug\jni.tlog\unsuccessfulbuild".
+[   +2 ms] CustomBuild:
+[        ]   All outputs are up-to-date.
+[  +14 ms] ClCompile:
+[   +1 ms]   All outputs are up-to-date.
+[  +11 ms] Link:
+[        ]   All outputs are up-to-date.
+[        ]   jni.vcxproj -> C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\jni\shared\Debug\dartjni.dll
+[  +16 ms] FinalizeBuildStatus:
+[        ]   Deleting file "jni.dir\Debug\jni.tlog\unsuccessfulbuild".
+[        ]   Touching "jni.dir\Debug\jni.tlog\jni.lastbuildstate".
+[        ] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\jni\shared\jni.vcxproj" (default targets).
+[  +83 ms] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\ALL_BUILD.vcxproj" (3) is building "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\runner\money_manager.vcxproj" (10) on node 1 (default targets).
+[        ] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\runner\money_manager.vcxproj" (10) is building "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\screen_retriever_windows\screen_retriever_windows_plugin.vcxproj" (11) on node 1 (default targets).
+[        ] PrepareForBuild:
+[        ]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +1 ms] InitializeBuildStatus:
+[        ]   Creating "screen_retriever_windows_plugin.dir\Debug\screen_r.109E3814.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[        ]   Touching "screen_retriever_windows_plugin.dir\Debug\screen_r.109E3814.tlog\unsuccessfulbuild".
+[   +3 ms] CustomBuild:
+[        ]   All outputs are up-to-date.
+[  +14 ms] ClCompile:
+[        ]   All outputs are up-to-date.
+[  +12 ms] Link:
+[        ]   All outputs are up-to-date.
+[   +1 ms]   screen_retriever_windows_plugin.vcxproj -> C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\screen_retriever_windows\Debug\screen_retriever_windows_plugin.dll
+[  +22 ms] FinalizeBuildStatus:
+[        ]   Deleting file "screen_retriever_windows_plugin.dir\Debug\screen_r.109E3814.tlog\unsuccessfulbuild".
+[   +1 ms]   Touching "screen_retriever_windows_plugin.dir\Debug\screen_r.109E3814.tlog\screen_retriever_windows_plugin.lastbuildstate".
+[        ] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\screen_retriever_windows\screen_retriever_windows_plugin.vcxproj" (default targets).
+[  +37 ms] Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\runner\money_manager.vcxproj" (10) is building "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\window_manager\window_manager_plugin.vcxproj" (12) on node 1 (default targets).
+[        ] PrepareForBuild:
+[        ]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +1 ms] InitializeBuildStatus:
+[   +1 ms]   Creating "window_manager_plugin.dir\Debug\window_m.9118AB5D.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[        ]   Touching "window_manager_plugin.dir\Debug\window_m.9118AB5D.tlog\unsuccessfulbuild".
+[        ] CustomBuild:
+[        ]   All outputs are up-to-date.
+[  +21 ms] ClCompile:
+[        ]   All outputs are up-to-date.
+[   +9 ms] Link:
+[        ]   All outputs are up-to-date.
+[   +1 ms]   window_manager_plugin.vcxproj -> C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\window_manager\Debug\window_manager_plugin.dll
+[  +28 ms] FinalizeBuildStatus:
+[   +1 ms]   Deleting file "window_manager_plugin.dir\Debug\window_m.9118AB5D.tlog\unsuccessfulbuild".
+[        ]   Touching "window_manager_plugin.dir\Debug\window_m.9118AB5D.tlog\window_manager_plugin.lastbuildstate".
+[        ] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\plugins\window_manager\window_manager_plugin.vcxproj" (default targets).
+[  +27 ms] PrepareForBuild:
+[        ]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +2 ms] InitializeBuildStatus:
+[   +1 ms]   Creating "money_manager.dir\Debug\money_manager.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[        ]   Touching "money_manager.dir\Debug\money_manager.tlog\unsuccessfulbuild".
+[        ] CustomBuild:
+[        ]   All outputs are up-to-date.
+[  +54 ms] ClCompile:
+[   +1 ms]   All outputs are up-to-date.
+[  +11 ms] ResourceCompile:
+[        ]   All outputs are up-to-date.
+[  +20 ms] Link:
+[        ]   All outputs are up-to-date.
+[   +1 ms]   money_manager.vcxproj -> C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\runner\Debug\money_manager.exe
+[  +39 ms] FinalizeBuildStatus:
+[        ]   Deleting file "money_manager.dir\Debug\money_manager.tlog\unsuccessfulbuild".
+[        ]   Touching "money_manager.dir\Debug\money_manager.tlog\money_manager.lastbuildstate".
+[        ] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\runner\money_manager.vcxproj" (default targets).
+[  +49 ms] PrepareForBuild:
+[        ]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +1 ms] InitializeBuildStatus:
+[        ]   Creating "x64\Debug\ALL_BUILD\ALL_BUILD.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[        ]   Touching "x64\Debug\ALL_BUILD\ALL_BUILD.tlog\unsuccessfulbuild".
+[   +7 ms] CustomBuild:
+[        ]   All outputs are up-to-date.
+[  +30 ms] FinalizeBuildStatus:
+[        ]   Deleting file "x64\Debug\ALL_BUILD\ALL_BUILD.tlog\unsuccessfulbuild".
+[        ]   Touching "x64\Debug\ALL_BUILD\ALL_BUILD.tlog\ALL_BUILD.lastbuildstate".
+[   +1 ms] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\ALL_BUILD.vcxproj" (default targets).
+[  +21 ms] PrepareForBuild:
+[        ]   Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+[   +2 ms] InitializeBuildStatus:
+[   +1 ms]   Creating "x64\Debug\INSTALL\INSTALL.tlog\unsuccessfulbuild" because "AlwaysCreate" was specified.
+[   +1 ms]   Touching "x64\Debug\INSTALL\INSTALL.tlog\unsuccessfulbuild".
+[  +95 ms] CustomBuild:
+[        ]   1>
+[  +20 ms] PostBuildEvent:
+[        ]   setlocal
+[        ]   "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -DBUILD_TYPE=Debug -P cmake_install.cmake
+[        ]   if %errorlevel% neq 0 goto :cmEnd
+[        ]   :cmEnd
+[        ]   endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+[        ]   :cmErrorLevel
+[        ]   exit /b %1
+[        ]   :cmDone
+[        ]   if %errorlevel% neq 0 goto :VCEnd
+[        ]   :VCEnd
+[ +185 ms]   -- Install configuration: "Debug"
+[  +13 ms]   -- Up-to-date: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/icudtl.dat
+[        ]   -- Up-to-date: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/flutter_windows.dll
+[        ]   -- Up-to-date: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/audioplayers_windows_plugin.dll
+[        ]   -- Up-to-date: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/flutter_secure_storage_windows_plugin.dll
+[        ]   -- Up-to-date: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/screen_retriever_windows_plugin.dll
+[        ]   -- Up-to-date: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/window_manager_plugin.dll
+[        ]   -- Up-to-date: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/dartjni.dll
+[        ]   -- Up-to-date: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug
+[  +15 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets
+[   +1 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/AssetManifest.bin
+[  +16 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets
+[   +1 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Fredoka-300.ttf
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Fredoka-400.ttf
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Fredoka-500.ttf
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Fredoka-600.ttf
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Fredoka-700.ttf
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Fredoka.zip
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Nunito-300.ttf
+[   +3 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Nunito-400.ttf
+[   +3 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Nunito-600.ttf
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Nunito-700.ttf
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Nunito-800.ttf
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/fonts/Nunito.zip
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/icon
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/icon/app_icon.png
+[   +5 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds
+[   +3 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/card_flip.wav
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/cash.wav
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/click.wav
+[   +1 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/dice_roll.wav
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/fanfare.wav
+[   +1 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/money_count.wav
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/pop.wav
+[   +1 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/property_buy.wav
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/sad_trombone.wav
+[   +1 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/success.wav
+[   +1 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/theme.mp3
+[  +21 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/assets/sounds/theme.wav
+[   +6 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/FontManifest.json
+[   +1 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/fonts
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/fonts/MaterialIcons-Regular.otf
+[   +8 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/kernel_blob.bin
+[ +353 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/NativeAssetsManifest.json
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/NOTICES.Z
+[        ]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/shaders
+[   +1 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/shaders/ink_sparkle.frag
+[   +2 ms]   -- Installing: C:/Users/Kevin/Desktop/Proyectos/Monopoly digital/monopoly_banking/build/windows/x64/runner/Debug/data/flutter_assets/shaders/stretch_effect.frag
+[  +33 ms] FinalizeBuildStatus:
+[   +2 ms]   Deleting file "x64\Debug\INSTALL\INSTALL.tlog\unsuccessfulbuild".
+[   +1 ms]   Touching "x64\Debug\INSTALL\INSTALL.tlog\INSTALL.lastbuildstate".
+[   +6 ms] Done Building Project "C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\build\windows\x64\INSTALL.vcxproj" (default targets).
+[ +122 ms] Build succeeded.
+[  +13 ms]     0 Warning(s)
+[  +27 ms]     0 Error(s)
+[ +231 ms] Time Elapsed 00:00:16.46
+[ +742 ms] Building Windows application... (completed in 29.7s)
+[   +2 ms] √ Built build\windows\x64\runner\Debug\money_manager.exe
+[+1069 ms] VM Service URL on device: http://127.0.0.1:63414/tn67-wVjlBA=/
+[  +10 ms] Caching compiled dill
+[ +154 ms] Connecting to service protocol: http://127.0.0.1:63414/tn67-wVjlBA=/
+[ +131 ms] Launching a Dart Developer Service (DDS) instance at http://127.0.0.1:0, connecting to VM service at http://127.0.0.1:63414/tn67-wVjlBA=/.
+[ +672 ms] Successfully connected to service protocol: http://127.0.0.1:63414/tn67-wVjlBA=/
+[  +19 ms] DevFS: Creating new filesystem on the device (null)
+[  +60 ms] DevFS: Created new filesystem on the device (file:///C:/Users/Kevin/AppData/Local/Temp/monopoly_bankingeadf7750/monopoly_banking/)
+[   +3 ms] Updating assets for windows
+[   +1 ms] runHooks() with {TargetFile: C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\lib\main.dart, BuildMode: debug} and TargetPlatform.windows_x64
+[   +3 ms] runHooks() - will perform dart build
+[ +141 ms] Building native assets for windows_x64.
+[ +102 ms] input.json contents:
+           {
+             "assets": {},
+             "config": {
+               "build_asset_types": [],
+               "linking_enabled": false
+             },
+             "out_dir_shared": "C:\\Users\\Kevin\\Desktop\\Proyectos\\Monopoly digital\\monopoly_banking\\.dart_tool\\hooks_runner\\shared\\objective_c\\build\\",
+             "out_file": "C:\\Users\\Kevin\\Desktop\\Proyectos\\Monopoly digital\\monopoly_banking\\.dart_tool\\hooks_runner\\objective_c\\337ce265dc\\output.json",
+             "package_name": "objective_c",
+             "package_root": "C:\\Users\\Kevin\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\objective_c-9.4.1\\",
+             "user_defines": {}
+           }
+[   +9 ms] output.json contents:
+           {
+             "assets_for_linking": {},
+             "status": "success",
+             "timestamp": "2026-07-30 10:43:02.000"
+           }
+[   +4 ms] Skipping build for objective_c in C:\Users\Kevin\Desktop\Proyectos\Monopoly digital\monopoly_banking\.dart_tool\hooks_runner\objective_c\337ce265dc\. Last build on 2026-07-30 10:43:02.000.
+[   +7 ms] Building native assets for windows_x64 done.
+[   +1 ms] runHooks() - done
+[ +230 ms] Manifest contained wildcard assets. Inserting missing file into build graph to force rerun. for more information see #56466.
+[   +4 ms] Syncing files to device Windows...
+[   +2 ms] Compiling dart to kernel with 0 updated files
+[        ] Processing bundle.
+[   +1 ms] <- recompile package:money_manager/main.dart 5efe01a7-2427-4c5b-8d21-b97beeeed78c
+[        ] <- 5efe01a7-2427-4c5b-8d21-b97beeeed78c
+[   +4 ms] Bundle processing done.
+[ +229 ms] Updating files.
+[        ] Pending asset builds completed. Writing dirty entries.
+[        ] DevFS: Sync finished
+[        ] Syncing files to device Windows... (completed in 241ms)
+[        ] Synced 0.0MB.
+[   +1 ms] <- accept
+[   +3 ms] Connected to _flutterView/0x205b0a68d40.
+[   +2 ms] Flutter run key commands.
+[   +2 ms] r Hot reload. 
+[        ] R Hot restart.
+[        ] h List all available interactive commands.
+[   +1 ms] d Detach (terminate "flutter run" but leave application running).
+[        ] c Clear the screen
+[        ] q Quit (terminate the application on the device).
+[        ] A Dart VM Service on Windows is available at: http://127.0.0.1:63420/mFVGLbe8Qz8=/
+[   +1 ms] The Flutter DevTools debugger and profiler on Windows is available at: http://127.0.0.1:63420/mFVGLbe8Qz8=/devtools/?uri=ws://127.0.0.1:63420/mFVGLbe8Qz8=/ws
+[+17971 ms] [ERROR:flutter/shell/common/shell.cc(1183)] The 'xyz.luan/audioplayers/events/45db82e9-a16d-45fa-b00c-246c7176fe14' channel sent a message from native to Flutter on a non-platform thread. Platform channel messages must be sent on the platform thread. Failure to do so may result in data loss or crashes, and must be fixed in the plugin or application code creating that channel.
+[        ] See https://docs.flutter.dev/platform-integration/platform-channels#channels-and-platform-threading for more information.
+[+1092 ms] Service protocol connection closed.
+[   +1 ms] Lost connection to device.
+[   +1 ms] DevFS: Deleting filesystem on the device (file:///C:/Users/Kevin/AppData/Local/Temp/monopoly_bankingeadf7750/monopoly_banking/)
+[   +1 ms] DevFS: Deleted filesystem on the device (file:///C:/Users/Kevin/AppData/Local/Temp/monopoly_bankingeadf7750/monopoly_banking/)
+[   +2 ms] "flutter run" took 53,088ms.
+[   +3 ms] Running 3 shutdown hooks
+[   +9 ms] Shutdown hooks complete
+[        ] exiting with code 0

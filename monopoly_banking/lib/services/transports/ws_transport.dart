@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/services/transports/p2p_transport.dart';
-import 'package:monopoly_banking/services/transports/ws_models.dart';
+import 'package:money_manager/services/transports/p2p_transport.dart';
+import 'package:money_manager/services/transports/ws_models.dart';
 
 class WsTransport extends P2PTransport {
   @override
@@ -29,8 +29,8 @@ class WsTransport extends P2PTransport {
   final _connections = <String, WebSocket>{};
   final _connectionsByInstallationId = <String, String>{};
 
-  // Grace period para reconexión: 6 segundos
-  static const Duration reconnectionGracePeriod = Duration(seconds: 6);
+  // Grace period para reconexión: 45 segundos (suficiente si la pantalla se apaga)
+  static const Duration reconnectionGracePeriod = Duration(seconds: 45);
   // Información temporal de jugadores desconectados durante el período de gracia
   final _disconnectedPlayers = <String, WsPlayer>{};
   // Timers pendientes para eliminar jugadores desconectados
@@ -43,8 +43,8 @@ class WsTransport extends P2PTransport {
 
   // UDP Discovery
   static const int discoveryPort = 42424;
-  static const String _discoveryRequest = 'monopoly_discover';
-  static const String _discoveryResponse = 'monopoly_bank';
+  static const String _discoveryRequest = 'money_manager_discover';
+  static const String _discoveryResponse = 'money_manager_bank';
 
   RawDatagramSocket? _discoverySocket;
   StreamSubscription<RawSocketEvent>? _discoverySub;
@@ -709,3 +709,4 @@ class WsTransport extends P2PTransport {
     _bankLastSeen.clear();
   }
 }
+

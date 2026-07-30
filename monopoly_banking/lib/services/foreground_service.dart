@@ -26,7 +26,7 @@ class BankForegroundService {
         autoStartOnBoot: false,
         isForegroundMode: true,
         foregroundServiceNotificationId: _notificationId,
-        initialNotificationTitle: 'Banco Monopoly',
+        initialNotificationTitle: 'Money Manager',
         initialNotificationContent: 'Servidor activo',
         foregroundServiceTypes: [AndroidForegroundType.dataSync],
         onStart: onStart,

@@ -1,4 +1,4 @@
-# Monopoly Banking - Code Conventions
+﻿# Money Manager - Code Conventions
 
 ## General Style
 - Language: **Spanish** for UI strings and comments (app targets Spanish-speaking users).
@@ -52,3 +52,4 @@
 - Initial balance: 2000.0 (`kInitialBalance`).
 - Pass Go reward: 200.0 (`kPassGoAmount`).
 - Balance is `double`, displayed as integer (no decimals).
+

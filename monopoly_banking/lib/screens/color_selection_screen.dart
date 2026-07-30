@@ -1,9 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:monopoly_banking/core/constants.dart';
-import 'package:monopoly_banking/services/sound_service.dart';
-import 'package:monopoly_banking/widgets/animated_entry.dart';
-import 'package:monopoly_banking/widgets/monopoly_background.dart';
+import 'package:money_manager/core/constants.dart';
+import 'package:money_manager/services/sound_service.dart';
+import 'package:money_manager/widgets/animated_entry.dart';
+import 'package:money_manager/widgets/money_manager_background.dart';
 
 const _palette = [
   Color(0xFFE53935),
@@ -107,7 +107,7 @@ class _ColorSelectionScreenState extends State<ColorSelectionScreen> {
           body: Stack(
             children: [
               const Positioned.fill(
-                child: MonopolyBackground(child: SizedBox.expand()),
+                child: MoneyManagerBackground(child: SizedBox.expand()),
               ),
               Positioned.fill(
                 child: _DynamicColorBackdrop(color: _selectedColor),
@@ -345,7 +345,7 @@ class _ColorSelectionScreenState extends State<ColorSelectionScreen> {
                         ),
                       ),
                     ),
-                    const Text('MONOPOLY',
+                    const Text('MONEY MANAGER',
                         style: TextStyle(
                             color: Colors.white70,
                             fontSize: 10,
@@ -357,7 +357,7 @@ class _ColorSelectionScreenState extends State<ColorSelectionScreen> {
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
-                    '•••• •••• •••• ••••',
+                    '\u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022 \u2022\u2022\u2022\u2022',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.6),
                       fontSize: 18,
@@ -433,3 +433,5 @@ class _DynamicColorBackdrop extends StatelessWidget {
     );
   }
 }
+
+

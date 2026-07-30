@@ -4,11 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:monopoly_banking/models/session_model.dart';
-import 'package:monopoly_banking/models/transaction_model.dart';
+import 'package:money_manager/models/session_model.dart';
+import 'package:money_manager/models/transaction_model.dart';
 
 class HiveService {
-  static const _keyAlias = 'monopoly_hive_key';
+  static const _keyAlias = 'money_manager_hive_key';
   static const _sessionBox = 'session';
   static const _txBox = 'transactions';
   static const _settingsBox = 'settings';
@@ -74,14 +74,14 @@ class HiveService {
       final appDir = await _getDesktopPath();
       Hive.init(appDir.path);
     } catch (_) {
-      final tempDir = Directory.systemTemp.createTempSync('monopoly_banking_');
+      final tempDir = Directory.systemTemp.createTempSync('money_manager_');
       Hive.init(tempDir.path);
     }
   }
 
   static Future<Directory> _getDesktopPath() async {
     final appDir = Directory(
-      '${Platform.environment['APPDATA']}\\monopoly_banking',
+      '${Platform.environment['APPDATA']}\\money_manager_banking',
     );
     if (!appDir.existsSync()) {
       appDir.createSync(recursive: true);
@@ -115,3 +115,4 @@ class HiveService {
   static Box<TransactionModel> get txBox => Hive.box<TransactionModel>(_txBox);
   static Box get settingsBox => Hive.box(_settingsBox);
 }
+
