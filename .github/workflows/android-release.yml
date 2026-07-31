@@ -65,11 +65,11 @@ jobs:
           platform: android
           working-directory: monopoly_banking
           flutter-version: "3.44.6"
-          args: --build-number=${{ github.run_number }} -- --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }} --obfuscate --split-debug-info=build/app/symbols --extra-gen-snapshot-options=--save-obfuscation-map=build/app/obfuscation.map.json
+          args: --build-number=${{ github.run_number }} -- --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }} --obfuscate --split-debug-info=build/app/symbols
 
       - name: Build AppBundle (release)
         if: ${{ !(env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '') }}
-        run: flutter build appbundle --release --build-number=${{ github.run_number }} --target-platform android-arm,android-arm64,android-x64 --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }} --obfuscate --split-debug-info=build/app/symbols --extra-gen-snapshot-options=--save-obfuscation-map=build/app/obfuscation.map.json
+        run: flutter build appbundle --release --build-number=${{ github.run_number }} --target-platform android-arm,android-arm64,android-x64 --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }} --obfuscate --split-debug-info=build/app/symbols --extra-gen-snapshot-options=--save-obfuscation-map=build/shorebird/obfuscation_map.json
 
       - name: Subir simbolos de depuracion a Sentry
         if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
@@ -80,3 +80,5 @@ jobs:
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_RELEASE: com.moneymanager.app@1.0.0+${{ github.run_number }}
+          SENTRY_DIST: ${{ github.run_number }}

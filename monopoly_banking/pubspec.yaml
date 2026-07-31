@@ -44,7 +44,7 @@ sentry:
   project: flutter
   org: money-manager-flutter
   upload_sources: true
-  dart_symbol_map_path: build/app/obfuscation.map.json
+  dart_symbol_map_path: build/shorebird/obfuscation_map.json
   ignore_missing: true
 
 flutter:

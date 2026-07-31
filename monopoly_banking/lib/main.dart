@@ -13,13 +13,16 @@ import 'services/sound_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  const sentryDsn = String.fromEnvironment('SENTRY_DSN');
+
+  if (sentryDsn.isEmpty) {
+    await runAppWithSentry();
+    return;
+  }
+
   await SentryFlutter.init(
     (options) {
-      options.dsn = const String.fromEnvironment(
-        'SENTRY_DSN',
-        defaultValue:
-            'https://ba612f70520c6c09dee1076092a0fe9b@o4511831597711360.ingest.us.sentry.io/4511831637295104',
-      );
+      options.dsn = sentryDsn;
       options.tracesSampleRate = 1.0;
       options.attachStacktrace = true;
       options.environment = kReleaseMode ? 'release' : 'debug';
