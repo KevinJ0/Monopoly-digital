@@ -225,7 +225,7 @@ mixin _WalletBuilders on State<WalletScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(color: color.withValues(alpha: 0.5), width: 2),
@@ -237,12 +237,7 @@ mixin _WalletBuilders on State<WalletScreen> {
                       )
                     ],
                   ),
-                  child: AnimatedAvatar(
-                    emoji: avatarId,
-                    size: 104,
-                    glowColor: color,
-                    showIdle: true,
-                  ),
+                  child: Icon(Icons.account_balance_rounded, color: color, size: 76),
                 ),
                 const SizedBox(height: 32),
                 Text(
@@ -302,11 +297,14 @@ mixin _WalletBuilders on State<WalletScreen> {
                 padding: EdgeInsets.fromLTRB(compact ? 12 : 16, 12, compact ? 6 : 12, 12),
                 child: Row(
                   children: [
-                    AnimatedAvatar(
-                      emoji: avatarId,
-                      size: compact ? 36 : 42,
-                      glowColor: color,
-                      showIdle: true,
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.account_balance_rounded,
+                          color: color, size: compact ? 22 : 28),
                     ),
                     SizedBox(width: compact ? 10 : 14),
                     Expanded(

@@ -157,7 +157,6 @@ class _BankScreenState extends State<BankScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         await P2PService().initTransports(isBank: true);
-        await P2PService().startWsServer();
         await BankForegroundService().start();
       } catch (e, s) {
         if (mounted) context.showFriendlyError(e, s);

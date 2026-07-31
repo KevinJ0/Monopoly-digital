@@ -264,14 +264,12 @@ class _DesktopLayoutState extends State<_DesktopLayout> {
                           });
                           final winnerId = BankLedgerService().checkWinner();
                           if (winnerId != null) {
-                            final winnerAccount =
-                                BankLedgerService().accountFor(winnerId);
+                            final winnerAccount = BankLedgerService().accountFor(winnerId);
                             if (winnerAccount != null) {
                               await P2PService().sendPayload({
                                 'type': 'winner',
                                 'targetPlayerId': winnerId,
-                                'targetInstallationId':
-                                    winnerAccount.deviceInstallationId,
+                                'targetInstallationId': winnerAccount.deviceInstallationId,
                               });
                             }
                             NotificationService().show(
@@ -411,6 +409,7 @@ class _DesktopLayoutState extends State<_DesktopLayout> {
         _buildAppBar(bankColor, displayName, stats),
         Expanded(
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildSidebar(bankColor),
               Container(width: 0, color: kBorder),

@@ -22,7 +22,6 @@ import 'package:money_manager/services/sound_service.dart';
 import 'package:money_manager/services/transports/p2p_transport.dart';
 import 'package:money_manager/services/transports/ws_models.dart';
 import 'package:money_manager/widgets/animated_entry.dart';
-import 'package:money_manager/widgets/animated_avatar.dart';
 import 'package:money_manager/widgets/premium_dialog.dart';
 import 'package:money_manager/widgets/player_info_widget.dart';
 import 'package:money_manager/widgets/transaction_tile.dart';
@@ -128,7 +127,6 @@ class _WalletScreenState extends State<WalletScreen>
     }
     _bankDeliveryAcks.clear();
     WidgetsBinding.instance.removeObserver(this);
-    P2PService().wsTransport.stop();
     _payloadSub?.cancel();
     _txSub?.cancel();
     final bankruptListener = _bankruptListener;

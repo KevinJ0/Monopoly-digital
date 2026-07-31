@@ -20,7 +20,7 @@ class _BankHeader extends StatelessWidget {
               color: kGold.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Text('\u{1F3E6}', style: TextStyle(fontSize: 28)),
+            child: const Icon(Icons.account_balance_rounded, color: kGold, size: 28),
           ),
           const SizedBox(width: 14),
           const Expanded(
