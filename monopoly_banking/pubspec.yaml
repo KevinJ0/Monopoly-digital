@@ -41,8 +41,8 @@ dev_dependencies:
   sentry_dart_plugin: ^3.4.0
 
 sentry:
-  project: money-manager
-  org: your-org-slug
+  project: flutter
+  org: hospital-salvador
   upload_sources: true
   dart_symbol_map_path: build/app/obfuscation.map.json
   ignore_missing: true
