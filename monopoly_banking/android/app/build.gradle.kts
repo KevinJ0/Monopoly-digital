@@ -5,6 +5,8 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    // Uploads ProGuard/R8 mappings and native debug symbols to Sentry on release builds.
+    id("io.sentry.android.gradle")
 }
 
 val keystoreProperties = Properties()
@@ -69,6 +71,32 @@ android {
 
 flutter {
     source = "../.."
+}
+
+sentry {
+    // The Sentry Android SDK is already bundled by sentry_flutter.
+    autoInstallation {
+        enabled.set(false)
+    }
+    // Credentials come from environment variables so they are never committed.
+    // Only set them when the token is present; otherwise the plugin skips uploads.
+    val sentryAuthToken = System.getenv("SENTRY_AUTH_TOKEN")
+    if (!sentryAuthToken.isNullOrEmpty()) {
+        org.set(System.getenv("SENTRY_ORG"))
+        projectName.set(System.getenv("SENTRY_PROJECT"))
+        authToken.set(sentryAuthToken)
+    }
+}
+
+// Avoid the Sentry plugin running upload tasks when no auth token is configured
+// (e.g. local builds). The plugin passes the mapping path unquoted to cmd on
+// Windows, which breaks when the project path contains spaces.
+if (System.getenv("SENTRY_AUTH_TOKEN").isNullOrEmpty()) {
+    tasks.configureEach {
+        if (name.startsWith("uploadSentryProguardMappings") || name.startsWith("uploadSentryNativeSymbols")) {
+            enabled = false
+        }
+    }
 }
 
 dependencies {

@@ -7,6 +7,9 @@ on:
 
 env:
   SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+  SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+  SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+  SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
 jobs:
   build-and-upload:
@@ -62,11 +65,21 @@ jobs:
           platform: android
           working-directory: monopoly_banking
           flutter-version: "3.44.6"
-          args: --build-number=${{ github.run_number }}
+          args: --build-number=${{ github.run_number }} -- --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }} --obfuscate --split-debug-info=build/app/symbols --extra-gen-snapshot-options=--save-obfuscation-map=build/app/obfuscation.map.json
 
       - name: Build AppBundle (release)
         if: ${{ !(env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '') }}
-        run: flutter build appbundle --release --build-number=${{ github.run_number }} --target-platform android-arm,android-arm64,android-x64
+        run: flutter build appbundle --release --build-number=${{ github.run_number }} --target-platform android-arm,android-arm64,android-x64 --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }} --obfuscate --split-debug-info=build/app/symbols --extra-gen-snapshot-options=--save-obfuscation-map=build/app/obfuscation.map.json
+
+      - name: Subir simbolos de depuracion a Sentry
+        if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
+        shell: bash
+        run: |
+          dart run sentry_dart_plugin
+        env:
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
       - name: Subir a Play Console (Internal Testing)
         uses: r0adkll/upload-google-play@v1

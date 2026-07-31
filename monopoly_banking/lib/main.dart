@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:window_manager/window_manager.dart';
 import 'app.dart';
 import 'services/app_audit_logger.dart';
@@ -12,6 +13,22 @@ import 'services/sound_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = const String.fromEnvironment(
+        'SENTRY_DSN',
+        defaultValue:
+            'https://ba612f70520c6c09dee1076092a0fe9b@o4511831597711360.ingest.us.sentry.io/4511831637295104',
+      );
+      options.tracesSampleRate = 1.0;
+      options.attachStacktrace = true;
+      options.environment = kReleaseMode ? 'release' : 'debug';
+    },
+    appRunner: () => runAppWithSentry(),
+  );
+}
+
+Future<void> runAppWithSentry() async {
   if (!kIsWeb && Platform.isWindows) {
     await windowManager.ensureInitialized();
     const windowOptions = WindowOptions(
@@ -37,6 +54,10 @@ Future<void> main() async {
         'silent': details.silent,
       },
     );
+    Sentry.captureException(
+      details.exception,
+      stackTrace: details.stack,
+    );
     FlutterError.dumpErrorToConsole(details);
   };
 
@@ -46,6 +67,7 @@ Future<void> main() async {
       error,
       stack: stack,
     );
+    Sentry.captureException(error, stackTrace: stack);
     return true;
   };
 
@@ -57,6 +79,7 @@ Future<void> main() async {
     AppAuditLogger.instance.event('APP', 'initialized');
   } catch (e, stack) {
     AppAuditLogger.instance.error('APP_INIT', e, stack: stack);
+    Sentry.captureException(e, stackTrace: stack);
     rethrow;
   }
 

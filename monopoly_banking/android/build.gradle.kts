@@ -42,6 +42,8 @@ subprojects {
 
 // Fix JVM target mismatch for Android library subprojects that use old Java 1.8
 // but inherit Kotlin JVM target 17 from the project's Kotlin plugin version.
+// Also force a supported Kotlin language version for plugins that pin an old one
+// (e.g. sentry_flutter sets languageVersion 1.6, rejected by Kotlin 2.x).
 gradle.projectsEvaluated {
     subprojects {
         if (plugins.hasPlugin("com.android.library")) {
@@ -50,6 +52,7 @@ gradle.projectsEvaluated {
                 val javaTarget = androidExt?.compileOptions?.targetCompatibility ?: JavaVersion.VERSION_17
                 project.tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
                     compilerOptions {
+                        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_1_9)
                         jvmTarget.set(
                             when (javaTarget) {
                                 JavaVersion.VERSION_1_8 -> org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
