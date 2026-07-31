@@ -1,0 +1,77 @@
+name: Android Release to Play Store
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+
+jobs:
+  build-and-upload:
+    name: Build AAB y subir a Play Console
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: monopoly_banking
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.44.6"
+          cache: true
+
+      - name: Restaurar keystore y key.properties desde secrets
+        shell: bash
+        run: |
+          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" > android/key.properties
+          echo "keyPassword=${{ secrets.KEYSTORE_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.KEYSTORE_ALIAS }}" >> android/key.properties
+          echo "storeFile=monopoly-release.jks" >> android/key.properties
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/monopoly-release.jks
+
+      - name: Dependencias
+        run: flutter pub get
+
+      - name: Setup Shorebird
+        if: ${{ env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '' }}
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+
+      - name: Shorebird Release
+        if: ${{ env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '' }}
+        uses: shorebirdtech/shorebird-release@v1
+        id: shorebird-release
+        with:
+          platform: android
+          working-directory: monopoly_banking
+          flutter-version: "3.44.6"
+          args: --build-number=${{ github.run_number }}
+
+      - name: Build AppBundle (release)
+        if: ${{ !(env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '') }}
+        run: flutter build appbundle --release --build-number=${{ github.run_number }} --target-platform android-arm,android-arm64,android-x64
+
+      - name: Subir a Play Console (Internal Testing)
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJson: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: com.moneymanager.app
+          releaseFiles: monopoly_banking/build/app/outputs/bundle/release/app-release.aab
+          track: internal

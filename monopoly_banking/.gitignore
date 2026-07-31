@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Signing (nunca commitear el keystore ni las credenciales)
+/android/key.properties
+/android/app/*.jks
+/android/app/*.keystore
