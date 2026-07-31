@@ -44,6 +44,7 @@ flutter:
     - assets/sounds/
     - assets/icon/
     - assets/fonts/
+    - shorebird.yaml
   fonts:
     - family: Fredoka
       fonts:
