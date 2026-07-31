@@ -46,6 +46,7 @@ class _BankScreenState extends State<BankScreen>
     super.didChangeDependencies();
     updateKeepAlive();
   }
+
   final _amountCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _sending = false;
@@ -60,27 +61,14 @@ class _BankScreenState extends State<BankScreen>
     if (_cachedOps != null) return _cachedOps!;
     final settings = BankSettingsService();
     _cachedOps = <_OpOption>[
-      const _OpOption(
-          id: 'payment',
-          label: 'Cobrar al jugador',
-          icon: Icons.arrow_upward_rounded,
-          color: kRed),
-      const _OpOption(
-          id: 'receive',
-          label: 'Pagar al jugador',
-          icon: Icons.arrow_downward_rounded,
-          color: kGreen),
-      _OpOption(
-          id: 'passGo',
-          label: 'Pasar por GO (${formatMoney(settings.passGoAmount.round())})',
-          icon: Icons.flag_rounded,
-          color: kGold),
+      const _OpOption(id: 'payment', label: 'Cobrar al jugador', icon: Icons.arrow_upward_rounded, color: kRed),
+      const _OpOption(id: 'receive', label: 'Pagar al jugador', icon: Icons.arrow_downward_rounded, color: kGreen),
+      _OpOption(id: 'passGo', label: 'Pasar por GO (${formatMoney(settings.passGoAmount.round())})', icon: Icons.flag_rounded, color: kGold),
       for (final c in settings.customOps)
         _OpOption(
           id: 'custom:${c.id}',
           label: c.name,
-          icon: BankSettingsService.availableIcons[c.iconKey] ??
-              Icons.payments_rounded,
+          icon: BankSettingsService.availableIcons[c.iconKey] ?? Icons.payments_rounded,
           color: c.isGive ? kGreen : kRed,
         ),
     ];
@@ -123,27 +111,19 @@ class _BankScreenState extends State<BankScreen>
         }
         return;
       }
-      if (payload['type'] == 'handshake_confirm' ||
-          payload['type'] == 'ws_identity') {
+      if (payload['type'] == 'handshake_confirm' || payload['type'] == 'ws_identity') {
         final name = payload['name'] as String? ?? 'Jugador';
         if (payload['type'] == 'ws_identity') {
           final account = BankLedgerService().accountFor(name);
-          final installationId =
-              (payload['deviceInstallationId'] as String?) ?? '';
-          if (account != null &&
-              (account.bankrupt ||
-                  BankLedgerService().isDeviceBanned(installationId))) {
+          final installationId = (payload['deviceInstallationId'] as String?) ?? '';
+          if (account != null && (account.bankrupt || BankLedgerService().isDeviceBanned(installationId))) {
             return;
           }
 
-          final isReturningPlayer = account != null &&
-              account.deviceInstallationId.isNotEmpty &&
-              account.deviceInstallationId == installationId;
+          final isReturningPlayer = account != null && account.deviceInstallationId.isNotEmpty && account.deviceInstallationId == installationId;
 
           NotificationService().show(
-            isReturningPlayer
-                ? '$name se reconectó a la partida'
-                : '$name se conectó al banco',
+            isReturningPlayer ? '$name se reconectó a la partida' : '$name se conectó al banco',
             backgroundColor: kGreen,
             duration: const Duration(seconds: 4),
             dedupeKey: 'ws-connected:$name',
@@ -168,10 +148,7 @@ class _BankScreenState extends State<BankScreen>
     if (_selectedOp == 'passGo') return true;
     if (_selectedOp.startsWith('custom:')) {
       final customId = _selectedOp.substring('custom:'.length);
-      final match = BankSettingsService()
-          .customOps
-          .where((c) => c.id == customId)
-          .firstOrNull;
+      final match = BankSettingsService().customOps.where((c) => c.id == customId).firstOrNull;
       return match?.isGive ?? true;
     }
     return _selectedOp == 'receive';
@@ -183,10 +160,7 @@ class _BankScreenState extends State<BankScreen>
     }
     if (_selectedOp.startsWith('custom:')) {
       final customId = _selectedOp.substring('custom:'.length);
-      final match = BankSettingsService()
-          .customOps
-          .where((c) => c.id == customId)
-          .firstOrNull;
+      final match = BankSettingsService().customOps.where((c) => c.id == customId).firstOrNull;
       return match?.amount ?? 0;
     }
     return 0;
