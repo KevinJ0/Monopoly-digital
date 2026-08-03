@@ -13,7 +13,6 @@ import 'package:window_manager/window_manager.dart';
 import 'package:money_manager/widgets/player_color_backdrop.dart';
 import 'package:money_manager/services/error_translator_service.dart';
 import 'package:money_manager/core/game_transitions.dart';
-import 'package:money_manager/screens/ws_debug_screen.dart';
 
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
@@ -226,16 +225,6 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> with TickerPr
                               ),
                             ),
                             const SizedBox(height: 12),
-                            TextButton.icon(
-                              onPressed: () => Navigator.of(context).push(
-                                GameFadeRoute(page: const WsDebugScreen()),
-                              ),
-                              icon: const Icon(Icons.bug_report_rounded, size: 14),
-                              label: const Text('WS Debug', style: TextStyle(fontSize: 11)),
-                              style: TextButton.styleFrom(
-                                foregroundColor: kTextSecondary.withValues(alpha: 0.4),
-                              ),
-                            ),
                           ],
                         ),
                       ),
