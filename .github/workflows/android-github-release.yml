@@ -80,6 +80,14 @@ jobs:
           VERSION=$(grep -oP '(?<=version: ).*' pubspec.yaml | head -1 | cut -d'+' -f1)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Renombrar APK y AAB
+        shell: bash
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/MoneyManager-v${VERSION}.apk
+          cp build/app/outputs/bundle/release/app-release.aab dist/MoneyManager-v${VERSION}.aab
+
       - name: Subir simbolos de depuracion a Sentry
         if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
         shell: bash
@@ -89,16 +97,14 @@ jobs:
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_RELEASE: com.moneymanager.app@1.0.0+${{ github.run_number }}
+          SENTRY_RELEASE: com.moneymanager.app@${{ steps.version.outputs.version }}+${{ github.run_number }}
           SENTRY_DIST: ${{ github.run_number }}
 
       - name: Subir APK y AAB como artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: |
-            monopoly_banking/build/app/outputs/flutter-apk/*.apk
-            monopoly_banking/build/app/outputs/bundle/release/*.aab
+          path: monopoly_banking/dist/*
           if-no-files-found: error
 
     outputs:
@@ -126,6 +132,6 @@ jobs:
           tag_name: android-v${{ needs.build-android.outputs.version }}
           name: Money Manager Android v${{ needs.build-android.outputs.version }}
           files: |
-            artifacts/android-apk/**/*.apk
-            artifacts/android-apk/**/*.aab
+            artifacts/android-apk/*.apk
+            artifacts/android-apk/*.aab
           generate_release_notes: true
