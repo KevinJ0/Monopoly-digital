@@ -50,3 +50,7 @@ app.*.map.json
 /android/app/*.keystore
 
 sentry.properties
+
+# Instalador Windows generado (no commitear el .exe, solo el script .iss)
+/windows/installer/
+
