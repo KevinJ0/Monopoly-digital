@@ -1,0 +1,106 @@
+name: Desktop (Windows) Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "desktop-v*"
+
+env:
+  SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+
+jobs:
+  build-windows:
+    name: Build exe + instalador Windows
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: monopoly_banking
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.44.6"
+          cache: true
+
+      - name: Dependencias
+        run: flutter pub get
+
+      - name: Setup Shorebird
+        if: ${{ env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '' }}
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+
+      - name: Shorebird Release Windows
+        if: ${{ env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '' }}
+        uses: shorebirdtech/shorebird-release@v1
+        id: shorebird-release
+        with:
+          platform: windows
+          working-directory: monopoly_banking
+          flutter-version: "3.44.6"
+          args: -- --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+
+      - name: Build exe Windows (release)
+        if: ${{ !(env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '') }}
+        run: flutter build windows --release --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }}
+
+      - name: Instalar Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Determinar y aplicar version del release
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep -oP '(?<=version: ).*' pubspec.yaml | head -1 | cut -d'+' -f1)
+          sed -i "s/^#define MyAppVersion \".*\"/#define MyAppVersion \"$VERSION\"/" windows/installer.iss
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Compilar instalador
+        run: |
+          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" windows/installer.iss
+
+      - name: Subir instalador como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: monopoly_banking/windows/installer/MoneyManager-Setup-*.exe
+          if-no-files-found: error
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+  publish-release:
+    name: Crear GitHub Release con el instalador
+    runs-on: ubuntu-latest
+    needs: build-windows
+    permissions:
+      contents: write
+
+    steps:
+      - name: Descargar artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Listar artifacts
+        run: ls -R artifacts
+
+      - name: Crear GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ needs.build-windows.outputs.version }}
+          name: Money Manager Desktop v${{ needs.build-windows.outputs.version }}
+          files: |
+            artifacts/windows-installer/MoneyManager-Setup-*.exe
+          generate_release_notes: true

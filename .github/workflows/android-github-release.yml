@@ -1,10 +1,10 @@
-name: Windows + Android Release (Instalador y APK)
+name: Android Release (GitHub)
 
 on:
   workflow_dispatch:
   push:
     tags:
-      - "v*"
+      - "android-v*"
 
 env:
   SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
@@ -13,76 +13,6 @@ env:
   SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
 
 jobs:
-  build-windows:
-    name: Build exe + instalador Windows
-    runs-on: windows-latest
-    permissions:
-      contents: read
-
-    defaults:
-      run:
-        working-directory: monopoly_banking
-        shell: bash
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          flutter-version: "3.44.6"
-          cache: true
-
-      - name: Dependencias
-        run: flutter pub get
-
-      - name: Setup Shorebird
-        if: ${{ env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '' }}
-        uses: shorebirdtech/setup-shorebird@v1
-        with:
-          cache: true
-
-      - name: Shorebird Release Windows
-        if: ${{ env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '' }}
-        uses: shorebirdtech/shorebird-release@v1
-        id: shorebird-release
-        with:
-          platform: windows
-          working-directory: monopoly_banking
-          flutter-version: "3.44.6"
-          args: -- --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }}
-
-      - name: Build exe Windows (release)
-        if: ${{ !(env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '') }}
-        run: flutter build windows --release --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }}
-
-      - name: Instalar Inno Setup
-        run: choco install innosetup -y --no-progress
-
-      - name: Determinar y aplicar version del release
-        id: version
-        shell: bash
-        run: |
-          VERSION=$(grep -oP '(?<=version: ).*' pubspec.yaml | head -1 | cut -d'+' -f1)
-          sed -i "s/^#define MyAppVersion \".*\"/#define MyAppVersion \"$VERSION\"/" windows/installer.iss
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Compilar instalador
-        run: |
-          "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" windows/installer.iss
-
-      - name: Subir instalador como artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer
-          path: monopoly_banking/windows/installer/MoneyManager-Setup-*.exe
-          if-no-files-found: error
-
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-
   build-android:
     name: Build APK + AAB Android
     runs-on: ubuntu-latest
@@ -143,6 +73,25 @@ jobs:
         if: ${{ !(env.SHOREBIRD_TOKEN != '' && hashFiles('monopoly_banking/shorebird.yaml') != '') }}
         run: flutter build apk --release --dart-define=SENTRY_DSN=${{ secrets.SENTRY_DSN }}
 
+      - name: Determinar version del release
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep -oP '(?<=version: ).*' pubspec.yaml | head -1 | cut -d'+' -f1)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Subir simbolos de depuracion a Sentry
+        if: ${{ env.SENTRY_AUTH_TOKEN != '' }}
+        shell: bash
+        run: |
+          dart run sentry_dart_plugin
+        env:
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_RELEASE: com.moneymanager.app@1.0.0+${{ github.run_number }}
+          SENTRY_DIST: ${{ github.run_number }}
+
       - name: Subir APK y AAB como artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -152,10 +101,13 @@ jobs:
             monopoly_banking/build/app/outputs/bundle/release/*.aab
           if-no-files-found: error
 
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
   publish-release:
-    name: Crear GitHub Release con instalador y APK
+    name: Crear GitHub Release con el APK
     runs-on: ubuntu-latest
-    needs: [build-windows, build-android]
+    needs: build-android
     permissions:
       contents: write
 
@@ -171,9 +123,9 @@ jobs:
       - name: Crear GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.build-windows.outputs.version }}
-          name: Money Manager v${{ needs.build-windows.outputs.version }}
+          tag_name: android-v${{ needs.build-android.outputs.version }}
+          name: Money Manager Android v${{ needs.build-android.outputs.version }}
           files: |
-            artifacts/windows-installer/MoneyManager-Setup-*.exe
             artifacts/android-apk/*.apk
+            artifacts/android-apk/*.aab
           generate_release_notes: true
