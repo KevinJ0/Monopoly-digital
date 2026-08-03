@@ -126,6 +126,6 @@ jobs:
           tag_name: android-v${{ needs.build-android.outputs.version }}
           name: Money Manager Android v${{ needs.build-android.outputs.version }}
           files: |
-            artifacts/android-apk/*.apk
-            artifacts/android-apk/*.aab
+            artifacts/android-apk/**/*.apk
+            artifacts/android-apk/**/*.aab
           generate_release_notes: true
